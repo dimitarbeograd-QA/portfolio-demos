@@ -1,0 +1,7 @@
+node_modules/
+cypress/screenshots/
+cypress/videos/
+
+# ключове и лични данни – никога в репото
+.env
+js/config.json

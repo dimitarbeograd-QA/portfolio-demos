@@ -1,0 +1,7 @@
+Шрифтовете в тази папка са под SIL Open Font License 1.1 (https://openfontlicense.org).
+- Cormorant Garamond – Copyright The Cormorant Project Authors
+- Jost – Copyright 2020 The Jost Project Authors (https://github.com/indestructible-type/Jost)
+- Great Vibes – Copyright 2010 The Great Vibes Pro Project Authors (SIL OFL 1.1)
+- Caveat – Copyright 2014 The Caveat Project Authors (SIL OFL 1.1)
+- Marck Script – Copyright The Marck Script Project Authors
+Файловете са взети от пакетите @fontsource/* (npm).

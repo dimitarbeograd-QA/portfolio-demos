@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Снимки и видео от сватбата</title>
+  <script src="js/look.js"></script>
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="page-head"><div class="wrap">
+    <p class="kicker">Спомени от нашия ден</p>
+    <h1 class="page-names" id="couple-names" data-testid="couple-names">…</h1>
+    <p class="state" id="gallery-state" data-testid="gallery-state"></p>
+    <a id="back" class="btn ghost small" href="index.html">← Към поканата</a>
+  </div></header>
+
+  <main class="wrap">
+    <section class="page-section" id="upload-section" aria-labelledby="h-up" hidden>
+      <h2 id="h-up">Качете снимки и видео</h2>
+      <form id="upload-form" data-testid="upload-form" novalidate>
+        <div class="field">
+          <label for="u-name">От кого (по желание)</label>
+          <input id="u-name" type="text" maxlength="40" data-testid="upload-name">
+        </div>
+
+        <div class="field">
+          <label for="u-files">Снимки и видео (до 10 файла, видео до 50 MB)</label>
+          <input id="u-files" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" multiple data-testid="upload-files">
+          <p class="error" id="error-files" data-testid="error-files" hidden></p>
+        </div>
+
+        <label class="consent">
+          <input type="checkbox" id="u-consent" data-testid="upload-consent">
+          <span>Файловете са мои и съм съгласен да се показват в тази галерия.</span>
+        </label>
+        <p class="error" id="error-consent" data-testid="error-consent" hidden></p>
+
+        <button type="submit" class="btn" data-testid="upload-submit">Качи</button>
+        <p id="upload-status" class="status" role="status" data-testid="upload-status" hidden></p>
+      </form>
+      <p class="muted">Файловете се показват след одобрение от младоженците. От снимките местоположението се премахва автоматично, а видеата се качват без промяна.</p>
+    </section>
+
+    <section class="page-section" id="gallery-section" aria-labelledby="h-grid">
+      <h2 id="h-grid">Галерия</h2>
+      <p id="empty" data-testid="gallery-empty" hidden>Още няма одобрени снимки и видеа.</p>
+      <div id="grid" class="gallery-grid" data-testid="gallery-grid"></div>
+    </section>
+  </main>
+
+  <footer><div class="wrap">
+    <p>Ако искате вашя снимка да бъде премахната, пишете на младоженците.</p>
+  </div></footer>
+
+  <script src="js/store.js"></script>
+  <script src="js/gallery.js"></script>
+</body>
+</html>

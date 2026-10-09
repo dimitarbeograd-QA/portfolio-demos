@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500" role="img" aria-label="Място за снимка на младоженците">
+  <rect width="400" height="500" fill="#EEF2FA"/>
+  <circle cx="150" cy="190" r="48" fill="#B7C6E6"/>
+  <path d="M70 380c0-62 36-100 80-100s80 38 80 100z" fill="#B7C6E6"/>
+  <circle cx="255" cy="200" r="44" fill="#d9c9a8"/>
+  <path d="M180 380c0-58 33-92 75-92s75 34 75 92z" fill="#d9c9a8"/>
+  <text x="200" y="445" text-anchor="middle" font-family="Georgia, serif" font-size="22" fill="#5B6794">Тук е вашата снимка</text>
+</svg>

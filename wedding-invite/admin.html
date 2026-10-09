@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Табло на младоженците</title>
+  <script src="js/look.js"></script>
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main class="wrap admin page-section">
+    <h1 class="page-names">Табло на младоженците</h1>
+    <div id="demo-banner" class="banner" data-testid="demo-banner" hidden>
+      Демо режим: данните се пазят само в този браузър. Свържете Supabase за истинска употреба.
+    </div>
+    <p id="admin-error" class="error" data-testid="admin-error" role="alert" hidden></p>
+
+    <form id="login-form" data-testid="login-form" hidden novalidate>
+      <div class="field">
+        <label for="l-email">Имейл</label>
+        <input id="l-email" type="text" inputmode="email" autocomplete="username" data-testid="login-email">
+      </div>
+      <div class="field">
+        <label for="l-pass">Парола</label>
+        <input id="l-pass" type="password" autocomplete="current-password" data-testid="login-password"
+              >
+      </div>
+      <button type="submit" class="btn" data-testid="login-submit">Вход</button>
+    </form>
+
+    <div id="panel" hidden>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" id="tab-rsvp" class="btn small ghost" aria-selected="true" data-testid="tab-rsvp">Отговори</button>
+        <button type="button" role="tab" id="tab-photos" class="btn small ghost" aria-selected="false" data-testid="tab-photos">Снимки и видео</button>
+      </div>
+
+      <section id="view-rsvp">
+        <div class="summary">
+          <div><strong id="sum-answers" data-testid="sum-answers">0</strong>отговора</div>
+          <div><strong id="sum-yes" data-testid="sum-yes">0</strong>идват</div>
+          <div><strong id="sum-persons" data-testid="sum-persons">0</strong>души общо</div>
+          <div><strong id="sum-no" data-testid="sum-no">0</strong>отказа</div>
+        </div>
+        <button type="button" id="export-csv" class="btn small ghost" data-testid="export-csv">Свали списък (CSV)</button>
+        <div class="table-wrap">
+          <table data-testid="rsvp-table">
+            <thead><tr><th>Име</th><th>Отговор</th><th>Души</th><th>Бележка</th><th>Код</th></tr></thead>
+            <tbody id="rsvp-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="view-photos" hidden>
+        <p id="photo-counts" data-testid="photo-counts"></p>
+        <button type="button" id="download-zip" class="btn small ghost" data-testid="download-zip">Свали одобрените снимки (ZIP)</button>
+        <p id="zip-status" class="status" role="status" data-testid="zip-status" hidden></p>
+        <div id="photo-grid" class="gallery-grid" data-testid="photo-grid"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="js/store.js"></script>
+  <script src="js/zip.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>
