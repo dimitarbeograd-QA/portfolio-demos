@@ -2,7 +2,7 @@
 
 Small demo projects I build to practise web development and QA. Each project lives in its own folder, with its own README, tests and, where it makes sense, a live demo.
 
-**Dimitar Beograd** · freelance web developer and aspiring junior QA engineer · Lom, Bulgaria · [DimitTech](https://dimitarbeograd-qa.github.io/)
+**Dimitar Beograd** · freelance web developer and aspiring junior QA engineer · Lom, Bulgaria · [DimitTech](https://dimitga4qa.github.io/)
 
 ## Projects
 
