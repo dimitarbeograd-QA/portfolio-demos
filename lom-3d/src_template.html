@@ -75,6 +75,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
 #loading[hidden] { display: none; }
 @media (max-width: 480px) { .card { bottom: calc(12px + 172px); } .card.low { bottom: 70px; } }
 @media (prefers-reduced-motion: reduce) { #compass svg { transition: none; } }
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin:8px 2px 2px;font-size:11.5px;color:var(--muted,#5b5b55)}.legend span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
 </style>
 
 <div id="app">
@@ -89,7 +90,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     <h2 id="cardTitle"></h2><p id="cardText"></p>
   </div>
   <button class="menubtn" id="menuBtn" aria-expanded="false" aria-controls="dock"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>Слоеве и час</button>
-  <div class="mini" id="mini">© OpenStreetMap · АГКК · Microsoft ML (ODbL) · Contains modified Copernicus Sentinel data 2025 · Copernicus DEM</div>
+  <div class="mini" id="mini">© OpenStreetMap · АГКК · Microsoft ML (ODbL) · Contains modified Copernicus Sentinel data 2025 · Copernicus DEM · Overture Places</div>
   <div class="dock" id="dock" hidden>
     <div class="row">
       <label for="hour">Час</label>
@@ -105,8 +106,10 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       <button class="tog" data-layer="water" aria-pressed="true">Вода</button>
       <button class="tog" data-layer="parcels" aria-pressed="true">Имоти</button>
       <button class="tog" data-layer="power" aria-pressed="true">Ток 110 kV</button>
+      <button class="tog" data-layer="poi" aria-pressed="true">Места</button>
     </div>
-    <p class="attr">Данни © сътрудниците на OpenStreetMap. Контури и етажност на сградите и границите на имотите: АГКК (КАИС, отворени данни, 14.09.2026), за лична употреба. Допълнително: Microsoft ML Building Footprints (ODbL) чрез Overture Maps. Сателитна снимка: Contains modified Copernicus Sentinel data 2025 (26.07.2025, 10 м). Релеф: Copernicus DEM GLO-30 (30 м), © DLR e.V. и Airbus Defence and Space GmbH, предоставен от ЕС и ESA в рамките на Copernicus; релефът е груб и сградите стоят върху него по най-ниския си ъгъл. Етажите и видът на фасадите са оценка по типа на сградата. Електрическата мрежа е само 110 kV, средно и ниско напрежение няма в открити данни.</p>
+    <div class="legend" id="legend" aria-label="Цветове на местата"></div>
+    <p class="attr">Данни © сътрудниците на OpenStreetMap. Контури и етажност на сградите и границите на имотите: АГКК (КАИС, отворени данни, 14.09.2026), за лична употреба. Допълнително: Microsoft ML Building Footprints (ODbL) чрез Overture Maps. Сателитна снимка: Contains modified Copernicus Sentinel data 2025 (26.07.2025, 10 м). Места (заведения, магазини, институции): Overture Maps Places (Meta, AllThePlaces; CDLA-Permissive-2.0 и CC0), точността им е различна и част от обектите може вече да не работят. Релеф: Copernicus DEM GLO-30 (30 м), © DLR e.V. и Airbus Defence and Space GmbH, предоставен от ЕС и ESA в рамките на Copernicus; релефът е груб и сградите стоят върху него по най-ниския си ъгъл. Етажите и видът на фасадите са оценка по типа на сградата. Електрическата мрежа е само 110 kV, средно и ниско напрежение няма в открити данни.</p>
   </div>
   <div id="loading">Построявам града…</div>
 </div>
@@ -298,17 +301,17 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     vertexShader: 'varying vec2 vUv; varying vec3 vW; varying vec3 vC;\n#include <fog_pars_vertex>\nvoid main(){ vUv = uv; vC = color; vec4 wp = modelMatrix * vec4(position, 1.0); vW = wp.xyz; vec4 mvPosition = viewMatrix * wp; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
     fragmentShader: 'uniform sampler2D uSat; uniform vec3 uBr; uniform vec2 uTexel; varying vec2 vUv; varying vec3 vW; varying vec3 vC;\n#include <common>\n#include <fog_pars_fragment>\n' +
       'float h21(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }\n' +
-      'float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y); }\n' +
+      'float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); vec2 a = mod(i, 251.0), b = mod(i + 1.0, 251.0); return mix(mix(h21(a), h21(vec2(b.x, a.y)), f.x), mix(h21(vec2(a.x, b.y)), h21(b), f.x), f.y); }\n' +
       'void main(){\n' +
       ' vec3 c = texture2D(uSat, vUv).rgb;\n' +
       ' vec3 bl = (texture2D(uSat, vUv + vec2(uTexel.x * 1.6, 0.0)).rgb + texture2D(uSat, vUv - vec2(uTexel.x * 1.6, 0.0)).rgb + texture2D(uSat, vUv + vec2(0.0, uTexel.y * 1.6)).rgb + texture2D(uSat, vUv - vec2(0.0, uTexel.y * 1.6)).rgb) * 0.25;\n' +
-      ' c = clamp(c + (c - bl) * 0.35, 0.04, 1.0);\n' +
+      ' c = clamp(c + (c - bl) * 0.25, 0.0, 1.0); c = c * 0.78 + 0.13 * vec3(0.95, 1.0, 0.8);\n' +
       ' float dist = length(cameraPosition - vW); float nr = 1.0 - smoothstep(160.0, 900.0, dist);\n' +
       ' float veg = smoothstep(0.0, 0.07, c.g - c.r) * smoothstep(0.0, 0.05, c.g - c.b * 1.05);\n' +
       ' float bare = smoothstep(0.0, 0.04, c.r - c.b) * (1.0 - veg);\n' +
       ' vec2 p = vW.xz;\n' +
       ' float n1 = vn(p * 5.0), n2 = vn(p * 15.0 + 3.0), n3 = vn(p * 41.0 + 9.0), n4 = vn(p * 113.0 + 1.0);\n' +
-      ' float g = (n1 - 0.5) * 0.30 + (n2 - 0.5) * 0.34 + (n3 - 0.5) * 0.38 + (n4 - 0.5) * 0.30;\n' +
+      ' float g = (n1 - 0.5) * 0.16 + (n2 - 0.5) * 0.22 + (n3 - 0.5) * 0.24 + (n4 - 0.5) * 0.14;\n' +
       ' float bl2 = vn(vec2(p.x * 48.0, p.y * 17.0) + vn(p * 3.1) * 9.0);\n' +
       ' float ang = floor(vn(p * 0.006) * 4.0) * 0.785398; vec2 dr = vec2(cos(ang), sin(ang)); float fu = dot(p, dr) * 0.9 + vn(p * 0.8) * 2.5; float fur = abs(fract(fu) - 0.5) * 2.0;\n' +
       ' float other = 1.0 - veg - bare;\n' +
@@ -818,6 +821,40 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     });
   })();
 
+
+  /* ---------- places: businesses and institutions (Overture Maps Places, CDLA-Permissive-2.0) ---------- */
+  var POIC = [0x2f6fd0, 0xd9433a, 0x6b4bb8, 0xc78a1a, 0xe0702c, 0x2e9a5b, 0x1f8a94, 0x7a7f86, 0x8a5a3a, 0xb04a8f, 0x4a5a6a];
+  var poiGroup = new THREE.Group(); scene.add(poiGroup); var poiPick = [], poiList = [];
+  function roofAt(x, y) {
+    var z = hAt(x, y), i;
+    for (i = 0; i < bbox.length; i++) { var k = bbox[i]; if (x > k[0] && x < k[1] && y > k[2] && y < k[3] && inPoly(x, y, pts(bInfo[i].b.p))) return hAt(x, y) + bInfo[i].h.v; }
+    var cell = xGrid[Math.floor(x / 40) + ',' + Math.floor(y / 40)] || [];
+    for (i = 0; i < cell.length; i++) { var X = xInfo[cell[i]]; if (inPoly(x, y, X.q)) return X.z + X.H; }
+    return z;
+  }
+  (function () {
+    var list = D.poi || [], lab = D.poig || [];
+    if (!list.length) return;
+    var cone = new THREE.ConeGeometry(3.4, 15, 8).rotateX(Math.PI).translate(0, 7.5, 0).toNonIndexed(), ball = new THREE.SphereGeometry(5.6, 12, 9).translate(0, 18, 0).toNonIndexed();
+    var pos = [], nor = [];
+    [cone, ball].forEach(function (g) { var a = g.attributes.position.array, n = g.attributes.normal.array; for (var i = 0; i < a.length; i++) { pos.push(a[i]); nor.push(n[i]); } });
+    var pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); pg.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    var mats = POIC.map(function (c) { return new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.28 }); });
+    list.forEach(function (o) {
+      var x = o[0] / 10, y = o[1] / 10, m = new THREE.Mesh(pg, mats[o[2] % mats.length]);
+      m.position.set(x, roofAt(x, y) + 1.5, -y); m.castShadow = false; m.frustumCulled = false;
+      m.userData = { title: o[3], text: (lab[o[2]] || '') + (o[4] ? ' · ' + o[4] : '') + (o[5] ? ' · ' + o[5].replace(/_/g, ' ') : ''), poi: o };
+      poiGroup.add(m); poiPick.push(m); poiList.push({ x: x, y: y, o: o });
+    });
+    var lg = document.getElementById('legend');
+    if (lg) lab.forEach(function (t, i) { var s = document.createElement('span'); s.innerHTML = '<i style="background:#' + ('000000' + POIC[i % POIC.length].toString(16)).slice(-6) + '"></i>' + t; lg.appendChild(s); });
+  })();
+  function poiScale() {
+    var d = camera.position.distanceTo(controls.target), k = Math.max(0.22, Math.min(2.2, d / 650));
+    poiGroup.children.forEach(function (m) { m.scale.setScalar(k); });
+  }
+  function poiIn(q) { return poiList.filter(function (p) { return inPoly(p.x, p.y, q); }).map(function (p) { return p.o[3] + ' (' + (D.poig[p.o[2]] || '').toLowerCase() + ')'; }); }
+
   /* ---------- camera ---------- */
   var controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.dampingFactor = 0.12; controls.maxPolarAngle = 1.42; controls.minDistance = 1.2; controls.zoomSpeed = 2.6; controls.maxDistance = 3400; controls.rotateSpeed = 0.7;
@@ -890,7 +927,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var dirty = true;
   var hourEl = document.getElementById('hour');
   hourEl.addEventListener('input', function () { setHour(parseFloat(hourEl.value)); });
-  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup], roads: [roadMesh], trees: [crowns, trunks], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup], parcels: [parcelGroup] };
+  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup], roads: [roadMesh], trees: [crowns, trunks], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup], parcels: [parcelGroup], poi: [poiGroup] };
   Array.prototype.forEach.call(document.querySelectorAll('.tog'), function (b) {
     b.addEventListener('click', function () {
       var on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on);
@@ -962,6 +999,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     var targets = bGroup.visible ? bGroup.children.slice() : [];
     if (msGroup.visible) targets = targets.concat(msGroup.children);
     if (powerGroup.visible) targets = targets.concat(powerPick);
+    if (poiGroup.visible) targets = targets.concat(poiPick);
     var hit = ray.intersectObjects(targets, false)[0];
     unsel();
     if (!hit) { card.hidden = true; dirty = true; return; }
@@ -991,6 +1029,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       if (X.s) ln.push(X.s);
       ln.push((X.est ? '≈ ' : '') + X.fl + ' ет. · височина ' + (X.est ? '≈ ' : '') + Math.round(X.H) + ' м');
       ln.push('Застроена площ ≈ ' + Math.round(X.a) + ' м²');
+      var pin2 = poiIn(X.q); if (pin2.length) ln.push('Тук: ' + pin2.slice(0, 4).join(', '));
       document.getElementById('cardText').textContent = ln.join(' · ');
       card.hidden = false; dirty = true; return;
     }
@@ -1002,6 +1041,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     if (b.s) lines.push(b.s);
     lines.push((info.est ? '≈ ' : '') + info.floors + ' ет. · височина ' + (info.est ? '≈ ' : '') + Math.round(info.h.v) + ' м' + (info.est ? ' (оценка по вид и размер)' : ''));
     lines.push('Застроена площ ≈ ' + Math.round(polyArea(b.p)) + ' м²');
+    var pin = poiIn(pts(b.p)); if (pin.length) lines.push('Тук: ' + pin.slice(0, 4).join(', '));
     document.getElementById('cardText').textContent = lines.join(' · ');
     card.hidden = false; dirty = true;
   });
@@ -1011,7 +1051,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     var gdy = (hAt(t.x, -t.z) - t.y) * 0.3; if (Math.abs(gdy) > 0.02) { t.y += gdy; camera.position.y += gdy; }
     var dd = camera.position.distanceTo(t), nn = Math.max(0.2, Math.min(3, dd / 30));
     if (Math.abs(nn - camera.near) > 0.02) { camera.near = nn; camera.updateProjectionMatrix(); }
-    placeSun(); dirty = true;
+    placeSun(); poiScale(); dirty = true;
   });
   function resize() {
     var w = stage.clientWidth, h = stage.clientHeight;
@@ -1028,7 +1068,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     needle.style.transform = 'rotate(' + (az * 180 / Math.PI).toFixed(1) + 'deg)';
     if (dirty) { renderer.render(scene, camera); dirty = false; }
   }
-  setHour(15.5); resize(); loop();
+  setHour(15.5); resize(); poiScale(); loop();
   document.getElementById('loading').hidden = true;
 })();
 </script>

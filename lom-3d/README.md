@@ -10,6 +10,7 @@ An interactive 3D model of the town of Lom (Bulgaria) that runs in a phone or de
 - Real terrain from the Copernicus DEM (30 m), so streets, buildings, water and trees follow the hills above the Danube
 - Satellite ground from Sentinel-2 (10 m), a procedural close-up ground texture, and a crisp procedural Danube drawn from a water mask
 - Roads, rails, water, trees and the 110 kV grid from OpenStreetMap
+- About 250 places (shops, restaurants, hotels, schools, hospital, banks, offices, workshops) as colour-coded pins by category; tap a pin or a building to see the name, category and address
 - Day/night slider, layer toggles, and Google-Maps-style touch controls (one finger pans, two fingers pinch and tilt, double tap zooms)
 
 ## Data sources and licences
@@ -19,12 +20,15 @@ An interactive 3D model of the town of Lom (Bulgaria) that runs in a phone or de
 | Roads, rails, water, landuse, power, some buildings | OpenStreetMap contributors | ODbL |
 | Building footprints | Microsoft ML Building Footprints via Overture Maps | ODbL |
 | Satellite image, vegetation and water masks | Copernicus Sentinel-2 L2A, 26 July 2025 (contains modified Copernicus Sentinel data 2025) | Free and open |
+| Places (names, categories, addresses) | Overture Maps Places (Meta, AllThePlaces) | CDLA-Permissive-2.0 and CC0 |
 | Terrain heights | Copernicus DEM GLO-30, © DLR e.V. and Airbus Defence and Space GmbH, provided under COPERNICUS by the EU and ESA | Free and open |
 
 This public version deliberately does **not** include cadastral data (building types, floor counts, addresses, parcel boundaries) from the Bulgarian Agency for Geodesy, Cartography and Cadastre, because the terms of those open data files are unclear.
 
 ## Limits
 
+- Places come from a global open dataset and are incomplete or out of date in places; phone numbers and e-mails were left out on purpose.
+- Factories and larger firms are mostly missing as named places; the Bulgarian Commercial Register is not used.
 - Facades, floor counts and roof shapes are estimated from building type and size, not surveyed.
 - The ground image is 10 m per pixel; close-up detail is procedural, not photographic.
 - The terrain is a 30 m model and shows the general shape, not steps or retaining walls.
