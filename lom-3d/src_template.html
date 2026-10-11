@@ -287,7 +287,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var ROAD = { secondary: 0x6a6d72, secondary_link: 0x6a6d72, tertiary: 0x73767b, unclassified: 0x7f8286, residential: 0x86888c, service: 0x9a9b9d, track: 0xb7a07c, pedestrian: 0xd9d0bd, footway: 0xe3dbc9, path: 0xcfc3a8, bridleway: 0xc4b48f };
 
   var groundMat = new THREE.MeshLambertMaterial({ color: 0x7f704c });
-  var farGround = new THREE.Mesh(new THREE.PlaneGeometry(40000, 40000), groundMat);
+  var farGround = new THREE.Mesh(new THREE.PlaneGeometry(120000, 120000), groundMat);
   farGround.rotation.x = -Math.PI / 2; farGround.position.y = -9; scene.add(farGround);
 
   var OUT = __OUT__;
@@ -309,18 +309,49 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   /* ---------- satellite (Copernicus Sentinel-2, 10 m, drawn under the roads) ---------- */
   var maxAniso0 = (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) ? Math.min(4, renderer.capabilities.getMaxAnisotropy()) : 1;
   var SB = [-4000, 4000, -4600, 4600];
+
+  /* crops guessed from Sentinel-2 colour/NDVI (July): stubble, ploughed soil, sunflower, maize; drawn as rows/stripes up close, as colour far away */
+  var CROP_GLSL =
+    'uniform sampler2D uCls; uniform sampler2D uCls2; uniform vec4 uClsB;\n' +
+    'vec4 clsAt(vec2 p){ vec2 u = (p - uClsB.xy) * uClsB.zw; return vec4(texture2D(uCls, u).rgb, texture2D(uCls2, u).r); }\n' +
+    'vec3 cropShade(vec3 c, vec4 k, vec2 p, float dist, float strength){\n' +
+    ' float lm = dot(c, vec3(0.3, 0.59, 0.11)); float gw = smoothstep(0.5, 0.8, k.g), pw = gw * (1.0 - smoothstep(0.30, 0.42, lm)), sw = gw - pw, sf = smoothstep(0.5, 0.8, k.b), mz = smoothstep(0.5, 0.8, k.a);\n' +
+    ' float gd = smoothstep(0.02, 0.08, c.g - c.r); sf *= gd; mz *= gd; sw *= 1.0 - gd * 0.85; pw *= 1.0 - gd * 0.85;\n' +
+    ' float tot = sw + pw + sf + mz; if (tot < 0.01) return c;\n' +
+    ' float ang = 0.25 + floor(vn(p * 0.0006) * 5.0) * 0.61 + (vn(p * 0.0021) - 0.5) * 0.35;\n' +
+    ' mat2 R = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)); vec2 q = R * p;\n' +
+    ' float fv = vn(p * 0.0045 + 3.0);\n' +
+    ' float fw = fwidth(q.y); float aa = 1.0 - smoothstep(0.25, 0.6, fw / 0.75);\n' +
+    ' float aS = 1.0 - smoothstep(0.25, 0.6, fw / 5.5);\n' +
+    ' float row = 0.5 + 0.5 * sin(q.y * 8.38);\n' +
+    ' vec3 o = c;\n' +
+    ' if (sw > 0.0) { vec3 g = vec3(0.88, 0.75, 0.42) * (0.88 + 0.2 * fv); vec3 v = mix(c, g, 0.5);\n' +
+    '  float sk = sin(q.y * 1.14) * 0.5 + 0.5; v *= 1.0 + (sk - 0.5) * 0.3 * aS * (1.0 - smoothstep(120.0, 600.0, dist)) + (row - 0.5) * 0.1 * aa;\n' +
+    '  vec2 bc = floor(p / 16.0); float hb = h21(bc); vec2 bq = fract(p / 16.0) - vec2(0.3 + 0.4 * h21(bc + 4.0), 0.3 + 0.4 * h21(bc + 9.0));\n' +
+    '  float bale = step(0.55, hb) * (1.0 - smoothstep(0.045, 0.075, length(bq))) * (1.0 - smoothstep(60.0, 320.0, dist));\n' +
+    '  v = mix(v, vec3(0.62, 0.45, 0.2), bale * 0.85); o = mix(o, v, sw * strength); }\n' +
+    ' if (pw > 0.0) { vec3 v = mix(c, vec3(0.45, 0.32, 0.21) * (0.9 + 0.25 * fv), 0.55); v *= 1.0 + (row - 0.5) * 0.26 * aa + (vn(p * 0.8) - 0.5) * 0.08; o = mix(o, v, pw * strength); }\n' +
+    ' if (sf > 0.0) { float bloom = smoothstep(0.35, 0.7, fv); vec3 g = mix(vec3(0.27, 0.42, 0.1), vec3(0.78, 0.66, 0.1), bloom * 0.85); vec3 v = mix(c, g, 0.55);\n' +
+    '  float hd = vn(vec2(q.x * 1.3, q.y * 0.3)); v *= 1.0 + (row - 0.5) * 0.34 * aa; v = mix(v, vec3(0.92, 0.74, 0.08), bloom * smoothstep(0.62, 0.9, hd) * 0.5 * aa);\n' +
+    '  o = mix(o, v, sf * strength); }\n' +
+    ' if (mz > 0.0) { vec3 v = mix(c, vec3(0.13, 0.36, 0.09) * (0.85 + 0.3 * fv), 0.55); v *= 1.0 + (row - 0.5) * 0.4 * aa + (vn(vec2(q.x * 0.9, q.y * 0.2)) - 0.5) * 0.18 * aa;\n' +
+    '  o = mix(o, v, mz * strength); }\n' +
+    ' return o;\n}\n';
   var satMat = new THREE.ShaderMaterial({
     transparent: false, depthWrite: false, fog: true, vertexColors: true,
-    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSat: { value: null }, uWm: { value: null }, uBr: { value: new THREE.Vector3(1, 1, 1) }, uTexel: { value: new THREE.Vector2(1 / 1400, 1 / 1610) } }]),
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uCls: { value: null }, uCls2: { value: null }, uClsB: { value: new THREE.Vector4(-22500, -12500, 1 / 44000, 1 / 17500) }, uSat: { value: null }, uWm: { value: null }, uBr: { value: new THREE.Vector3(1, 1, 1) }, uTexel: { value: new THREE.Vector2(1 / 1400, 1 / 1610) } }]),
     vertexShader: 'varying vec2 vUv; varying vec3 vW; varying vec3 vC;\n#include <fog_pars_vertex>\nvoid main(){ vUv = uv; vC = color; vec4 wp = modelMatrix * vec4(position, 1.0); vW = wp.xyz; vec4 mvPosition = viewMatrix * wp; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
     fragmentShader: 'uniform sampler2D uSat; uniform sampler2D uWm; uniform vec3 uBr; uniform vec2 uTexel; varying vec2 vUv; varying vec3 vW; varying vec3 vC;\n#include <common>\n#include <fog_pars_fragment>\n' +
       'float h21(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }\n' +
-      'float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); vec2 a = mod(i, 251.0), b = mod(i + 1.0, 251.0); return mix(mix(h21(a), h21(vec2(b.x, a.y)), f.x), mix(h21(vec2(a.x, b.y)), h21(b), f.x), f.y); }\n' +
+      'float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); vec2 a = mod(i, 251.0), b = mod(i + 1.0, 251.0); return mix(mix(h21(a), h21(vec2(b.x, a.y)), f.x), mix(h21(vec2(a.x, b.y)), h21(b), f.x), f.y); }\n' + CROP_GLSL +
       'void main(){\n' +
       ' vec3 c = texture2D(uSat, vUv).rgb;\n' +
       ' vec3 bl = (texture2D(uSat, vUv + vec2(uTexel.x * 1.6, 0.0)).rgb + texture2D(uSat, vUv - vec2(uTexel.x * 1.6, 0.0)).rgb + texture2D(uSat, vUv + vec2(0.0, uTexel.y * 1.6)).rgb + texture2D(uSat, vUv - vec2(0.0, uTexel.y * 1.6)).rgb) * 0.25;\n' +
       ' c = clamp(c + (c - bl) * 0.25, 0.0, 1.0); c = c * 0.78 + 0.13 * vec3(0.95, 1.0, 0.8);\n' +
-      ' float dist = length(cameraPosition - vW); float nr = 1.0 - smoothstep(160.0, 900.0, dist);\n' +
+      ' float dist = length(cameraPosition - vW);\n' +
+      ' { vec4 kk = clsAt(vec2(vW.x, -vW.z)); c = cropShade(c, kk, vec2(vW.x, -vW.z), dist, 0.85); }\n' +
+      ' { float wf = smoothstep(0.4, 0.7, texture2D(uWm, vUv).r) * smoothstep(1500.0, 4000.0, dist); c = mix(c, vec3(0.09, 0.24, 0.36), wf * 0.9); }\n' +
+      ' float nr = 1.0 - smoothstep(160.0, 900.0, dist);\n' +
       ' float veg = smoothstep(0.0, 0.07, c.g - c.r) * smoothstep(0.0, 0.05, c.g - c.b * 1.05);\n' +
       ' float bare = smoothstep(0.0, 0.04, c.r - c.b) * (1.0 - veg);\n' +
       ' vec2 p = vW.xz;\n' +
@@ -365,9 +396,22 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var OB = [-22500, 21500, -12500, 5000];
   var outMat = new THREE.ShaderMaterial({
     fog: true, vertexColors: true,
-    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSat: { value: null } }]),
-    vertexShader: 'varying vec2 vUv; varying vec3 vC;\n#include <fog_pars_vertex>\nvoid main(){ vUv = uv; vC = color; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
-    fragmentShader: 'uniform sampler2D uSat; uniform vec3 uBr; varying vec2 vUv; varying vec3 vC;\n#include <common>\n#include <fog_pars_fragment>\nvoid main(){ vec3 c = texture2D(uSat, vUv).rgb; c = c * 0.78 + 0.13 * vec3(0.95, 1.0, 0.8); gl_FragColor = vec4(c * uBr * vC, 1.0);\n#include <fog_fragment>\n}'
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSat: { value: null }, uCls: { value: null }, uCls2: { value: null }, uClsB: { value: new THREE.Vector4(OB[0], OB[2], 1 / (OB[1] - OB[0]), 1 / (OB[3] - OB[2])) }, uSun: { value: new THREE.Vector3(0.3, 0.8, 0.3) }, uDay: { value: 1 } }]),
+    vertexShader: 'varying vec2 vUv; varying vec3 vC; varying vec3 vW;\n#include <fog_pars_vertex>\nvoid main(){ vUv = uv; vC = color; vec4 wp = modelMatrix * vec4(position, 1.0); vW = wp.xyz; vec4 mvPosition = viewMatrix * wp; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
+    fragmentShader: 'uniform sampler2D uSat; uniform vec3 uBr; uniform vec3 uSun; uniform float uDay; varying vec2 vUv; varying vec3 vC; varying vec3 vW;\n#include <common>\n#include <fog_pars_fragment>\n' +
+      'float h21(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }\n' +
+      'float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); vec2 a = mod(i, 251.0), b = mod(i + 1.0, 251.0); return mix(mix(h21(a), h21(vec2(b.x, a.y)), f.x), mix(h21(vec2(a.x, b.y)), h21(b), f.x), f.y); }\n' + CROP_GLSL +
+      'float rip(vec2 p){ return vn(p * 0.9) * 0.5 + vn(p * 2.3 + 7.0) * 0.28 + vn(p * 5.7 + 3.0) * 0.14; }\n' +
+      'void main(){ vec3 c = texture2D(uSat, vUv).rgb; c = c * 0.78 + 0.13 * vec3(0.95, 1.0, 0.8);\n' +
+      ' vec2 p = vec2(vW.x, -vW.z); vec4 k = clsAt(p); float dist = length(cameraPosition - vW);\n' +
+      ' float sat0 = dot(c, vec3(0.3, 0.59, 0.11)); c = mix(vec3(sat0), c, 1.18);\n' +
+      ' c = cropShade(c, k, p, dist, 1.0);\n' +
+      ' float wa = smoothstep(0.4, 0.7, k.r);\n' +
+      ' if (wa > 0.01) { vec2 q = vec2(p.x * 0.12, p.y * 0.35); float h0 = rip(q), hx = rip(q + vec2(0.3, 0.0)), hz = rip(q + vec2(0.0, 0.3));\n' +
+      '  vec3 n = normalize(vec3((h0 - hx) * 1.8, 0.0, (h0 - hz) * 1.8) * (1.0 - smoothstep(250.0, 2200.0, length(cameraPosition - vW))) + vec3(0.0, 1.0, 0.0)); vec3 V = normalize(cameraPosition - vW); float fr = pow(1.0 - max(dot(n, V), 0.0), 3.0);\n' +
+      '  vec3 w = mix(vec3(0.05, 0.19, 0.30), vec3(0.12, 0.34, 0.41), clamp(smoothstep(0.95, 0.5, k.r) * 0.9 + (h0 - 0.5) * 0.35, 0.0, 1.0)); w = mix(w, vec3(0.50, 0.66, 0.82), fr * 0.5);\n' +
+      '  vec3 R = reflect(-normalize(uSun), n); w += vec3(1.0, 0.93, 0.8) * pow(max(dot(R, V), 0.0), 90.0) * 0.9 * uDay; w *= 0.22 + 0.78 * uDay; c = mix(c, w / max(uBr.g, 0.2), wa); }\n' +
+      ' gl_FragColor = vec4(c * uBr * vC, 1.0);\n#include <fog_fragment>\n}'
   });
   outMat.uniforms.uBr = satMat.uniforms.uBr;
   var outMesh = new THREE.Mesh(terrainGeo(OB[0], OB[1], OB[2], 4960, 100, -2, true, OB), outMat);
@@ -376,6 +420,8 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     var im = new Image();
     im.onload = function () { var t = new THREE.Texture(im); t.needsUpdate = true; t.anisotropy = maxAniso0; outMat.uniforms.uSat.value = t; dirty = true; };
     im.src = 'data:image/jpeg;base64,__SATO__';
+    function ldc(src, key) { var ic = new Image(); ic.onload = function () { var t = new THREE.Texture(ic); t.needsUpdate = true; t.anisotropy = 4; outMat.uniforms[key].value = t; satMat.uniforms[key].value = t; dirty = true; }; ic.src = src; }
+    ldc('data:image/png;base64,__CLS__', 'uCls'); ldc('data:image/png;base64,__CLS2__', 'uCls2');
   })();
   var satMesh = new THREE.Mesh(terrainGeo(SB[0], SB[1], SB[2], SB[3], 30, 0, true, SB), satMat);
   satMesh.renderOrder = 2.5; satMesh.frustumCulled = false;
@@ -402,12 +448,12 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       'float rip(vec2 p){ return vn(p * 0.9) * 0.5 + vn(p * 2.3 + 7.0) * 0.28 + vn(p * 5.7 + 3.0) * 0.14 + vn(p * 13.0 + 1.0) * 0.08; }\n' +
       'void main(){ float m = texture2D(uMask, vUv).r; float a = smoothstep(0.36, 0.64, m); if (a < 0.01) discard;\n' +
       ' vec2 q = vec2(vW.x * 0.12, vW.z * 0.35); float h0 = rip(q), hx = rip(q + vec2(0.3, 0.0)), hz = rip(q + vec2(0.0, 0.3));\n' +
-      ' vec3 n = normalize(vec3((h0 - hx) * 1.8, 1.0, (h0 - hz) * 1.8)); vec3 V = normalize(cameraPosition - vW);\n' +
+      ' vec3 n = normalize(vec3((h0 - hx) * 1.8, 0.0, (h0 - hz) * 1.8) * (1.0 - smoothstep(250.0, 2200.0, length(cameraPosition - vW))) + vec3(0.0, 1.0, 0.0)); vec3 V = normalize(cameraPosition - vW);\n' +
       ' float fr = pow(1.0 - max(dot(n, V), 0.0), 3.0);\n' +
       ' vec3 col = mix(vec3(0.05, 0.19, 0.30), vec3(0.12, 0.34, 0.41), clamp(smoothstep(0.7, 0.0, m) * 0.9 + (h0 - 0.5) * 0.35, 0.0, 1.0));\n' +
       ' col = mix(col, vec3(0.50, 0.66, 0.82), fr * 0.5);\n' +
       ' vec3 L = normalize(uSun); vec3 R = reflect(-L, n); col += vec3(1.0, 0.93, 0.8) * pow(max(dot(R, V), 0.0), 90.0) * 0.9 * uDay;\n' +
-      ' col *= 0.22 + 0.78 * uDay; gl_FragColor = vec4(col, a);\n#include <fog_fragment>\n}'
+      ' col *= 0.22 + 0.78 * uDay; a *= 1.0 - smoothstep(3500.0, 7000.0, length(cameraPosition - vW)); gl_FragColor = vec4(col, a);\n#include <fog_fragment>\n}'
   });
   var waterBits = null, waterResolve, waterReady = new Promise(function (r) { waterResolve = r; });
   function inWater(x, y) { if (!waterBits) return false; var c = Math.floor((x - SB[0]) / (SB[1] - SB[0]) * waterBits.w), r = Math.floor((SB[3] - y) / (SB[3] - SB[2]) * waterBits.h); return c >= 0 && r >= 0 && c < waterBits.w && r < waterBits.h && waterBits.a[r * waterBits.w + c] === 1; }
@@ -1185,7 +1231,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
 
   /* ---------- camera ---------- */
   var controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true; controls.dampingFactor = 0.12; controls.maxPolarAngle = 1.42; controls.minDistance = 1.2; controls.zoomSpeed = 2.6; controls.maxDistance = 14000; controls.rotateSpeed = 0.7;
+  controls.enableDamping = true; controls.dampingFactor = 0.12; controls.maxPolarAngle = 1.42; controls.minDistance = 1.2; controls.zoomSpeed = 2.6; controls.maxDistance = 36000; controls.rotateSpeed = 0.7;
   /* map-style gestures: one finger drags the map, two fingers pinch to zoom and twist/tilt (like Google Maps) */
   controls.screenSpacePanning = false; controls.panSpeed = 1.1;
   controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
@@ -1237,7 +1283,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     sun.intensity = s > 0 ? 0.2 + 1.0 * day : 0.22;
     hemi.intensity = 0.16 + 0.6 * day; hemi.color.copy(skyC).lerp(new THREE.Color(0xffffff), 0.35 * day);
     var night = 1 - day;
-    waterMat.uniforms.uDay.value = day; waterMat.uniforms.uSun.value.copy(dir);
+    waterMat.uniforms.uDay.value = day; waterMat.uniforms.uSun.value.copy(dir); outMat.uniforms.uDay.value = day; outMat.uniforms.uSun.value.copy(dir);
     parcelMat.opacity = 0.18 + 0.52 * day;
     wallMats.forEach(function (m) { m.emissiveIntensity = Math.pow(night, 1.6) * 1.15; m.userData.px.uSky.value = Math.max(0.12, 1 - night); });
     groundMat.color.copy(groundDay);
