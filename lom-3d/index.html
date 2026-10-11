@@ -297,9 +297,9 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var SB = [-4000, 4000, -4600, 4600];
   var satMat = new THREE.ShaderMaterial({
     transparent: false, depthWrite: false, fog: true, vertexColors: true,
-    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSat: { value: null }, uBr: { value: new THREE.Vector3(1, 1, 1) }, uTexel: { value: new THREE.Vector2(1 / 1400, 1 / 1610) } }]),
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSat: { value: null }, uWm: { value: null }, uBr: { value: new THREE.Vector3(1, 1, 1) }, uTexel: { value: new THREE.Vector2(1 / 1400, 1 / 1610) } }]),
     vertexShader: 'varying vec2 vUv; varying vec3 vW; varying vec3 vC;\n#include <fog_pars_vertex>\nvoid main(){ vUv = uv; vC = color; vec4 wp = modelMatrix * vec4(position, 1.0); vW = wp.xyz; vec4 mvPosition = viewMatrix * wp; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
-    fragmentShader: 'uniform sampler2D uSat; uniform vec3 uBr; uniform vec2 uTexel; varying vec2 vUv; varying vec3 vW; varying vec3 vC;\n#include <common>\n#include <fog_pars_fragment>\n' +
+    fragmentShader: 'uniform sampler2D uSat; uniform sampler2D uWm; uniform vec3 uBr; uniform vec2 uTexel; varying vec2 vUv; varying vec3 vW; varying vec3 vC;\n#include <common>\n#include <fog_pars_fragment>\n' +
       'float h21(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }\n' +
       'float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); vec2 a = mod(i, 251.0), b = mod(i + 1.0, 251.0); return mix(mix(h21(a), h21(vec2(b.x, a.y)), f.x), mix(h21(vec2(a.x, b.y)), h21(b), f.x), f.y); }\n' +
       'void main(){\n' +
@@ -315,6 +315,18 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       ' float bl2 = vn(vec2(p.x * 48.0, p.y * 17.0) + vn(p * 3.1) * 9.0);\n' +
       ' float ang = floor(vn(p * 0.006) * 4.0) * 0.785398; vec2 dr = vec2(cos(ang), sin(ang)); float fu = dot(p, dr) * 0.9 + vn(p * 0.8) * 2.5; float fur = abs(fract(fu) - 0.5) * 2.0;\n' +
       ' float other = 1.0 - veg - bare;\n' +
+      ' float nw = max(max(texture2D(uWm, vUv + vec2(0.0075, 0.0)).r, texture2D(uWm, vUv - vec2(0.0075, 0.0)).r), max(texture2D(uWm, vUv + vec2(0.0, 0.0065)).r, texture2D(uWm, vUv - vec2(0.0, 0.0065)).r));\n' +
+      ' float lum = dot(c, vec3(0.3, 0.59, 0.11));\n' +
+      ' float sand = smoothstep(0.5, 0.6, lum) * smoothstep(0.025, 0.07, c.r - c.b) * (1.0 - smoothstep(0.05, 0.11, c.r - c.g)) * smoothstep(0.0, 0.03, c.g - c.b) * (1.0 - veg) * smoothstep(0.1, 0.6, nw) * (1.0 - smoothstep(300.0, 1600.0, dist));\n' +
+      ' if (sand > 0.01) {\n' +
+      '  float gr = vn(p * 170.0) * 0.5 + vn(p * 520.0) * 0.5;\n' +
+      '  float rp = sin((p.x * 0.8 + p.y * 1.3) * 5.0 + vn(p * 0.45) * 9.0) * 0.5 + 0.5;\n' +
+      '  float pb = step(0.965, h21(floor(p * 40.0))) * (0.6 + 0.4 * h21(floor(p * 40.0) + 7.0));\n' +
+      '  float wet = smoothstep(0.55, 1.0, nw) * 0.12;\n' +
+      '  vec3 sc = c * (0.92 + 0.16 * gr + (rp - 0.5) * 0.08 * (1.0 - smoothstep(60.0, 400.0, dist))) * vec3(1.02, 1.0, 0.95);\n' +
+      '  sc -= pb * 0.07 * (1.0 - smoothstep(80.0, 500.0, dist)); sc *= 1.0 - wet;\n' +
+      '  c = mix(c, sc, sand);\n' +
+      ' }\n' +
       ' float m = 1.0 + nr * (veg * (g * 0.9 + (bl2 - 0.5) * 0.28) + bare * (g * 0.7 + (fur - 0.5) * 0.09 * smoothstep(500.0, 100.0, dist)) + other * g * 0.45);\n' +
       ' c.g *= 1.0 + nr * veg * (n2 - 0.5) * 0.22; c.r *= 1.0 + nr * veg * (n1 - 0.5) * 0.14;\n' +
       ' gl_FragColor = vec4(c * m * uBr * vC, 1.0);\n#include <fog_fragment>\n}'
@@ -358,7 +370,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   (function () {
     var im = new Image();
     im.onload = function () {
-      var t = new THREE.Texture(im); t.needsUpdate = true; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; waterMat.uniforms.uMask.value = t; dirty = true;
+      var t = new THREE.Texture(im); t.needsUpdate = true; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; waterMat.uniforms.uMask.value = t; satMat.uniforms.uWm.value = t; dirty = true;
       try { var w = im.width, h = im.height, c = cv(w, h), g = c.getContext('2d'); g.drawImage(im, 0, 0); var px = g.getImageData(0, 0, w, h).data; waterBits = { w: w, h: h, a: new Uint8Array(w * h) }; for (var i = 0; i < w * h; i++) waterBits.a[i] = px[i * 4] > 127 ? 1 : 0; } catch (e) {}
       waterResolve();
     };
