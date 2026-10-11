@@ -160,12 +160,26 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     return { a: a, x0: -4500, y0: -5100, s: 30, nx: 301, ny: 341 };
   })();
   function hR(i, j) { i = i < 0 ? 0 : i > TN.ny - 1 ? TN.ny - 1 : i; j = j < 0 ? 0 : j > TN.nx - 1 ? TN.nx - 1 : j; return TN.a[i * TN.nx + j] * 0.75; }
+  var TN2 = (function () {
+    var b = atob('__DEM2__'), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i);
+    return { a: a, x0: -22500, y0: -12500, s: 60, nx: 734, ny: 292 };
+  })();
+  function hR2(i, j) { i = i < 0 ? 0 : i > TN2.ny - 1 ? TN2.ny - 1 : i; j = j < 0 ? 0 : j > TN2.nx - 1 ? TN2.nx - 1 : j; var v = TN2.a[i * TN2.nx + j] * 1.3 - 1.0; return v < 0 ? 0 : v; }
+  function hOuter(x, y) {
+    var fx = (x - TN2.x0) / TN2.s, fy = (y - TN2.y0) / TN2.s, cx0 = Math.max(0, Math.min(TN2.nx - 1.001, fx)), cy0 = Math.max(0, Math.min(TN2.ny - 1.001, fy));
+    var j = Math.floor(cx0), i = Math.floor(cy0), u = cx0 - j, v = cy0 - i;
+    var h = (hR2(i, j) * (1 - u) + hR2(i, j + 1) * u) * (1 - v) + (hR2(i + 1, j) * (1 - u) + hR2(i + 1, j + 1) * u) * v;
+    var dx = Math.max(0, -fx, fx - (TN2.nx - 1)) * TN2.s, dy = Math.max(0, -fy, fy - (TN2.ny - 1)) * TN2.s, d = Math.hypot(dx, dy);
+    if (d > 0) { var k = Math.min(1, d / 1500); k = k * k * (3 - 2 * k); h *= 1 - k; }
+    return h;
+  }
   function hAt(x, y) {
-    var fx = (x - TN.x0) / TN.s, fy = (y - TN.y0) / TN.s, cx0 = Math.max(0, Math.min(TN.nx - 1, fx)), cy0 = Math.max(0, Math.min(TN.ny - 1, fy));
+    var fx = (x - TN.x0) / TN.s, fy = (y - TN.y0) / TN.s, e = Math.min(fx, TN.nx - 1 - fx, fy, TN.ny - 1 - fy) * TN.s;
+    if (e <= 0) return hOuter(x, y);
+    var cx0 = Math.max(0, Math.min(TN.nx - 1, fx)), cy0 = Math.max(0, Math.min(TN.ny - 1, fy));
     var j = Math.min(TN.nx - 2, Math.floor(cx0)), i = Math.min(TN.ny - 2, Math.floor(cy0)), u = cx0 - j, v = cy0 - i;
     var h = (hR(i, j) * (1 - u) + hR(i, j + 1) * u) * (1 - v) + (hR(i + 1, j) * (1 - u) + hR(i + 1, j + 1) * u) * v;
-    var dx = Math.max(0, -fx, fx - (TN.nx - 1)) * TN.s, dy = Math.max(0, -fy, fy - (TN.ny - 1)) * TN.s, d = Math.hypot(dx, dy);
-    if (d > 0) { var k = Math.min(1, d / 1500); k = k * k * (3 - 2 * k); h *= 1 - k; }
+    if (e < 900) { var k = e / 900; k = k * k * (3 - 2 * k); h = h * k + hOuter(x, y) * (1 - k); }
     return h;
   }
   function nAt(x, y) {
@@ -273,11 +287,10 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var ROAD = { secondary: 0x6a6d72, secondary_link: 0x6a6d72, tertiary: 0x73767b, unclassified: 0x7f8286, residential: 0x86888c, service: 0x9a9b9d, track: 0xb7a07c, pedestrian: 0xd9d0bd, footway: 0xe3dbc9, path: 0xcfc3a8, bridleway: 0xc4b48f };
 
   var groundMat = new THREE.MeshLambertMaterial({ color: 0x7f704c });
-  var ground = new THREE.Mesh(terrainGeo(-6500, 6500, -7000, 7000, 50, -3, false, [-6500, 6500, -7000, 7000]), groundMat);
-  ground.receiveShadow = true; scene.add(ground);
   var farGround = new THREE.Mesh(new THREE.PlaneGeometry(40000, 40000), groundMat);
-  farGround.rotation.x = -Math.PI / 2; farGround.position.y = -3.2; scene.add(farGround);
+  farGround.rotation.x = -Math.PI / 2; farGround.position.y = -9; scene.add(farGround);
 
+  var OUT = __OUT__;
   var landAcc = new Acc(140, 0.03);
   D.landuse.forEach(function (z) { addPoly(landAcc, z.p, col(LAND[z.k] || 0xb9b59d)); });
   var landMesh = landAcc.mesh(1); scene.add(landMesh);
@@ -289,7 +302,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var waterMesh = waterAcc.mesh(2); scene.add(waterMesh);
 
   var roadAcc = new Acc(40, 0.08); roadAcc.uv = [];
-  D.roads.slice().sort(function (a, b) { return b.w - a.w; }).forEach(function (r) { addRibbon(roadAcc, pts(r.p), r.w / 2, r.w / 2, col(ROAD[r.c] || 0x8a8c8f), r.w >= 5.5); });
+  D.roads.concat(OUT.roads).sort(function (a, b) { return b.w - a.w; }).forEach(function (r) { addRibbon(roadAcc, pts(r.p), r.w / 2, r.w / 2, col(ROAD[r.c] || 0x8a8c8f), r.w >= 5.5); });
   D.rails.forEach(function (r) { addRibbon(roadAcc, pts(r.p), 1.3, 1.3, col(0x4d4640), false); });
   var roadMesh = roadAcc.mesh(3); scene.add(roadMesh);
 
@@ -347,6 +360,23 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       ' c.g *= 1.0 + nr * veg * (n2 - 0.5) * 0.22; c.r *= 1.0 + nr * veg * (n1 - 0.5) * 0.14;\n' +
       ' gl_FragColor = vec4(c * m * uBr * vC, 1.0);\n#include <fog_fragment>\n}'
   });
+
+  /* ---------- the whole municipality: coarse Sentinel-2 (12.5 m) on a 100 m terrain, drawn under the detailed city layers ---------- */
+  var OB = [-22500, 21500, -12500, 5000];
+  var outMat = new THREE.ShaderMaterial({
+    fog: true, vertexColors: true,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSat: { value: null } }]),
+    vertexShader: 'varying vec2 vUv; varying vec3 vC;\n#include <fog_pars_vertex>\nvoid main(){ vUv = uv; vC = color; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
+    fragmentShader: 'uniform sampler2D uSat; uniform vec3 uBr; varying vec2 vUv; varying vec3 vC;\n#include <common>\n#include <fog_pars_fragment>\nvoid main(){ vec3 c = texture2D(uSat, vUv).rgb; c = c * 0.78 + 0.13 * vec3(0.95, 1.0, 0.8); gl_FragColor = vec4(c * uBr * vC, 1.0);\n#include <fog_fragment>\n}'
+  });
+  outMat.uniforms.uBr = satMat.uniforms.uBr;
+  var outMesh = new THREE.Mesh(terrainGeo(OB[0], OB[1], OB[2], 4960, 100, -2, true, OB), outMat);
+  outMesh.renderOrder = 2.2; outMesh.frustumCulled = false; scene.add(outMesh);
+  (function () {
+    var im = new Image();
+    im.onload = function () { var t = new THREE.Texture(im); t.needsUpdate = true; t.anisotropy = maxAniso0; outMat.uniforms.uSat.value = t; dirty = true; };
+    im.src = 'data:image/jpeg;base64,__SATO__';
+  })();
   var satMesh = new THREE.Mesh(terrainGeo(SB[0], SB[1], SB[2], SB[3], 30, 0, true, SB), satMat);
   satMesh.renderOrder = 2.5; satMesh.frustumCulled = false;
   scene.add(satMesh);
@@ -883,6 +913,56 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     var m = new THREE.Mesh(geo, B.mats); m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
     msGroup.add(m);
   });
+  /* ---------- village buildings (Overture: Microsoft ML + OSM footprints), 1 km cells built lazily as the camera comes near ---------- */
+  var outerGroup = new THREE.Group(); scene.add(outerGroup);
+  var outCells = {}, outQ = [], outJob = null, outUid = 0;
+  Object.keys(OUT.cells).forEach(function (k) { var a = k.split(','), cx = +a[0] * 1000 + 500, cy = +a[1] * 1000 + 500; outCells[k] = { x: cx, y: cy, list: OUT.cells[k], built: false, queued: false, meshes: [] }; });
+  function outStart(c) {
+    outJob = { c: c, i: 0, batches: {} };
+  }
+  function outStep(budget) {
+    var t0 = performance.now();
+    if (!outJob && outQ.length) outStart(outQ.shift());
+    var J = outJob; if (!J) return;
+    while (J.i < J.c.list.length && performance.now() - t0 < budget) {
+      var p = J.c.list[J.i++], area = polyArea(p), b = { id: 950000 + (outUid++), t: 'yes' }, P = plan(b, area), g;
+      if (P.st === 'shop' && area < 400) { P.st = 'house'; P.floors = 1 + (rnd(b.id) > 0.5 ? 1 : 0); P.H = P.floors * 3; P.pitch = true; }
+      if (P.st === 'ind' && area < 700) { P.st = 'house'; P.floors = 1; P.H = 3; P.pitch = true; }
+      try { g = new THREE.ExtrudeGeometry(shapeOf(p), { depth: P.H, bevelEnabled: false, UVGenerator: WALL_UV }); } catch (e) { continue; }
+      g.rotateX(-Math.PI / 2);
+      var q = pts(p), pitched = false, rh = 0, ob = null, bz = baseZ(q); g.translate(0, bz, 0);
+      if (P.pitch) {
+        try { ob = obb(q); } catch (e) { ob = null; }
+        if (ob && ob.A > 0 && area / ob.A > 0.86 && ob.b >= 1.8 && ob.b <= 9) { pitched = true; rh = Math.max(1.1, Math.min(3.2, ob.b * 0.5)); }
+      }
+      var wm = wallMat(P.st, b.id), cm = pitched ? gableMat(b.id) : flatMat(b.id);
+      var key = 'w' + wm.id + '_' + cm.id; (J.batches[key] || (J.batches[key] = new Batch([cm, wm]))).add(g); g.dispose();
+      if (pitched) {
+        var rg = gableGeo(ob, P.H, rh), rm = roofMat(b.id), gm = gableMat(b.id); rg.translate(0, bz, 0);
+        var key2 = 'r' + rm.id + '_' + gm.id; (J.batches[key2] || (J.batches[key2] = new Batch([rm, gm]))).add(rg); rg.dispose();
+      }
+    }
+    if (J.i >= J.c.list.length) {
+      Object.keys(J.batches).forEach(function (k) {
+        var B = J.batches[k], geo = new THREE.BufferGeometry(), pos = [], nor = [], uv = [], start = 0;
+        B.g.forEach(function (t, mi) { pos = pos.concat(t.p); nor = nor.concat(t.n); uv = uv.concat(t.u); if (t.p.length) geo.addGroup(start, t.p.length / 3, mi); start += t.p.length / 3; });
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+        geo.computeBoundingSphere();
+        var m = new THREE.Mesh(geo, B.mats); m.castShadow = false; m.receiveShadow = false; J.c.meshes.push(m); outerGroup.add(m);
+      });
+      J.c.built = true; outJob = null; dirty = true;
+    }
+  }
+  function outUpdate() {
+    var cp = camera.position, tg = controls.target, any = false;
+    for (var k in outCells) {
+      var c = outCells[k], dc = Math.hypot(cp.x - c.x, cp.z + c.y), dt = Math.hypot(tg.x - c.x, tg.z + c.y), d = Math.min(dc, dt + 300);
+      if (!c.built && !c.queued && d < 2600) { c.queued = true; outQ.push(c); }
+      if (c.built) { var vis = d < 4200; if (c.meshes.length && c.meshes[0].visible !== vis) { c.meshes.forEach(function (m) { m.visible = vis; }); any = true; } }
+    }
+    outQ.sort(function (a, b) { return Math.hypot(tg.x - a.x, tg.z + a.y) - Math.hypot(tg.x - b.x, tg.z + b.y); });
+    if (any) dirty = true;
+  }
   var roofDetailGroup = new THREE.Group(); scene.add(roofDetailGroup);
   [['par', 0xd6d3cb, 0], ['box', 0xa2a6ab, 0], ['tank', 0xb9bdb8, 0], ['pv', 0x1f3350, 0x0a1426]].forEach(function (k) {
     var t = RD[k[0]]; if (!t.p.length) return;
@@ -1105,7 +1185,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
 
   /* ---------- camera ---------- */
   var controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true; controls.dampingFactor = 0.12; controls.maxPolarAngle = 1.42; controls.minDistance = 1.2; controls.zoomSpeed = 2.6; controls.maxDistance = 3400; controls.rotateSpeed = 0.7;
+  controls.enableDamping = true; controls.dampingFactor = 0.12; controls.maxPolarAngle = 1.42; controls.minDistance = 1.2; controls.zoomSpeed = 2.6; controls.maxDistance = 14000; controls.rotateSpeed = 0.7;
   /* map-style gestures: one finger drags the map, two fingers pinch to zoom and twist/tilt (like Google Maps) */
   controls.screenSpacePanning = false; controls.panSpeed = 1.1;
   controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
@@ -1176,7 +1256,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var dirty = true;
   var hourEl = document.getElementById('hour');
   hourEl.addEventListener('input', function () { setHour(parseFloat(hourEl.value)); });
-  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup], roads: [roadMesh], trees: [crowns, trunks, shoreVegGroup], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
+  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup, outerGroup], roads: [roadMesh], trees: [crowns, trunks, shoreVegGroup], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
   Array.prototype.forEach.call(document.querySelectorAll('.tog'), function (b) {
     b.addEventListener('click', function () {
       var on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on);
@@ -1296,7 +1376,9 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   });
 
   controls.addEventListener('change', function () {
-    var t = controls.target; t.x = Math.max(B[0], Math.min(B[1], t.x)); t.z = Math.max(-B[3], Math.min(-B[2], t.z));
+    var t = controls.target; t.x = Math.max(-21600, Math.min(20500, t.x)); t.z = Math.max(-4300, Math.min(12000, t.z));
+    var dd = camera.position.distanceTo(t); camera.near = Math.max(0.3, Math.min(dd * 0.012, 60)); camera.far = Math.max(16000, dd * 7); camera.updateProjectionMatrix();
+    if (scene.fog) { scene.fog.near = Math.max(3500, dd * 2); scene.fog.far = Math.max(10500, dd * 6); }
     var gdy = (hAt(t.x, -t.z) - t.y) * 0.3; if (Math.abs(gdy) > 0.02) { t.y += gdy; camera.position.y += gdy; }
     var dd = camera.position.distanceTo(t), nn = Math.max(0.2, Math.min(3, dd / 30));
     if (Math.abs(nn - camera.near) > 0.02) { camera.near = nn; camera.updateProjectionMatrix(); }
@@ -1315,6 +1397,8 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     controls.update();
     var az = controls.getAzimuthalAngle();
     needle.style.transform = 'rotate(' + (az * 180 / Math.PI).toFixed(1) + 'deg)';
+    if (outQ.length || outJob) { outStep(6); }
+    if ((window.__ou = (window.__ou || 0) + 1) % 20 === 0) outUpdate();
     if (dirty) {
       var tn = performance.now(), dtf = tn - (window.__lastR || tn); window.__lastR = tn;
       if (dtf > 0 && dtf < 250) { window.__ema = (window.__ema || 30) * 0.9 + dtf * 0.1; window.__nf = (window.__nf || 0) + 1; }
