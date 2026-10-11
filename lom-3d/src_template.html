@@ -109,7 +109,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       <button class="tog" data-layer="poi" aria-pressed="true">Места</button>
     </div>
     <div class="legend" id="legend" aria-label="Цветове на местата"></div>
-    <p class="attr">Данни © сътрудниците на OpenStreetMap. Контури и етажност на сградите и границите на имотите: АГКК (КАИС, отворени данни, 14.09.2026), за лична употреба. Допълнително: Microsoft ML Building Footprints (ODbL) чрез Overture Maps. Сателитна снимка: Contains modified Copernicus Sentinel data 2025 (26.07.2025, 10 м). Места (заведения, магазини, институции): Overture Maps Places (Meta, AllThePlaces; CDLA-Permissive-2.0 и CC0), точността им е различна и част от обектите може вече да не работят. Релеф: Copernicus DEM GLO-30 (30 м), © DLR e.V. и Airbus Defence and Space GmbH, предоставен от ЕС и ESA в рамките на Copernicus; релефът е груб и сградите стоят върху него по най-ниския си ъгъл. Етажите и видът на фасадите са оценка по типа на сградата. Електрическата мрежа е само 110 kV, средно и ниско напрежение няма в открити данни.</p>
+    <p class="attr">Данни © сътрудниците на OpenStreetMap. Контури и етажност на сградите и границите на имотите: АГКК (КАИС, отворени данни, 14.09.2026), за лична употреба. Допълнително: Microsoft ML Building Footprints (ODbL) чрез Overture Maps. Сателитна снимка: Contains modified Copernicus Sentinel data 2025 (26.07.2025, 10 м). Фирми с търговски обекти и общински дружества: отворени данни на Община Лом (регистри от 2015–2021 г., само юридически лица, може да са остарели; координатите са по адреса). Места (заведения, магазини, институции): Overture Maps Places (Meta, AllThePlaces; CDLA-Permissive-2.0 и CC0), точността им е различна и част от обектите може вече да не работят. Релеф: Copernicus DEM GLO-30 (30 м), © DLR e.V. и Airbus Defence and Space GmbH, предоставен от ЕС и ESA в рамките на Copernicus; релефът е груб и сградите стоят върху него по най-ниския си ъгъл. Етажите и видът на фасадите са оценка по типа на сградата. Електрическата мрежа е само 110 kV, средно и ниско напрежение няма в открити данни.</p>
   </div>
   <div id="loading">Построявам града…</div>
 </div>
@@ -823,7 +823,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
 
 
   /* ---------- places: businesses and institutions (Overture Maps Places, CDLA-Permissive-2.0) ---------- */
-  var POIC = [0x2f6fd0, 0xd9433a, 0x6b4bb8, 0xc78a1a, 0xe0702c, 0x2e9a5b, 0x1f8a94, 0x7a7f86, 0x8a5a3a, 0xb04a8f, 0x4a5a6a];
+  var POIC = [0x2f6fd0, 0xd9433a, 0x6b4bb8, 0xc78a1a, 0xe0702c, 0x2e9a5b, 0x1f8a94, 0x7a7f86, 0x8a5a3a, 0xb04a8f, 0x4a5a6a, 0xa8b020, 0x1d3fa0];
   var poiGroup = new THREE.Group(); scene.add(poiGroup); var poiPick = [], poiList = [];
   function roofAt(x, y) {
     var z = hAt(x, y), i;

@@ -12,5 +12,8 @@ s = s.replace('      <button class="tog" data-layer="parcels" aria-pressed="true
 s = s.replace('Сгради от кадастъра на АГКК и OSM, снимка от Sentinel-2', 'Сгради от OSM и Microsoft ML, снимка от Sentinel-2')
 s = s.replace('© OpenStreetMap · АГКК · Microsoft ML', '© OpenStreetMap · Microsoft ML')
 s = s.replace('Контури и етажност на сградите и границите на имотите: АГКК (КАИС, отворени данни, 14.09.2026), за лична употреба. Допълнително: ', 'Сгради: ')
+import re
+s = re.sub(r'Фирми с търговски обекти и общински дружества:[^.]*\.[^.]*\.[^.]*\. ', '', s)
+s = s.replace('Фирми с търговски обекти и общински дружества: отворени данни на Община Лом (регистри от 2015–2021 г., само юридически лица, може да са остарели; координатите са по адреса). ', '')
 (r / 'index.html').write_text(s, encoding='utf-8')
 print('index.html', len(s) // 1024, 'KB')

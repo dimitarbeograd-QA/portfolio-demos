@@ -41,3 +41,8 @@ python3 build_public.py
 ```
 
 `build_public.py` reads `src_template.html` and the files in `data/` and writes `index.html`. The scripts in `tools/` show how the data files were produced (`process.py` for OpenStreetMap, `ms.py` for the footprints, `sat2.py` for the satellite crop and masks, `dem.py` for the terrain).
+
+## Next steps
+
+- Optional layers that are kept out of this public build until their licences are clear: cadastral building types, floor counts, addresses and parcel boundaries; municipal company and trade-outlet registers placed by address.
+- Ideas: key buildings with real facades, a lighter mode for older phones, and game mechanics (a mayor simulation) on top of the map.
