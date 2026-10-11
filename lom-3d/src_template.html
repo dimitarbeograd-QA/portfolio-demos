@@ -352,11 +352,18 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       ' vec3 L = normalize(uSun); vec3 R = reflect(-L, n); col += vec3(1.0, 0.93, 0.8) * pow(max(dot(R, V), 0.0), 90.0) * 0.9 * uDay;\n' +
       ' col *= 0.22 + 0.78 * uDay; gl_FragColor = vec4(col, a);\n#include <fog_fragment>\n}'
   });
+  var waterBits = null, waterResolve, waterReady = new Promise(function (r) { waterResolve = r; });
+  function inWater(x, y) { if (!waterBits) return false; var c = Math.floor((x - SB[0]) / (SB[1] - SB[0]) * waterBits.w), r = Math.floor((SB[3] - y) / (SB[3] - SB[2]) * waterBits.h); return c >= 0 && r >= 0 && c < waterBits.w && r < waterBits.h && waterBits.a[r * waterBits.w + c] === 1; }
   var waterSurf = new THREE.Mesh(terrainGeo(SB[0], SB[1], SB[2], SB[3], 30, 0.07, false, SB), waterMat);
   waterSurf.renderOrder = 2.7; waterSurf.frustumCulled = false; scene.add(waterSurf);
   (function () {
     var im = new Image();
-    im.onload = function () { var t = new THREE.Texture(im); t.needsUpdate = true; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; waterMat.uniforms.uMask.value = t; dirty = true; };
+    im.onload = function () {
+      var t = new THREE.Texture(im); t.needsUpdate = true; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; waterMat.uniforms.uMask.value = t; dirty = true;
+      try { var w = im.width, h = im.height, c = cv(w, h), g = c.getContext('2d'); g.drawImage(im, 0, 0); var px = g.getImageData(0, 0, w, h).data; waterBits = { w: w, h: h, a: new Uint8Array(w * h) }; for (var i = 0; i < w * h; i++) waterBits.a[i] = px[i * 4] > 127 ? 1 : 0; } catch (e) {}
+      waterResolve();
+    };
+    im.onerror = function () { waterResolve(); };
     im.src = 'data:image/png;base64,__WM__';
   })();
   (function () {
@@ -893,9 +900,10 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     if (typeof DecompressionStream === 'undefined' || typeof Response === 'undefined') return;
     try {
       var b = atob('__PAR__'), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i);
-      new Response(new Blob([a]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer().then(function (buf) {
+      Promise.all([new Response(new Blob([a]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(), waterReady]).then(function (rs) {
+        var buf = rs[0];
         var dv = new DataView(buf), o = 0, n = buf.byteLength, pos = [], k = 0;
-        function seg(ax, ay, bx, by) { var L = Math.hypot(bx - ax, by - ay), m = Math.max(1, Math.ceil(L / 25)); for (var q = 0; q < m; q++) { var u0 = q / m, u1 = (q + 1) / m, x0 = ax + (bx - ax) * u0, y0 = ay + (by - ay) * u0, x1 = ax + (bx - ax) * u1, y1 = ay + (by - ay) * u1; pos.push(x0, hAt(x0, y0) + 0.7, -y0, x1, hAt(x1, y1) + 0.7, -y1); } }
+        function seg(ax, ay, bx, by) { var L = Math.hypot(bx - ax, by - ay), m = Math.max(1, Math.ceil(L / 25)); for (var q = 0; q < m; q++) { var u0 = q / m, u1 = (q + 1) / m, x0 = ax + (bx - ax) * u0, y0 = ay + (by - ay) * u0, x1 = ax + (bx - ax) * u1, y1 = ay + (by - ay) * u1; if (inWater((x0 + x1) / 2, (y0 + y1) / 2)) continue; pos.push(x0, hAt(x0, y0) + 0.7, -y0, x1, hAt(x1, y1) + 0.7, -y1); } }
         while (o + 10 <= n) {
           var m = dv.getUint16(o, true), x = dv.getInt32(o + 2, true), y = dv.getInt32(o + 6, true); o += 10;
           var fx = x, fy = y, px = x, py = y;

@@ -31,8 +31,9 @@ def band(name):
     return (w[ri,ci]*(1-fc[...,0])*(1-fr[...,0])+w[ri,ci+1]*fc[...,0]*(1-fr[...,0])+w[ri+1,ci]*(1-fc[...,0])*fr[...,0]+w[ri+1,ci+1]*fc[...,0]*fr[...,0])
 B3=band('B03.tif'); B8=band('B08.tif')
 ndwi=(B3-B8)/(B3+B8+1e-6)
+wm=np.array(Image.open('water_mask_hi.png').resize((W,H),Image.LANCZOS),dtype=float)/255
+wm=np.clip((wm-0.5)*2.4+0.5,0,1)
 from PIL import ImageFilter
-wm=np.array(Image.fromarray((np.clip((ndwi-0.05)/0.2,0,1)*255).astype('uint8')).filter(ImageFilter.GaussianBlur(1.2)),dtype=float)/255
 lum=o.mean(axis=2,keepdims=True)
 blue=np.concatenate([lum*0.55+14,lum*0.95+38,lum*1.05+62],axis=2)
 o=o*(1-wm[...,None])+blue*wm[...,None]
@@ -53,7 +54,7 @@ im=im.filter(ImageFilter.UnsharpMask(radius=2.2,percent=170,threshold=2))
 im=ImageEnhance.Color(im).enhance(1.12); im=ImageEnhance.Contrast(im).enhance(1.06)
 im.save('sat.jpg',quality=82)
 # water mask for the crisp procedural water layer
-Image.fromarray((np.clip((wm-0.05)/0.9,0,1)*255).astype('uint8')).save('water_mask.png',optimize=True)
+pass
 np.save('wm.npy',wm)
 print('sat.jpg',__import__('os').path.getsize('sat.jpg')//1024,'KB')
 # vegetation bit mask, 10 m cells over bounds -2500..2500, -2900..2900
