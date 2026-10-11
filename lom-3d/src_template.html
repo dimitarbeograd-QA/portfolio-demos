@@ -304,6 +304,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var roadAcc = new Acc(40, 0.08); roadAcc.uv = [];
   D.roads.concat(OUT.roads).sort(function (a, b) { return b.w - a.w; }).forEach(function (r) { addRibbon(roadAcc, pts(r.p), r.w / 2, r.w / 2, col(ROAD[r.c] || 0x8a8c8f), r.w >= 5.5); });
   D.rails.forEach(function (r) { addRibbon(roadAcc, pts(r.p), 1.3, 1.3, col(0x4d4640), false); });
+  (OUT.rails || []).forEach(function (r) { addRibbon(roadAcc, pts(r.p), 1.3, 1.3, col(0x4d4640), false); });
   var roadMesh = roadAcc.mesh(3); scene.add(roadMesh);
 
   /* ---------- satellite (Copernicus Sentinel-2, 10 m, drawn under the roads) ---------- */
@@ -1084,9 +1085,23 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       if (x > SB[0] && x < SB[1] && y > SB[2] && y < SB[3]) continue;
       var a = vegAt(x, y); if (!a) continue;
       var hit = false; for (var b = 0; b < bb.length; b++) if (x > bb[b][0] && x < bb[b][1] && y > bb[b][2] && y < bb[b][3]) { hit = true; break; }
-      if (hit) continue;
+      if (hit || nearBuilding(x, y) || railDist(x, y) < 7 || nearStn(x, y, 45)) continue;
       var r = R(); if (r < a[0] * 0.95) { if (trees.length < 2400) trees.push([x, y, a[2], R()]); } else if (r < a[0] * 0.95 + a[1] * 0.5) { if (shrubs.length < 700) shrubs.push([x, y, a[2], R()]); }
     }
+    RAILS.forEach(function (pl) {
+      for (var q = 0; q + 1 < pl.length; q++) {
+        var A = pl[q], B = pl[q + 1], mx = (A[0] + B[0]) / 2, my = (A[1] + B[1]) / 2;
+        if (Math.floor(mx / 1000) !== ci || Math.floor(my / 1000) !== cj) continue;
+        var L = Math.hypot(B[0] - A[0], B[1] - A[1]), nx = -(B[1] - A[1]) / L, ny = (B[0] - A[0]) / L, steps = Math.min(200, Math.floor(L / 7));
+        for (var s2 = 0; s2 < steps; s2++) {
+          var t0 = (s2 + R()) / steps, off = (R() < 0.5 ? -1 : 1) * (4.5 + R() * 15), x2 = A[0] + (B[0] - A[0]) * t0 + nx * off, y2 = A[1] + (B[1] - A[1]) * t0 + ny * off;
+          if (nearStn(x2, y2, 45) || nearBuilding(x2, y2) || railDist(x2, y2) < 4) continue;
+          var hit2 = false; for (var b2 = 0; b2 < bb.length; b2++) if (x2 > bb[b2][0] && x2 < bb[b2][1] && y2 > bb[b2][2] && y2 < bb[b2][3]) { hit2 = true; break; }
+          if (hit2) continue;
+          var rr2 = R(); if (rr2 < 0.7) shrubs.push([x2, y2, 0.3, R()]); else if (railDist(x2, y2) > 9) trees.push([x2, y2, 0.3, R()]);
+        }
+      }
+    });
     if (!vegLeafT) { vegLeafT = leafMat(true); vegLeafS = leafMat(false); vegGeoT = crownGeometry(2, 202); vegGeoT.userData.holes = true; vegGeoS = crownGeometry(2, 303); }
     function make(list, geo, mat, fn) {
       if (!list.length) return;
@@ -1146,6 +1161,29 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     for (var gx = Math.floor(k[0] / 50); gx <= Math.floor(k[1] / 50); gx++) for (var gy = Math.floor(k[2] / 50); gy <= Math.floor(k[3] / 50); gy++) (bGrid[gx + ',' + gy] || (bGrid[gx + ',' + gy] = [])).push(k);
   });
   function nearBuilding(x, y) { var c = bGrid[Math.floor(x / 50) + ',' + Math.floor(y / 50)]; if (!c) return false; for (var i = 0; i < c.length; i++) { var k = c[i]; if (x > k[0] && x < k[1] && y > k[2] && y < k[3]) return true; } return false; }
+  /* railway corridor and stations: no big trees within 7 m of the track, no vegetation at stations; scrub and small trees are added along the line */
+  var RAILS = D.rails.map(function (r) { return pts(r.p); }).concat((OUT.rails || []).map(function (r) { return pts(r.p); })), railGrid = {};
+  RAILS.forEach(function (pl) {
+    for (var i = 0; i + 1 < pl.length; i++) {
+      var a = pl[i], b = pl[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.ceil(L / 20)), seen = {};
+      for (var k = 0; k <= n; k++) {
+        var x = a[0] + (b[0] - a[0]) * k / n, y = a[1] + (b[1] - a[1]) * k / n;
+        for (var gx = Math.floor((x - 40) / 40); gx <= Math.floor((x + 40) / 40); gx++) for (var gy = Math.floor((y - 40) / 40); gy <= Math.floor((y + 40) / 40); gy++) { var kk = gx + ',' + gy; if (!seen[kk]) { seen[kk] = 1; (railGrid[kk] || (railGrid[kk] = [])).push([a[0], a[1], b[0], b[1]]); } }
+      }
+    }
+  });
+  function railDist(x, y) {
+    var c = railGrid[Math.floor(x / 40) + ',' + Math.floor(y / 40)]; if (!c) return 99;
+    var m = 99;
+    for (var i = 0; i < c.length; i++) {
+      var s = c[i], dx = s[2] - s[0], dy = s[3] - s[1], L2 = dx * dx + dy * dy, t = L2 > 0 ? Math.max(0, Math.min(1, ((x - s[0]) * dx + (y - s[1]) * dy) / L2)) : 0;
+      m = Math.min(m, Math.hypot(x - s[0] - dx * t, y - s[1] - dy * t));
+    }
+    return m;
+  }
+  var STN = D.poi.filter(function (p) { return p[5] === 'train_station'; }).map(function (p) { return [p[0] / 10, p[1] / 10]; });
+  D.buildings.forEach(function (b) { if (b.t === 'train_station') STN.push([b.p[0] / 10, b.p[1] / 10]); });
+  function nearStn(x, y, r) { for (var i = 0; i < STN.length; i++) if (Math.hypot(x - STN[i][0], y - STN[i][1]) < r) return true; return false; }
   var DENS = { forest: 1 / 110, orchard: 1 / 160, cemetery: 1 / 700, grass: 1 / 1500, meadow: 1 / 2500, residential: 1 / 420 };
   var VEG = (function () { var b = atob('__VEG__'), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; })();
   function isGreen(x, y) {
@@ -1167,6 +1205,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       if (treeList.length > 4500) break;
     }
   });
+  treeList = treeList.filter(function (t) { return railDist(t[0], t[1]) > 7 && !nearStn(t[0], t[1], 45); });
   /* ---------- foliage: crowns built from several displaced leaf clusters, with a procedural leaf pattern (light tips, dark gaps, ragged edge) in the shader ---------- */
   function crownGeometry(nClust, seed) {
     var Rg = mulberry(seed), pos = [], col = [], cen = [[0, 0.05, 0, 0.62]];
@@ -1239,7 +1278,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       if (!(gg > r * 1.03 && gg > b * 1.1)) continue;
       var lum = (0.3 * r + 0.59 * gg + 0.11 * b) / 255; if (lum > 0.42) continue;
       var jx = x + (Rn() - 0.5) * 8, jy = y + (Rn() - 0.5) * 8;
-      if (inWater(jx, jy) || nearBuilding(jx, jy) || have[Math.floor(x / 10) + ',' + Math.floor(y / 10)]) continue;
+      if (inWater(jx, jy) || nearBuilding(jx, jy) || railDist(jx, jy) < 7 || nearStn(jx, jy, 45) || have[Math.floor(x / 10) + ',' + Math.floor(y / 10)]) continue;
       if (lum < 0.22) { if (Rn() < 0.85) trees.push([jx, jy, r, gg, b, Rn()]); } else if (Rn() < 0.4) shrubs.push([jx, jy, r, gg, b, Rn()]);
     }
     function thin(a, cap) { if (a.length <= cap) return a; var p = cap / a.length; return a.filter(function () { return Rn() < p; }); }
