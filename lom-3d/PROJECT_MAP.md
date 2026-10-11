@@ -43,7 +43,7 @@
 | 440–481 | crisp procedural water (mask from Sentinel-2 NDWI; ripples are drawn per pixel so they stay sharp at any zoom) | inWater |
 | 482–499 | AI-sharpened centre (SEN2SR super-resolution of Sentinel-2, ~2.5 m/px; invented detail, labelled as such) | — |
 | 500–819 | buildings | cv, grain, glass, blank, rr, win, winLit, plaster, facadeTex, flatTex, tileTex, wallMat, roofMat, flatMat |
-| 820–908 | rooftop detail on large flat roofs: parapet, stair/lift boxes, vents, AC units, PV rows (own procedural design | addBox, roofDetail, baseZ |
+| 820–908 | rooftop detail on large flat roofs: parapet, stair/lift boxes, vents, AC units, PV rows (own procedural design | addBox, roofDetail, houseDetail (chimneys, dormers, doors on pitched houses), baseZ |
 | 909–961 | the rest of the town: Microsoft ML building footprints (ODbL) via Overture, merged into a few meshes | Batch, batchFor |
 | 962–1019 | village buildings (Overture: Microsoft ML + OSM footprints), 1 km cells built lazily as the camera comes near | outStart, outStep, outUpdate |
 | 1020–1053 | trees | inPoly, nearBuilding, isGreen |

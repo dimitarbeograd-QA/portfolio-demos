@@ -817,7 +817,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
 
 
   /* ---------- rooftop detail on large flat roofs: parapet, stair/lift boxes, vents, AC units, PV rows (own procedural design) ---------- */
-  var RD = { par: { p: [], n: [] }, box: { p: [], n: [] }, pv: { p: [], n: [] }, tank: { p: [], n: [] } };
+  var RD = { par: { p: [], n: [] }, box: { p: [], n: [] }, pv: { p: [], n: [] }, tank: { p: [], n: [] }, chim: { p: [], n: [] }, dorm: { p: [], n: [] }, droof: { p: [], n: [] }, glass: { p: [], n: [] }, door: { p: [], n: [] } };
   var RDY = 0;
   function addBox(t, cx, cy, cz, hx, hy, hz, ang) {
     cy += RDY;
@@ -874,6 +874,45 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     }
   }
 
+  /* pitched-roof houses: chimneys (with a cap), dormers (body, little roof, window) and a front door with a canopy */
+  function houseDetail(id, q, ob, H, rh, area) {
+    var r = mulberry(id * 13 + 5), c = Math.cos(ob.th), sn = Math.sin(ob.th), a = ob.a, b = ob.b, i, k;
+    function W(u, w) { return [ob.cx + u * c - w * sn, ob.cy + u * sn + w * c]; }
+    function roofY(w) { return H + rh * Math.max(0, 1 - Math.abs(w) / (b + 0.35)); }
+    if (r() < 0.78) {
+      var nc = (a > 7 && r() < 0.25) ? 2 : 1;
+      for (i = 0; i < nc; i++) {
+        var u = (r() < 0.5 ? -1 : 1) * (0.25 + r() * 0.4) * a, w = (r() * 2 - 1) * Math.min(0.35 * b, 0.9), p = W(u, w);
+        if (!inPoly(p[0], p[1], q)) continue;
+        var y0 = roofY(w) - 0.25, y1 = H + rh + 0.85;
+        addBox(RD.chim, p[0], (y0 + y1) / 2, -p[1], 0.3, (y1 - y0) / 2, 0.3, ob.th);
+        addBox(RD.box, p[0], y1 + 0.04, -p[1], 0.4, 0.05, 0.4, ob.th);
+      }
+    }
+    if (a >= 4.5 && b >= 3 && rh >= 1.4 && r() < 0.5) {
+      var sd = r() < 0.5 ? -1 : 1, nd = (a > 8 && r() < 0.5) ? 2 : 1, wd = sd * b * 0.5, yr = roofY(wd);
+      for (k = 0; k < nd; k++) {
+        var ud = nd === 2 ? (k ? 0.45 : -0.45) * a : (r() * 2 - 1) * 0.25 * a, pd = W(ud, wd), pf = W(ud, wd + sd * 0.57);
+        addBox(RD.dorm, pd[0], yr + 0.3, -pd[1], 0.6, 0.5, 0.55, ob.th);
+        addBox(RD.droof, pd[0], yr + 0.88, -pd[1], 0.78, 0.08, 0.72, ob.th);
+        addBox(RD.glass, pf[0], yr + 0.3, -pf[1], 0.32, 0.3, 0.02, ob.th);
+      }
+    }
+    if (r() < 0.85) {
+      var sh = 0, n = q.length, best = [], e;
+      for (e = 0; e < n; e++) { var f = (e + 1) % n; sh += q[e][0] * q[f][1] - q[f][0] * q[e][1]; }
+      for (e = 0; e < n; e++) { var g = (e + 1) % n, L = Math.hypot(q[g][0] - q[e][0], q[g][1] - q[e][1]); if (L >= 3.5) best.push([L, e]); }
+      if (best.length) {
+        best.sort(function (x, y) { return y[0] - x[0]; });
+        var pick = best[Math.min(best.length - 1, r() < 0.7 ? 0 : 1)], e0 = pick[1], e1 = (e0 + 1) % n, dx = q[e1][0] - q[e0][0], dy = q[e1][1] - q[e0][1], Lg = pick[0];
+        var nx = (sh > 0 ? dy : -dy) / Lg, ny = (sh > 0 ? -dx : dx) / Lg, t = 0.25 + 0.5 * r(), px = q[e0][0] + dx * t, py = q[e0][1] + dy * t, ang = Math.atan2(dy, dx);
+        addBox(RD.dorm, px + nx * 0.05, 1.05, -(py + ny * 0.05), 0.58, 1.05, 0.04, ang);
+        addBox(RD.door, px + nx * 0.1, 1.0, -(py + ny * 0.1), 0.45, 1.0, 0.04, ang);
+        addBox(RD.droof, px + nx * 0.32, 2.2, -(py + ny * 0.32), 0.65, 0.05, 0.32, ang);
+      }
+    }
+  }
+
   function baseZ(q) { var m = 1e9; for (var i = 0; i < q.length; i++) m = Math.min(m, hAt(q[i][0], q[i][1])); return m; }
   var bGroup = new THREE.Group(); scene.add(bGroup);
   var bInfo = [], bbox = [];
@@ -898,7 +937,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       rm.castShadow = true; rm.receiveShadow = true; rm.position.y = bz; rm.userData = { owner: m, base: rm.material };
       m.userData.roof = rm; bGroup.add(rm);
     }
-    if (!pitched) roofDetail(b.id, q, P.H, area);
+    if (!pitched) roofDetail(b.id, q, P.H, area); else if (P.st === 'house') houseDetail(b.id, q, ob, P.H, rh, area);
     bInfo.push({ b: b, h: { v: P.H + rh * 0.5, est: P.est }, floors: P.floors, pitched: pitched });
     var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
     q.forEach(function (c) { x0 = Math.min(x0, c[0]); x1 = Math.max(x1, c[0]); y0 = Math.min(y0, c[1]); y1 = Math.max(y1, c[1]); cxSum += c[0]; cySum += c[1]; cnt++; });
@@ -939,7 +978,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       var rg = gableGeo(ob, P.H, rh), rm = roofMat(b.id), gm = gableMat(b.id); rg.translate(0, bz, 0);
       batchFor('r' + rm.id + '_' + gm.id, [rm, gm]).add(rg); rg.dispose();
     }
-    if (!pitched) roofDetail(b.id, q, P.H, area);
+    if (!pitched) roofDetail(b.id, q, P.H, area); else if (P.st === 'house') houseDetail(b.id, q, ob, P.H, rh, area);
     var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
     q.forEach(function (c) { x0 = Math.min(x0, c[0]); x1 = Math.max(x1, c[0]); y0 = Math.min(y0, c[1]); y1 = Math.max(y1, c[1]); });
     msBox.push([x0 - 2, x1 + 2, y0 - 2, y1 + 2]);
@@ -1009,10 +1048,11 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     if (any) dirty = true;
   }
   var roofDetailGroup = new THREE.Group(); scene.add(roofDetailGroup);
-  [['par', 0xd6d3cb, 0], ['box', 0xa2a6ab, 0], ['tank', 0xb9bdb8, 0], ['pv', 0x1f3350, 0x0a1426]].forEach(function (k) {
+  var houseDetailGroup = new THREE.Group(); scene.add(houseDetailGroup);
+  [['par', 0xd6d3cb, 0, 1], ['box', 0xa2a6ab, 0, 1], ['tank', 0xb9bdb8, 0, 1], ['pv', 0x1f3350, 0x0a1426, 1], ['chim', 0x9c5b45, 0, 1], ['dorm', 0xe6e1d4, 0, 2], ['droof', 0x5b4636, 0, 2], ['glass', 0x273a55, 0x0a1426, 2], ['door', 0x6a4630, 0, 2]].forEach(function (k) {
     var t = RD[k[0]]; if (!t.p.length) return;
     var geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(t.p, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(t.n, 3));
-    var m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: k[1], emissive: k[2] || 0x000000 })); m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; roofDetailGroup.add(m);
+    var m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: k[1], emissive: k[2] || 0x000000 })); m.castShadow = k[3] === 1; m.receiveShadow = true; m.frustumCulled = false; (k[3] === 1 ? roofDetailGroup : houseDetailGroup).add(m);
   });
   var cx = cxSum / cnt, cy = cySum / cnt;
 
@@ -1301,7 +1341,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var dirty = true;
   var hourEl = document.getElementById('hour');
   hourEl.addEventListener('input', function () { setHour(parseFloat(hourEl.value)); });
-  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup, outerGroup], roads: [roadMesh], trees: [crowns, trunks, shoreVegGroup], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
+  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup, houseDetailGroup, outerGroup], roads: [roadMesh], trees: [crowns, trunks, shoreVegGroup], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
   Array.prototype.forEach.call(document.querySelectorAll('.tog'), function (b) {
     b.addEventListener('click', function () {
       var on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on);
@@ -1422,7 +1462,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
 
   controls.addEventListener('change', function () {
     var t = controls.target; t.x = Math.max(-21600, Math.min(20500, t.x)); t.z = Math.max(-4300, Math.min(12000, t.z));
-    var dd = camera.position.distanceTo(t); camera.near = Math.max(0.3, Math.min(dd * 0.012, 60)); camera.far = Math.max(16000, dd * 7); camera.updateProjectionMatrix();
+    var dd = camera.position.distanceTo(t); houseDetailGroup.children.forEach(function (m) { m.visible = dd < 700; }); camera.near = Math.max(0.3, Math.min(dd * 0.012, 60)); camera.far = Math.max(16000, dd * 7); camera.updateProjectionMatrix();
     if (scene.fog) { scene.fog.near = Math.max(3500, dd * 2); scene.fog.far = Math.max(10500, dd * 6); }
     var gdy = (hAt(t.x, -t.z) - t.y) * 0.3; if (Math.abs(gdy) > 0.02) { t.y += gdy; camera.position.y += gdy; }
     var dd = camera.position.distanceTo(t), nn = Math.max(0.2, Math.min(3, dd / 30));
