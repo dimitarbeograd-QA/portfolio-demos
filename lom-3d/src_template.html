@@ -105,7 +105,8 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       <button class="tog" data-layer="trees" aria-pressed="true">Дървета</button>
       <button class="tog" data-layer="water" aria-pressed="true">Вода</button>
       <button class="tog" data-layer="parcels" aria-pressed="true">Имоти</button>
-      <button class="tog" data-layer="power" aria-pressed="true">Ток 110 kV</button>
+      <button class="tog" data-layer="power" aria-pressed="true" title="110 kV от OSM; ниското напрежение е примерно">Ел. мрежа</button>
+      <button class="tog" data-layer="water2" aria-pressed="false" title="Водопровод (синьо) и канал (кафяво) — примерни трасета по улиците">ВиК (примерно)</button>
       <button class="tog" data-layer="poi" aria-pressed="true">Места</button>
       <button class="tog" data-layer="ai" aria-pressed="true" title="Централната част: снимка, изострена с ИИ (SEN2SR). Детайлът е генериран, не е реален.">Остра снимка (ИИ)</button>
     </div>
@@ -1317,7 +1318,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   }
 
   /* ---------- 110 kV grid (from OpenStreetMap) ---------- */
-  var powerGroup = new THREE.Group(); scene.add(powerGroup); var powerPick = [];
+  var powerGroup = new THREE.Group(); scene.add(powerGroup); var powerPick = []; D.power.lines = [];
   (function () {
     var seg = [], masts = [];
     D.power.lines.forEach(function (l) {
@@ -1361,6 +1362,130 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       var fence = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x - 35, hs + 1.6, -y - 23), new THREE.Vector3(x + 35, hs + 1.6, -y - 23), new THREE.Vector3(x + 35, hs + 1.6, -y + 23), new THREE.Vector3(x - 35, hs + 1.6, -y + 23)]), new THREE.LineBasicMaterial({ color: 0x55585c }));
       powerGroup.add(fence);
     });
+  })();
+
+  /* ---------- electricity network (real 110 kV lines from Overture/OSM + illustrative low-voltage grid) and water supply (illustrative) ---------- */
+  var INF = __INFRA__;
+  var infraGroup = new THREE.Group(); scene.add(infraGroup);
+  var waterNetGroup = new THREE.Group(); waterNetGroup.visible = false; scene.add(waterNetGroup);
+  var elecLocal = new THREE.Group(); scene.add(elecLocal);
+  (function () {
+    var o3 = new THREE.Object3D(), concrete = new THREE.MeshLambertMaterial({ color: 0xbab7af });
+    function inst(geo, mat, list, shadow) {
+      var m = new THREE.InstancedMesh(geo, mat, Math.max(1, list.length));
+      list.forEach(function (q, i) { o3.position.set(q[0], hAt(q[0], q[1]) + (q[3] || 0), -q[1]); o3.rotation.set(0, q[2] || 0, 0); o3.scale.set(1, 1, 1); o3.updateMatrix(); m.setMatrixAt(i, o3.matrix); });
+      m.count = list.length; m.castShadow = !!shadow; m.frustumCulled = false; return m;
+    }
+    /* --- 110 kV lines --- */
+    var seg = [], masts = [];
+    INF.lines.forEach(function (l) {
+      var p = pts(l.p), n = p.length, ang = [], i;
+      for (i = 0; i < n; i++) { var a0 = p[Math.max(0, i - 1)], b0 = p[Math.min(n - 1, i + 1)]; ang.push(Math.atan2(b0[1] - a0[1], b0[0] - a0[0])); if (p[i][0] > OB[0] && p[i][0] < OB[1] && p[i][1] > OB[2] && p[i][1] < OB[3]) masts.push([p[i][0], p[i][1], ang[i] + Math.PI / 2]); }
+      [[-4, 21], [4, 21], [0, 25]].forEach(function (o) {
+        for (var j = 0; j < n - 1; j++) {
+          var a = p[j], b = p[j + 1];
+          if (!(a[0] > OB[0] && a[0] < OB[1] && a[1] > OB[2] && a[1] < OB[3])) continue;
+          var ax = a[0] - Math.sin(ang[j]) * o[0], ay = a[1] + Math.cos(ang[j]) * o[0], bx = b[0] - Math.sin(ang[j + 1]) * o[0], by = b[1] + Math.cos(ang[j + 1]) * o[0];
+          var len = Math.hypot(bx - ax, by - ay), sag = Math.min(7, len * 0.014), K = Math.max(4, Math.min(12, Math.ceil(len / 40))), prev = null;
+          for (var k = 0; k <= K; k++) {
+            var tt = k / K, wx = ax + (bx - ax) * tt, wy = ay + (by - ay) * tt, cur = [wx, hAt(wx, wy) + o[1] - sag * 4 * tt * (1 - tt), -wy];
+            if (prev) seg.push(prev[0], prev[1], prev[2], cur[0], cur[1], cur[2]);
+            prev = cur;
+          }
+        }
+      });
+    });
+    var lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(seg, 3));
+    elecLocal.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x2a2c30 })));
+    var mastGeo = new THREE.CylinderGeometry(0.35, 1.1, 25, 4); mastGeo.translate(0, 12.5, 0);
+    var armGeo = new THREE.BoxGeometry(9, 0.4, 0.4); armGeo.translate(0, 21, 0);
+    var steel = new THREE.MeshLambertMaterial({ color: 0x8d9094 });
+    elecLocal.add(inst(mastGeo, steel, masts, true), inst(armGeo, steel, masts, false));
+    /* --- substations (the one in Lom is drawn by the older code) --- */
+    var gm = new THREE.MeshLambertMaterial({ color: 0x9a9da1 }), tm = new THREE.MeshLambertMaterial({ color: 0x5f6f80 });
+    INF.subs.forEach(function (s) {
+      var x = s.p[0] / 10, y = s.p[1] / 10;
+      if (D.power.subs.some(function (q) { return Math.hypot(q.p[0] / 10 - x, q.p[1] / 10 - y) < 300; })) return;
+      var hs = hAt(x, y), small = s.k === 'minor_distribution', ud = { title: s.n + (s.v ? ' · ' + s.v : ''), text: 'Подстанция/трафопост по данни от OpenStreetMap. Разположението е по данните, видът е условен.' };
+      if (small) { var b = new THREE.Mesh(new THREE.BoxGeometry(3.4, 3.6, 3.4), new THREE.MeshLambertMaterial({ color: 0xc9c5ba })); b.position.set(x, hs + 1.8, -y); b.castShadow = true; b.userData = ud; infraGroup.add(b); powerPick.push(b); return; }
+      var yard = new THREE.Mesh(new THREE.BoxGeometry(50, 0.2, 34), new THREE.MeshLambertMaterial({ color: 0x7b7d80 })); yard.position.set(x, hs + 0.1, -y); yard.userData = ud; infraGroup.add(yard); powerPick.push(yard);
+      [-14, 0, 14].forEach(function (dx) { var t1 = new THREE.Mesh(new THREE.BoxGeometry(5, 4.5, 3.5), tm); t1.position.set(x + dx, hs + 2.4, -y); t1.castShadow = true; t1.userData = ud; infraGroup.add(t1); powerPick.push(t1); var g1 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 9, 0.5), gm); g1.position.set(x + dx, hs + 4.6, -y + 9); infraGroup.add(g1); });
+      infraGroup.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([[-25, -17], [25, -17], [25, 17], [-25, 17]].map(function (c) { return new THREE.Vector3(x + c[0], hs + 1.6, -y + c[1]); })), new THREE.LineBasicMaterial({ color: 0x55585c })));
+    });
+    /* --- photovoltaic parks: every panel row from OSM --- */
+    var solAcc = new Acc(40, 0.5); INF.solar.forEach(function (r) { addPoly(solAcc, r, col(0x1f3a63)); });
+    var solMesh = solAcc.mesh(3.2); infraGroup.add(solMesh);
+    /* --- water towers, tanks and silos --- */
+    var wt = INF.wt.map(function (q) { return [q[0] / 10, q[1] / 10]; });
+    var shaft = new THREE.CylinderGeometry(1.4, 1.8, 14, 10); shaft.translate(0, 7, 0); var tank = new THREE.CylinderGeometry(4.2, 3.2, 6, 14); tank.translate(0, 17, 0);
+    var wtS = inst(shaft, concrete, wt, true), wtT = inst(tank, concrete, wt, true); waterNetGroup.add(wtS, wtT);
+    wt.forEach(function (q) { var m = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 22, 8), new THREE.MeshBasicMaterial({ visible: false })); m.position.set(q[0], hAt(q[0], q[1]) + 11, -q[1]); m.userData = { title: 'Водна кула', text: 'Водна кула по данни от OpenStreetMap. Мястото е точно, формата е условна.' }; infraGroup.add(m); powerPick.push(m); });
+    var tk = INF.tanks.filter(function (q) { return q[2] === 'storage_tank'; }).map(function (q) { return [q[0] / 10, q[1] / 10]; });
+    var sl = INF.tanks.filter(function (q) { return q[2] === 'silo'; }).map(function (q) { return [q[0] / 10, q[1] / 10]; });
+    infraGroup.add(inst(new THREE.CylinderGeometry(4.5, 4.5, 9, 14).translate(0, 4.5, 0), new THREE.MeshLambertMaterial({ color: 0xe2e5e7 }), tk, true), inst(new THREE.CylinderGeometry(3.6, 3.6, 22, 12).translate(0, 11, 0), new THREE.MeshLambertMaterial({ color: 0xcfd2d6 }), sl, true));
+
+    /* --- illustrative low-voltage grid along streets with buildings --- */
+    var BP = [], bg = {};
+    function addB(x, y, a) { BP.push([x, y, a]); var k = Math.floor(x / 60) + ',' + Math.floor(y / 60); (bg[k] || (bg[k] = [])).push(BP.length - 1); }
+    bbox.concat(msBox).forEach(function (k) { addB((k[0] + k[1]) / 2, (k[2] + k[3]) / 2, (k[1] - k[0]) * (k[3] - k[2])); });
+    for (var ck in OUT.cells) OUT.cells[ck].forEach(function (q) { var sx = 0, sy = 0; for (var i = 0; i < q.length; i += 2) { sx += q[i]; sy += q[i + 1]; } addB(sx / q.length * 2 / 10, sy / q.length * 2 / 10, polyArea(q)); });
+    function bNear(x, y) { var n = 0, cx = Math.floor(x / 60), cy = Math.floor(y / 60); for (var i = -1; i <= 1; i++) for (var j = -1; j <= 1; j++) { var c = bg[(cx + i) + ',' + (cy + j)]; if (c) n += c.length; } return n; }
+    var ROADS = D.roads.concat(OUT.roads).filter(function (r) { return /^(residential|service|tertiary|secondary|unclassified)$/.test(r.c); });
+    var poles = [], pg = {}, wires = [], pipeW = [], pipeS = [];
+    function nearPole(x, y, r) { var cx = Math.floor(x / 30), cy = Math.floor(y / 30), best = null, bd = r * r; for (var i = -1; i <= 1; i++) for (var j = -1; j <= 1; j++) { var c = pg[(cx + i) + ',' + (cy + j)]; if (c) c.forEach(function (pi) { var d = (poles[pi][0] - x) * (poles[pi][0] - x) + (poles[pi][1] - y) * (poles[pi][1] - y); if (d < bd) { bd = d; best = pi; } }); } return best; }
+    ROADS.forEach(function (r, ri) {
+      var p = pts(r.p), prevPole = null, prevPipe = null, side = (ri % 2) ? 1 : -1, acc = 0;
+      for (var i = 0; i < p.length - 1 && poles.length < 12000; i++) {
+        var a = p[i], b = p[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1) continue;
+        var tx = (b[0] - a[0]) / L, ty = (b[1] - a[1]) / L, ang = Math.atan2(ty, tx);
+        for (var s = acc; s < L; s += 42) {
+          var x = a[0] + tx * s, y = a[1] + ty * s;
+          if (bNear(x, y) < 2) { prevPole = null; prevPipe = null; continue; }
+          var px = x - ty * side * 5.5, py = y + tx * side * 5.5, ex = nearPole(px, py, 14), pi;
+          if (ex !== null) pi = ex; else { poles.push([px, py, ang + Math.PI / 2]); pi = poles.length - 1; (pg[Math.floor(px / 30) + ',' + Math.floor(py / 30)] || (pg[Math.floor(px / 30) + ',' + Math.floor(py / 30)] = [])).push(pi); }
+          if (prevPole !== null && prevPole !== pi) wires.push([prevPole, pi, ang]);
+          prevPole = pi;
+          var wx = x - ty * 1.6, wy = y + tx * 1.6, sx2 = x + ty * 1.6, sy2 = y - tx * 1.6;
+          if (prevPipe) { pipeW.push(prevPipe[0], prevPipe[1], wx, wy); pipeS.push(prevPipe[2], prevPipe[3], sx2, sy2); }
+          prevPipe = [wx, wy, sx2, sy2];
+        }
+        acc = (acc + Math.ceil((L - acc) / 42) * 42) - L; if (acc < 0) acc = 0;
+      }
+    });
+    var wseg = [], dseg = [];
+    wires.forEach(function (w) {
+      var A = poles[w[0]], B = poles[w[1]], len = Math.hypot(B[0] - A[0], B[1] - A[1]); if (len > 80) return;
+      [-0.7, 0.7].forEach(function (o) {
+        var ox = -Math.sin(w[2]) * o, oy = Math.cos(w[2]) * o, prev = null;
+        for (var k = 0; k <= 3; k++) { var t = k / 3, x = A[0] + (B[0] - A[0]) * t + ox, y = A[1] + (B[1] - A[1]) * t + oy, h = hAt(x, y) + 7.3 - 0.35 * 4 * t * (1 - t); if (prev) wseg.push(prev[0], prev[1], prev[2], x, h, -y); prev = [x, h, -y]; }
+      });
+    });
+    /* drops to buildings, and a transformer station per ~250 m cell */
+    var trc = {};
+    BP.forEach(function (b) {
+      var pi = nearPole(b[0], b[1], 38); if (pi === null) return; var P = poles[pi];
+      if (Math.hypot(b[0] - P[0], b[1] - P[1]) > 5 && Math.hypot(b[0] - P[0], b[1] - P[1]) < 26) dseg.push(P[0], hAt(P[0], P[1]) + 6.8, -P[1], b[0], hAt(b[0], b[1]) + 4, -b[1]);
+      var k = Math.floor(P[0] / 250) + ',' + Math.floor(P[1] / 250); (trc[k] || (trc[k] = [])).push(pi);
+      if (b[2] > 1400) { var kk = 'big' + Math.round(b[0] / 20) + ',' + Math.round(b[1] / 20); trc[kk] = [pi]; }
+    });
+    var tr = [];
+    for (var k in trc) { var l = trc[k], sx = 0, sy = 0; l.forEach(function (pi) { sx += poles[pi][0]; sy += poles[pi][1]; }); sx /= l.length; sy /= l.length; var bp = l[0], bd = 1e9; l.forEach(function (pi) { var d = Math.hypot(poles[pi][0] - sx, poles[pi][1] - sy); if (d < bd) { bd = d; bp = pi; } }); tr.push([poles[bp][0] + Math.cos(poles[bp][2]) * 4, poles[bp][1] + Math.sin(poles[bp][2]) * 4, poles[bp][2]]); }
+    var wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wseg, 3));
+    elecLocal.add(new THREE.LineSegments(wg, new THREE.LineBasicMaterial({ color: 0x24262a })));
+    var dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.Float32BufferAttribute(dseg, 3)); elecLocal.add(new THREE.LineSegments(dg, new THREE.LineBasicMaterial({ color: 0x3a3c40, transparent: true, opacity: 0.5 })));
+    var poleGeo = new THREE.CylinderGeometry(0.13, 0.19, 8, 6); poleGeo.translate(0, 4, 0); var arm = new THREE.BoxGeometry(1.8, 0.12, 0.12); arm.translate(0, 7.4, 0);
+    var wood = new THREE.MeshLambertMaterial({ color: 0x6d5a45 });
+    elecLocal.add(inst(poleGeo, wood, poles, false), inst(arm, wood, poles, false));
+    var ktp = new THREE.Mesh(new THREE.BoxGeometry(2.6, 3, 2.6), new THREE.MeshLambertMaterial({ color: 0xc4bfb2 }));
+    var ktpI = new THREE.InstancedMesh(ktp.geometry.clone().translate(0, 1.5, 0), ktp.material, Math.max(1, tr.length)); tr.forEach(function (q, i) { o3.position.set(q[0], hAt(q[0], q[1]), -q[1]); o3.rotation.set(0, q[2], 0); o3.updateMatrix(); ktpI.setMatrixAt(i, o3.matrix); }); ktpI.count = tr.length; ktpI.castShadow = true; ktpI.frustumCulled = false; elecLocal.add(ktpI);
+    /* pipes: drawn above ground so they can be seen, water main blue and sewer brown */
+    function pipes(arr, color) {
+      var s = []; for (var i = 0; i < arr.length; i += 4) { var h1 = hAt(arr[i], arr[i + 1]) + 0.3, h2 = hAt(arr[i + 2], arr[i + 3]) + 0.3; s.push(arr[i], h1, -arr[i + 1], arr[i + 2], h2, -arr[i + 3]); }
+      var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(s, 3));
+      var m = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: color, depthTest: false, transparent: true })); m.renderOrder = 6; m.frustumCulled = false; waterNetGroup.add(m);
+    }
+    pipes(pipeW, 0x2a86e0); pipes(pipeS, 0x9a6a35);
+    window.__infraStat = { poles: poles.length, wires: (wseg.length + dseg.length) / 6, ktp: tr.length, pipeKm: Math.round(pipeW.length / 4 * 42 / 1000) };
   })();
 
 
@@ -1470,7 +1595,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var dirty = true;
   var hourEl = document.getElementById('hour');
   hourEl.addEventListener('input', function () { setHour(parseFloat(hourEl.value)); });
-  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup, houseDetailGroup, outerGroup], roads: [roadMesh, railMesh], trees: [crowns, trunks, shoreVegGroup, vegGroup], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
+  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup, houseDetailGroup, outerGroup], roads: [roadMesh, railMesh], trees: [crowns, trunks, shoreVegGroup, vegGroup], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup, infraGroup, elecLocal], water2: [waterNetGroup], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
   Array.prototype.forEach.call(document.querySelectorAll('.tog'), function (b) {
     b.addEventListener('click', function () {
       var on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on);
