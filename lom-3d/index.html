@@ -459,7 +459,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   }
   function winLit(g, x, y, w, h, R, p) { if (R() < p) { g.fillStyle = R() < 0.5 ? '#ffd48a' : (R() < 0.5 ? '#ffe9b8' : '#cfe3ff'); g.fillRect(x, y, w, h); } }
   function plaster(g, w, h, R, n, base) {
-    for (var i = 0; i < n; i++) { var v = 150 + Math.floor(R() * 70); g.fillStyle = 'rgba(' + v + ',' + (v - 6) + ',' + (v - 16) + ',0.28)'; g.fillRect(R() * w, R() * h, 1 + R() * 4, 1 + R() * 3); }
+    for (var i = 0; i < n; i++) { var v = 175 + Math.floor(R() * 60); g.fillStyle = 'rgba(' + v + ',' + (v - 5) + ',' + (v - 12) + ',0.13)'; g.fillRect(R() * w, R() * h, 1 + R() * 3, 1 + R() * 2); }
     for (var k = 0; k < 6; k++) { var gg = g.createRadialGradient(R() * w, R() * h, 2, R() * w, R() * h, 40 + R() * 60); gg.addColorStop(0, 'rgba(120,105,85,0.07)'); gg.addColorStop(1, 'rgba(120,105,85,0)'); g.fillStyle = gg; g.fillRect(0, 0, w, h); }
   }
   var FR = ['#f4f1ea', '#e9e3d4', '#6b4a33', '#dcdcdc'];
@@ -573,12 +573,21 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     if (facade[key]) return facade[key];
     var out = {}, sp = SPEC[style];
     ['map', 'emi'].forEach(function (kind) {
-      var c = cv(512, 256), g = c.getContext('2d'), R = mulberry(style.length * 977 + v * 131 + (kind === 'map' ? 1 : 1));
+      var hi = kind === 'map', W = hi ? 1024 : 512, c = cv(W, W / 2), g = c.getContext('2d'), R = mulberry(style.length * 977 + v * 131 + 1);
+      if (hi) g.scale(2, 2);
       DRAW[style](g, kind === 'emi', R, v);
-      if (kind === 'map') {
-        var bc = cv(256, 128), bg = bc.getContext('2d'); bg.imageSmoothingEnabled = true; bg.imageSmoothingQuality = 'high'; bg.drawImage(c, 0, 0, 256, 128);
-        var bt = new THREE.CanvasTexture(bc); bt.wrapS = bt.wrapT = THREE.RepeatWrapping; bt.flipY = false; bt.anisotropy = maxAniso; bt.repeat.set(1 / sp.tw, 1 / sp.th); bt.offset.set(0, -1 / sp.th); out.bump = bt;
-        grain(g, 512, 256, 10, 11 + v);
+      if (hi) {
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        /* height + glass mask from the painted facade: dark glass sits deep, plaster and frames on the surface */
+        var hc = cv(512, 256), hg = hc.getContext('2d'); hg.imageSmoothingEnabled = true; hg.imageSmoothingQuality = 'high'; hg.drawImage(c, 0, 0, 512, 256);
+        var id = hg.getImageData(0, 0, 512, 256), d = id.data;
+        for (var i = 0; i < d.length; i += 4) {
+          var L = 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2], h = Math.max(0, Math.min(1, (L - 55) / 95)); h = h * h * (3 - 2 * h);
+          d[i] = h * 255; d[i + 1] = Math.pow(1 - h, 1.5) * 255; d[i + 2] = 0; d[i + 3] = 255;
+        }
+        hg.putImageData(id, 0, 0);
+        var ht = new THREE.CanvasTexture(hc); ht.wrapS = ht.wrapT = THREE.RepeatWrapping; ht.flipY = false; ht.anisotropy = maxAniso; out.h = ht;
+        grain(g, W, W / 2, 9, 11 + v);
       }
       var t = new THREE.CanvasTexture(c);
       t.wrapS = t.wrapT = THREE.RepeatWrapping; t.flipY = false; t.anisotropy = maxAniso;
@@ -624,7 +633,49 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     var pal = WALL_T[style], tint = pal[Math.floor(rnd(id + 3) * pal.length)], v = Math.floor(rnd(id + 29) * NVAR[style]), k = style + v + '_' + tint;
     if (!wallCache[k]) {
       var t = facadeTex(style, v);
-      wallCache[k] = new THREE.MeshPhongMaterial({ map: t.map, color: tint, specular: 0x050505, shininess: 6, emissive: 0xffffff, emissiveMap: t.emi, emissiveIntensity: 0 });
+      var wm = new THREE.MeshPhongMaterial({ map: t.map, color: tint, specular: 0xb0b8c0, shininess: 70, emissive: 0xffffff, emissiveMap: t.emi, emissiveIntensity: 0 });
+      var SPK = SPEC[style];
+      wm.userData.px = { hMap: { value: t.h }, uTile: { value: new THREE.Vector2(1 / SPK.tw, 1 / SPK.th) }, uDepth: { value: 0.38 }, uSky: { value: 1 } };
+      wm.customProgramCacheKey = function () { return 'wallpx'; };
+      wm.onBeforeCompile = function (sh) {
+        var u = wm.userData.px; for (var kk in u) sh.uniforms[kk] = u[kk];
+        sh.fragmentShader = sh.fragmentShader.replace('#include <uv_pars_fragment>', `#include <uv_pars_fragment>
+          uniform sampler2D hMap; uniform vec2 uTile; uniform float uDepth; uniform float uSky;
+          vec2 pUv; vec3 gT; vec3 gB; float gFade;
+          void initUv(){ pUv = vUv; }
+          #define vUv pUv`);
+        sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `
+          initUv();
+          vec3 pN = normalize(vNormal), pV = normalize(vViewPosition);
+          gFade = (1.0 - smoothstep(45.0, 140.0, length(vViewPosition))) * smoothstep(0.12, 0.45, dot(pV, pN));
+          {
+            vec3 dp1 = dFdx(-vViewPosition), dp2 = dFdy(-vViewPosition); vec2 du1 = dFdx(pUv), du2 = dFdy(pUv);
+            vec3 r1 = cross(dp2, pN), r2 = cross(pN, dp1);
+            gT = normalize(r1 * du1.x + r2 * du2.x); gB = normalize(r1 * du1.y + r2 * du2.y);
+            if (gFade > 0.02) {
+              vec3 vt = vec3(dot(pV, gT), dot(pV, gB), max(dot(pV, pN), 0.22));
+              vec2 dir = -vt.xy / vt.z * uDepth * uTile * gFade;
+              float prevD = 0.0, prevH = 0.0; vec2 uv0 = pUv; float hit = 1.0;
+              for (int i = 1; i <= 14; i++) {
+                float f = float(i) / 14.0; float dep = 1.0 - texture2D(hMap, uv0 + dir * f).r;
+                if (dep <= f) { float a = (prevD - prevH) , b = (dep - f); float t = (a - b) != 0.0 ? clamp(a / (a - b), 0.0, 1.0) : 1.0; hit = prevD + (f - prevD) * t; break; }
+                prevD = f; prevH = dep; hit = f;
+              }
+              pUv = uv0 + dir * hit;
+            }
+          }
+          #include <map_fragment>
+          { float gl = texture2D(hMap, pUv).g; float fr = pow(1.0 - max(dot(pV, pN), 0.0), 3.0) * 0.75 + 0.1;
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.74, 0.9) * uSky + vec3(0.03), clamp(gl * fr * 0.8, 0.0, 0.55)); }
+        `);
+        sh.fragmentShader = sh.fragmentShader.replace('#include <specularmap_fragment>', 'float specularStrength = 0.03 + texture2D(hMap, pUv).g * 0.9;');
+        sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          { float e = 1.0 / 512.0; vec2 uvp = pUv;
+            float hx = texture2D(hMap, uvp + vec2(e, 0.0)).r - texture2D(hMap, uvp - vec2(e, 0.0)).r;
+            float hy = texture2D(hMap, uvp + vec2(0.0, e * 2.0)).r - texture2D(hMap, uvp - vec2(0.0, e * 2.0)).r;
+            normal = normalize(normal - (gT * hx + gB * hy) * 4.0 * gFade); }`);
+      };
+      wallCache[k] = wm;
       wallMats.push(wallCache[k]);
     }
     return wallCache[k];
@@ -635,6 +686,16 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var hlWall = new THREE.MeshLambertMaterial({ color: 0xf2c764, emissive: 0x6b4a00 });
   var hlRoof = new THREE.MeshLambertMaterial({ color: 0xf2b134, emissive: 0x6b4a00, side: THREE.DoubleSide });
 
+  /* wall UVs run along each wall, so facade tiles never smear on diagonal walls */
+  var WALL_UV = {
+    generateTopUV: function (g, v, a, b, c) { return [new THREE.Vector2(v[a * 3], v[a * 3 + 1]), new THREE.Vector2(v[b * 3], v[b * 3 + 1]), new THREE.Vector2(v[c * 3], v[c * 3 + 1])]; },
+    generateSideWallUV: function (g, v, a, b, c, d) {
+      var I = [a, b, c, d], P = I.map(function (i) { return [v[i * 3], v[i * 3 + 1], v[i * 3 + 2]]; }), dx = 0, dy = 0, bd = -1;
+      for (var i = 0; i < 4; i++) for (var j = i + 1; j < 4; j++) { var ex = P[j][0] - P[i][0], ey = P[j][1] - P[i][1], L = ex * ex + ey * ey; if (L > bd) { bd = L; dx = ex; dy = ey; } }
+      var n = Math.sqrt(bd) || 1; dx /= n; dy /= n;
+      return P.map(function (q) { return new THREE.Vector2(q[0] * dx + q[1] * dy, 1 - q[2]); });
+    }
+  };
   function plan(b, area) {
     var r = rnd(b.id), t = b.t, st, fh, floors, est = true, pitch = false;
     if (t === 'hospital') { st = 'block'; fh = 3.3; floors = 3; }
@@ -742,7 +803,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var cxSum = 0, cySum = 0, cnt = 0;
   D.buildings.forEach(function (b) {
     var q = pts(b.p), area = polyArea(b.p), P = plan(b, area), g;
-    try { g = new THREE.ExtrudeGeometry(shapeOf(b.p), { depth: P.H, bevelEnabled: false }); } catch (e) { return; }
+    try { g = new THREE.ExtrudeGeometry(shapeOf(b.p), { depth: P.H, bevelEnabled: false, UVGenerator: WALL_UV }); } catch (e) { return; }
     g.rotateX(-Math.PI / 2);
     var bz = baseZ(q); RDY = bz;
     var pitched = false, rh = 0, ob = null;
@@ -788,7 +849,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   extra.forEach(function (e, idx) {
     var p = e.p, area = polyArea(p), b = { id: 900000 + idx, t: e.t, l: e.l > 0 ? String(e.l) : undefined }, P = plan(b, area), g;
     if (e.t === 'yes' && P.st === 'shop' && area < 400) { P.st = 'house'; P.floors = 1 + (rnd(b.id) > 0.5 ? 1 : 0); P.H = P.floors * 3; P.pitch = true; }
-    try { g = new THREE.ExtrudeGeometry(shapeOf(p), { depth: P.H, bevelEnabled: false }); } catch (e) { return; }
+    try { g = new THREE.ExtrudeGeometry(shapeOf(p), { depth: P.H, bevelEnabled: false, UVGenerator: WALL_UV }); } catch (e) { return; }
     g.rotateX(-Math.PI / 2);
     var q = pts(p), pitched = false, rh = 0, ob = null, bz = baseZ(q); RDY = bz; g.translate(0, bz, 0);
     if (P.pitch) {
@@ -1053,7 +1114,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     var night = 1 - day;
     waterMat.uniforms.uDay.value = day; waterMat.uniforms.uSun.value.copy(dir);
     parcelMat.opacity = 0.18 + 0.52 * day;
-    wallMats.forEach(function (m) { m.emissiveIntensity = Math.pow(night, 1.6) * 1.15; });
+    wallMats.forEach(function (m) { m.emissiveIntensity = Math.pow(night, 1.6) * 1.15; m.userData.px.uSky.value = Math.max(0.12, 1 - night); });
     groundMat.color.copy(groundDay);
     var sb = 0.16 + 0.84 * day; satMat.uniforms.uBr.value.set(sb, sb, Math.min(1, sb * 1.06)); aiMesh.material.color.setRGB(1.15 * sb, 1.14 * sb, 1.15 * sb);
     placeSun(); dirty = true;
