@@ -812,6 +812,22 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     g.addGroup(0, 12, 0); g.addGroup(12, 6, 1); g.computeVertexNormals();
     return g;
   }
+  /* hip roof (four slopes): the ridge is shorter than the house, the ends slope too */
+  function useHip(id, ob) { return rnd(id + 77) < 0.4 && ob.a - ob.b > 0.8; }
+  function hipGeo(o, h0, rh) {
+    var a = o.a + 0.35, b = o.b + 0.35, ra = Math.max(0.2, a - b), c = Math.cos(o.th), s = Math.sin(o.th), pos = [], uv = [], sl = Math.hypot(b, rh), hs = Math.hypot(a - ra, rh);
+    function P(u, w, h) { return [o.cx + u * c - w * s, h, -(o.cy + u * s + w * c)]; }
+    function tri(A, B, C, uvs) { pos.push(A[0], A[1], A[2], B[0], B[1], B[2], C[0], C[1], C[2]); uv.push.apply(uv, uvs); }
+    var e1 = P(-a, -b, h0), e2 = P(a, -b, h0), f1 = P(-a, b, h0), f2 = P(a, b, h0), r1 = P(-ra, 0, h0 + rh), r2 = P(ra, 0, h0 + rh);
+    tri(e1, e2, r2, [-a, 0, a, 0, ra, sl]); tri(e1, r2, r1, [-a, 0, ra, sl, -ra, sl]);
+    tri(f2, f1, r1, [a, 0, -a, 0, -ra, sl]); tri(f2, r1, r2, [a, 0, -ra, sl, ra, sl]);
+    tri(e1, f1, r1, [-b, 0, b, 0, 0, hs]); tri(e2, r2, f2, [b, 0, 0, hs, -b, 0]);
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.addGroup(0, 18, 0); g.computeVertexNormals();
+    return g;
+  }
+  function roofGeo(o, h0, rh, id) { return useHip(id, o) ? hipGeo(o, h0, rh) : gableGeo(o, h0, rh); }
 
 
   /* ---------- rooftop detail on large flat roofs: parapet, stair/lift boxes, vents, AC units, PV rows (own procedural design) ---------- */
@@ -874,13 +890,13 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
 
   /* pitched-roof houses: chimneys (with a cap), dormers (body, little roof, window) and a front door with a canopy */
   function houseDetail(id, q, ob, H, rh, area) {
-    var r = mulberry(id * 13 + 5), c = Math.cos(ob.th), sn = Math.sin(ob.th), a = ob.a, b = ob.b, i, k;
+    var r = mulberry(id * 13 + 5), c = Math.cos(ob.th), sn = Math.sin(ob.th), a = ob.a, b = ob.b, i, k, hip = useHip(id, ob), au = hip ? Math.max(0.5, (ob.a - ob.b) * 0.8) : ob.a;
     function W(u, w) { return [ob.cx + u * c - w * sn, ob.cy + u * sn + w * c]; }
     function roofY(w) { return H + rh * Math.max(0, 1 - Math.abs(w) / (b + 0.35)); }
     if (r() < 0.78) {
       var nc = (a > 7 && r() < 0.25) ? 2 : 1;
       for (i = 0; i < nc; i++) {
-        var u = (r() < 0.5 ? -1 : 1) * (0.25 + r() * 0.4) * a, w = (r() * 2 - 1) * Math.min(0.35 * b, 0.9), p = W(u, w);
+        var u = (r() < 0.5 ? -1 : 1) * (0.25 + r() * 0.4) * au, w = (r() * 2 - 1) * Math.min(0.35 * b, 0.9), p = W(u, w);
         if (!inPoly(p[0], p[1], q)) continue;
         var y0 = roofY(w) - 0.25, y1 = H + rh + 0.85;
         addBox(RD.chim, p[0], (y0 + y1) / 2, -p[1], 0.3, (y1 - y0) / 2, 0.3, ob.th);
@@ -890,7 +906,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     if (a >= 4.5 && b >= 3 && rh >= 1.4 && r() < 0.5) {
       var sd = r() < 0.5 ? -1 : 1, nd = (a > 8 && r() < 0.5) ? 2 : 1, wd = sd * b * 0.5, yr = roofY(wd);
       for (k = 0; k < nd; k++) {
-        var ud = nd === 2 ? (k ? 0.45 : -0.45) * a : (r() * 2 - 1) * 0.25 * a, pd = W(ud, wd), pf = W(ud, wd + sd * 0.57);
+        var ud = nd === 2 ? (k ? 0.45 : -0.45) * au : (r() * 2 - 1) * 0.25 * au, pd = W(ud, wd), pf = W(ud, wd + sd * 0.57);
         addBox(RD.dorm, pd[0], yr + 0.3, -pd[1], 0.6, 0.5, 0.55, ob.th);
         addBox(RD.droof, pd[0], yr + 0.88, -pd[1], 0.78, 0.08, 0.72, ob.th);
         addBox(RD.glass, pf[0], yr + 0.3, -pf[1], 0.32, 0.3, 0.02, ob.th);
@@ -931,7 +947,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     m.userData.owner = m;
     bGroup.add(m);
     if (pitched) {
-      var rm = new THREE.Mesh(gableGeo(ob, P.H, rh), [roofMat(b.id), gableMat(b.id)]);
+      var rm = new THREE.Mesh(roofGeo(ob, P.H, rh, b.id), [roofMat(b.id), gableMat(b.id)]);
       rm.castShadow = true; rm.receiveShadow = true; rm.position.y = bz; rm.userData = { owner: m, base: rm.material };
       m.userData.roof = rm; bGroup.add(rm);
     }
@@ -973,7 +989,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     var wm = wallMat(P.st, b.id), cm = pitched ? gableMat(b.id) : flatMat(b.id);
     batchFor('w' + wm.id + '_' + cm.id, [cm, wm]).add(g); g.dispose();
     if (pitched) {
-      var rg = gableGeo(ob, P.H, rh), rm = roofMat(b.id), gm = gableMat(b.id); rg.translate(0, bz, 0);
+      var rg = roofGeo(ob, P.H, rh, b.id), rm = roofMat(b.id), gm = gableMat(b.id); rg.translate(0, bz, 0);
       batchFor('r' + rm.id + '_' + gm.id, [rm, gm]).add(rg); rg.dispose();
     }
     if (!pitched) roofDetail(b.id, q, P.H, area); else if (P.st === 'house') houseDetail(b.id, q, ob, P.H, rh, area);
@@ -1020,7 +1036,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       var wm = wallMat(P.st, b.id), cm = pitched ? gableMat(b.id) : flatMat(b.id);
       var key = 'w' + wm.id + '_' + cm.id; (J.batches[key] || (J.batches[key] = new Batch([cm, wm]))).add(g); g.dispose();
       if (pitched) {
-        var rg = gableGeo(ob, P.H, rh), rm = roofMat(b.id), gm = gableMat(b.id); rg.translate(0, bz, 0);
+        var rg = roofGeo(ob, P.H, rh, b.id), rm = roofMat(b.id), gm = gableMat(b.id); rg.translate(0, bz, 0);
         var key2 = 'r' + rm.id + '_' + gm.id; (J.batches[key2] || (J.batches[key2] = new Batch([rm, gm]))).add(rg); rg.dispose();
       }
     }
