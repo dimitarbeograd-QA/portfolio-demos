@@ -6,7 +6,7 @@ s = (r / 'src_template.html').read_text(encoding='utf-8')
 rd = lambda n: (r / 'data' / n).read_text(encoding='utf-8')
 b64 = lambda n: base64.b64encode((r / 'data' / n).read_bytes()).decode()
 s = (s.replace('__DATA__', rd('data.json')).replace('__VEG__', rd('veg.b64')).replace('__DEM__', rd('dem.b64'))
-      .replace('__WM__', b64('water_mask.png')).replace('__SAT__', b64('sat.jpg')).replace('__SR__', b64('sr_local.jpg')).replace('__PAR__', '').replace('__DEM2__', rd('dem2.b64')).replace('__OUT__', rd('outer.json')).replace('__CLS2__', b64('cls_b.png')).replace('__CLS__', b64('cls_a.png')).replace('__SATO__', b64('sat_outer.jpg')))
+      .replace('__WM__', b64('water_mask.png')).replace('__SAT__', b64('sat.jpg')).replace('__SR__', b64('sr_local.jpg')).replace('__PAR__', '').replace('__DEM2__', rd('dem2.b64')).replace('__OUT__', rd('outer.json')).replace('__VEGO__', b64('veg_outer.png')).replace('__CLS2__', b64('cls_b.png')).replace('__CLS__', b64('cls_a.png')).replace('__SATO__', b64('sat_outer.jpg')))
 # the cadastre (KAIS) layers are not part of the public build
 s = s.replace('      <button class="tog" data-layer="parcels" aria-pressed="true">Имоти</button>\n', '')
 s = s.replace('Сгради от кадастъра на АГКК и OSM, снимка от Sentinel-2', 'Сгради от OSM и Microsoft ML, снимка от Sentinel-2')

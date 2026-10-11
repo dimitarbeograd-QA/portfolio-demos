@@ -1061,6 +1061,69 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     outQ.sort(function (a, b) { return Math.hypot(tg.x - a.x, tg.z + a.y) - Math.hypot(tg.x - b.x, tg.z + b.y); });
     if (any) dirty = true;
   }
+
+  /* ---------- trees and shrubs for the whole municipality: density maps from Sentinel-2 colour/NDVI (R = trees, G = shrubs, B = tone), built in 1 km cells near the camera ---------- */
+  var vegO = null, vegCells = {}, vegGroup = new THREE.Group(), vegBudget = 14000, vegLeafT = null, vegLeafS = null, vegGeoT = null, vegGeoS = null, vegTrunkMat = null;
+  scene.add(vegGroup);
+  (function () {
+    var im = new Image();
+    im.onload = function () { var c = cv(im.width, im.height), g = c.getContext('2d'); g.drawImage(im, 0, 0); vegO = { w: im.width, h: im.height, d: g.getImageData(0, 0, im.width, im.height).data }; };
+    im.src = 'data:image/png;base64,__VEGO__';
+  })();
+  function vegAt(x, y) {
+    var u = Math.floor((x - OB[0]) / (OB[1] - OB[0]) * vegO.w), v = Math.floor((OB[3] - y) / (OB[3] - OB[2]) * vegO.h);
+    if (u < 0 || v < 0 || u >= vegO.w || v >= vegO.h) return null;
+    var k = (v * vegO.w + u) * 4; return [vegO.d[k] / 255, vegO.d[k + 1] / 255, vegO.d[k + 2] / 255];
+  }
+  function vegBuild(ci, cj) {
+    var key = ci + ',' + cj, cell = { x: ci * 1000 + 500, y: cj * 1000 + 500, meshes: [], n: 0 }; vegCells[key] = cell;
+    var R = mulberry(ci * 7919 + cj * 104729 + 17), trees = [], shrubs = [], oc = outCells[key], bb = [], i;
+    if (oc) oc.list.forEach(function (p) { var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (var k = 0; k < p.length; k += 2) { x0 = Math.min(x0, p[k]); x1 = Math.max(x1, p[k]); y0 = Math.min(y0, p[k + 1]); y1 = Math.max(y1, p[k + 1]); } bb.push([x0 / 10 - 4, x1 / 10 + 4, y0 / 10 - 4, y1 / 10 + 4]); });
+    for (i = 0; i < 7000; i++) {
+      var x = ci * 1000 + R() * 1000, y = cj * 1000 + R() * 1000;
+      if (x > SB[0] && x < SB[1] && y > SB[2] && y < SB[3]) continue;
+      var a = vegAt(x, y); if (!a) continue;
+      var hit = false; for (var b = 0; b < bb.length; b++) if (x > bb[b][0] && x < bb[b][1] && y > bb[b][2] && y < bb[b][3]) { hit = true; break; }
+      if (hit) continue;
+      var r = R(); if (r < a[0] * 0.95) { if (trees.length < 2400) trees.push([x, y, a[2], R()]); } else if (r < a[0] * 0.95 + a[1] * 0.5) { if (shrubs.length < 700) shrubs.push([x, y, a[2], R()]); }
+    }
+    if (!vegLeafT) { vegLeafT = leafMat(true); vegLeafS = leafMat(false); vegGeoT = crownGeometry(2, 202); vegGeoT.userData.holes = true; vegGeoS = crownGeometry(2, 303); }
+    function make(list, geo, mat, fn) {
+      if (!list.length) return;
+      var mesh = new THREE.InstancedMesh(geo, mat, list.length), dm = new THREE.Object3D(), cc = new THREE.Color();
+      list.forEach(function (t, j) { fn(t, dm, cc); dm.updateMatrix(); mesh.setMatrixAt(j, dm.matrix); mesh.setColorAt(j, cc); });
+      mesh.frustumCulled = false; mesh.renderOrder = 3; vegGroup.add(mesh); cell.meshes.push(mesh); cell.n += list.length;
+    }
+    make(trees, vegGeoT, vegLeafT, function (t, dm, cc) {
+      var h = 8 + t[3] * 8, rr = h * (0.3 + t[3] * 0.08), g0 = hAt(t[0], t[1]) + 0.35;
+      dm.position.set(t[0], g0 + h * 0.6, -t[1]); dm.scale.set(rr, rr * 1.25, rr); dm.rotation.set(0, t[3] * 9, 0);
+      var tn = 0.8 + t[2] * 0.5; cc.setRGB(0.11 * tn, 0.27 * tn, 0.07 * tn); cc.multiplyScalar(0.8 + t[3] * 0.4);
+    });
+    if (trees.length) {
+      var tr = new THREE.InstancedMesh(trunkGeo, vegTrunkMat || (vegTrunkMat = new THREE.MeshLambertMaterial({ color: 0x5b4636 })), trees.length), dt = new THREE.Object3D();
+      trees.forEach(function (t, j) { var h = 8 + t[3] * 8, g0 = hAt(t[0], t[1]) + 0.35; dt.position.set(t[0], g0 + h * 0.22, -t[1]); dt.scale.set(1, h * 0.46, 1); dt.updateMatrix(); tr.setMatrixAt(j, dt.matrix); });
+      tr.frustumCulled = false; tr.renderOrder = 3; vegGroup.add(tr); cell.meshes.push(tr);
+    }
+    make(shrubs, vegGeoS, vegLeafS, function (t, dm, cc) {
+      var rr = 0.9 + t[3] * 1.5, g0 = hAt(t[0], t[1]) + 0.35;
+      dm.position.set(t[0], g0 + rr * 0.45, -t[1]); dm.scale.set(rr, rr * 0.65, rr); dm.rotation.set(0, t[3] * 9, 0);
+      var tn = 0.9 + t[2] * 0.6; cc.setRGB(0.2 * tn, 0.34 * tn, 0.1 * tn); cc.multiplyScalar(0.8 + ((t[3] * 7) % 1) * 0.5);
+    });
+    dirty = true;
+  }
+  function vegUpdate() {
+    if (!vegO) return;
+    var tg = controls.target, cp = camera.position, ci0 = Math.floor(tg.x / 1000), cj0 = Math.floor(-tg.z / 1000), todo = null, dBest = 1e9, k, total = 0, list = [];
+    for (var di = -3; di <= 3; di++) for (var dj = -3; dj <= 3; dj++) {
+      var ci = ci0 + di, cj = cj0 + dj, key = ci + ',' + cj, cx = ci * 1000 + 500, cy = cj * 1000 + 500, d = Math.min(Math.hypot(cp.x - cx, cp.z + cy), Math.hypot(tg.x - cx, tg.z + cy) + 300);
+      if (d > 2600 || cx < OB[0] || cx > OB[1] || cy < OB[2] || cy > OB[3]) continue;
+      if (!vegCells[key]) { if (d < dBest) { dBest = d; todo = [ci, cj]; } }
+    }
+    if (todo) vegBuild(todo[0], todo[1]);
+    for (k in vegCells) { var c = vegCells[k], dd = Math.min(Math.hypot(cp.x - c.x, cp.z + c.y), Math.hypot(tg.x - c.x, tg.z + c.y) + 300); list.push([dd, c]); }
+    list.sort(function (a, b) { return a[0] - b[0]; });
+    list.forEach(function (e) { var vis = e[0] < 2800 && total + e[1].n <= vegBudget; if (vis) total += e[1].n; e[1].meshes.forEach(function (m) { if (m.visible !== vis) { m.visible = vis; dirty = true; } }); });
+  }
   var roofDetailGroup = new THREE.Group(); scene.add(roofDetailGroup);
   var houseDetailGroup = new THREE.Group(); scene.add(houseDetailGroup);
   [['par', 0xd6d3cb, 0, 1], ['box', 0xa2a6ab, 0, 1], ['tank', 0xb9bdb8, 0, 1], ['pv', 0x1f3350, 0x0a1426, 1], ['chim', 0x9c5b45, 0, 1], ['dorm', 0xe6e1d4, 0, 2], ['droof', 0x5b4636, 0, 2], ['glass', 0x273a55, 0x0a1426, 2], ['door', 0x6a4630, 0, 2]].forEach(function (k) {
@@ -1355,7 +1418,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var dirty = true;
   var hourEl = document.getElementById('hour');
   hourEl.addEventListener('input', function () { setHour(parseFloat(hourEl.value)); });
-  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup, houseDetailGroup, outerGroup], roads: [roadMesh], trees: [crowns, trunks, shoreVegGroup], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
+  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup, houseDetailGroup, outerGroup], roads: [roadMesh], trees: [crowns, trunks, shoreVegGroup, vegGroup], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
   Array.prototype.forEach.call(document.querySelectorAll('.tog'), function (b) {
     b.addEventListener('click', function () {
       var on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on);
@@ -1497,7 +1560,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     var az = controls.getAzimuthalAngle();
     needle.style.transform = 'rotate(' + (az * 180 / Math.PI).toFixed(1) + 'deg)';
     if (outQ.length || outJob) { outStep(6); }
-    if ((window.__ou = (window.__ou || 0) + 1) % 20 === 0) outUpdate();
+    if ((window.__ou = (window.__ou || 0) + 1) % 20 === 0) { outUpdate(); vegUpdate(); }
     if (dirty) {
       var tn = performance.now(), dtf = tn - (window.__lastR || tn); window.__lastR = tn;
       if (dtf > 0 && dtf < 250) { window.__ema = (window.__ema || 30) * 0.9 + dtf * 0.1; window.__nf = (window.__nf || 0) + 1; }

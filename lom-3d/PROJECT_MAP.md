@@ -46,7 +46,7 @@
 | 820–908 | rooftop detail on large flat roofs: parapet, stair/lift boxes, vents, AC units, PV rows (own procedural design | addBox, roofDetail, houseDetail (chimneys, dormers, doors on pitched houses), gableGeo, hipGeo (hip roof, 40% of houses), roofGeo, baseZ |
 | 909–961 | the rest of the town: Microsoft ML building footprints (ODbL) via Overture, merged into a few meshes | Batch, batchFor |
 | 962–1019 | village buildings (Overture: Microsoft ML + OSM footprints), 1 km cells built lazily as the camera comes near | outStart, outStep, outUpdate |
-| 1020–1053 | trees | inPoly, nearBuilding, isGreen |
+| 1020–1053 | trees (city) and trees/shrubs for the whole municipality: vegAt, vegBuild, vegUpdate, density map data/veg_outer.png R=trees G=shrubs B=tone | inPoly, nearBuilding, isGreen |
 | 1054–1108 | foliage: crowns built from several displaced leaf clusters, with a procedural leaf pattern (light tips, dark g | crownGeometry, leafMat |
 | 1109–1150 | riverside vegetation from the satellite colours: dark green -> dense riparian forest, light green -> shrubs an | shoreVeg |
 | 1151–1198 | 110 kV grid (from OpenStreetMap) | — |
