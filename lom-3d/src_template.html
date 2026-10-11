@@ -510,7 +510,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     for (var i = 0; i < d.length; i += 4) { var n = (R() - 0.5) * amt; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
     g.putImageData(id, 0, 0);
   }
-  function glass(g, x, y, w, h, a, b) { var gr = g.createLinearGradient(x, y, x + w, y + h); gr.addColorStop(0, a); gr.addColorStop(1, b); g.fillStyle = gr; g.fillRect(x, y, w, h); }
+  function glass(g, x, y, w, h, a, b) { var gr = g.createLinearGradient(x, y, x + w, y + h); gr.addColorStop(0, a); gr.addColorStop(1, a); g.fillStyle = gr; g.fillRect(x, y, w, h); }
   function blank(g, lit, base) { g.fillStyle = lit ? '#000' : base; g.fillRect(0, 0, 512, 256); }
 
   /* ---- facade painter: windows with reveal, frame, glass reflection, sill, lintel, shutters; every style comes in several variants ---- */
@@ -520,9 +520,8 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     g.fillStyle = 'rgba(0,0,0,0.30)'; g.fillRect(x - fw + 3, y - fw + 3, w + 2 * fw, h + 2 * fw + (o.sill ? 0 : 2));
     if (o.lintel) { g.fillStyle = o.lintel; g.fillRect(x - fw - 5, y - fw - 9, w + 2 * fw + 10, 7); g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(x - fw - 5, y - fw - 2, w + 2 * fw + 10, 2); }
     g.fillStyle = o.frame; if (arch) { rr(g, x - fw, y - fw, w + 2 * fw, h + 2 * fw, w * 0.5 + fw); g.fill(); } else g.fillRect(x - fw, y - fw, w + 2 * fw, h + 2 * fw);
-    var gr = g.createLinearGradient(x, y, x + w * 0.6, y + h); gr.addColorStop(0, o.ga || '#34414f'); gr.addColorStop(0.55, o.gb || '#6f8396'); gr.addColorStop(1, o.ga || '#34414f');
+    var gr = g.createLinearGradient(x, y, x + w * 0.6, y + h); gr.addColorStop(0, o.ga || '#34414f'); gr.addColorStop(1, o.ga || '#34414f');
     g.fillStyle = gr; if (arch) { rr(g, x, y, w, h, w * 0.5); g.fill(); } else g.fillRect(x, y, w, h);
-    g.fillStyle = 'rgba(255,255,255,0.13)'; g.beginPath(); g.moveTo(x, y + h * 0.7); g.lineTo(x + w * 0.45, y); g.lineTo(x + w * 0.7, y); g.lineTo(x, y + h); g.closePath(); g.fill();
     if (o.curtain && R() < o.curtain) { g.fillStyle = 'rgba(' + (R() < 0.5 ? '235,225,205' : '200,170,150') + ',' + (0.35 + R() * 0.4) + ')'; g.fillRect(x, y, w * (0.3 + R() * 0.6), h * (0.55 + R() * 0.45)); }
     g.fillStyle = 'rgba(0,0,0,0.38)'; g.fillRect(x, y, w, 3); g.fillRect(x, y, 2, h);
     g.fillStyle = o.frame; var cols = o.cols || 2; for (var k = 1; k < cols; k++) g.fillRect(x + w * k / cols - 1.5, y, 3, h);
@@ -743,10 +742,8 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
             }
           }
           #include <map_fragment>
-          { float gl = texture2D(hMap, pUv).g; float fr = pow(1.0 - max(dot(pV, pN), 0.0), 3.0) * 0.75 + 0.1;
-            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.74, 0.9) * uSky + vec3(0.03), clamp(gl * fr * 0.8, 0.0, 0.55)); }
         `);
-        sh.fragmentShader = sh.fragmentShader.replace('#include <specularmap_fragment>', 'float specularStrength = 0.03 + texture2D(hMap, pUv).g * 0.9;');
+        sh.fragmentShader = sh.fragmentShader.replace('#include <specularmap_fragment>', 'float specularStrength = 0.02;');
         sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
           { float e = 1.0 / 512.0; vec2 uvp = pUv;
             float hx = texture2D(hMap, uvp + vec2(e, 0.0)).r - texture2D(hMap, uvp - vec2(e, 0.0)).r;
