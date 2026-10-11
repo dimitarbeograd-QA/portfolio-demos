@@ -328,6 +328,21 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       '  sc -= pb * 0.07 * (1.0 - smoothstep(80.0, 500.0, dist)); sc *= 1.0 - wet;\n' +
       '  c = mix(c, sc, sand);\n' +
       ' }\n' +
+      ' float nw2 = max(max(texture2D(uWm, vUv + vec2(0.03, 0.0)).r, texture2D(uWm, vUv - vec2(0.03, 0.0)).r), max(texture2D(uWm, vUv + vec2(0.0, 0.026)).r, texture2D(uWm, vUv - vec2(0.0, 0.026)).r));\n' +
+      ' float l0 = dot(texture2D(uSat, vUv).rgb, vec3(0.3, 0.59, 0.11));\n' +
+      ' float vdark = veg * (1.0 - smoothstep(0.19, 0.25, l0)), vlite = veg * smoothstep(0.22, 0.3, l0);\n' +
+      ' float zone = smoothstep(0.1, 0.5, nw2) * (1.0 - smoothstep(250.0, 1400.0, dist));\n' +
+      ' if (zone > 0.01) {\n' +
+      '  float cn = vn(p * 0.5) * 0.55 + vn(p * 1.6 + 5.0) * 0.3 + vn(p * 5.5 + 2.0) * 0.15;\n' +
+      '  c *= 1.0 - vdark * zone * (0.34 * cn + 0.06);\n' +
+      '  c.g *= 1.0 + vdark * zone * (vn(p * 3.0) - 0.5) * 0.18;\n' +
+      '  float tf = vn(p * 7.0) * 0.6 + vn(p * 23.0) * 0.4;\n' +
+      '  c *= 1.0 + vlite * zone * (tf - 0.5) * 0.22;\n' +
+      '  float cellh = h21(floor(p * 8.0)), fl = step(0.986, cellh) * vlite * zone * (1.0 - smoothstep(60.0, 260.0, dist));\n' +
+      '  vec2 fq = fract(p * 8.0) - 0.5; fl *= 1.0 - smoothstep(0.12, 0.2, length(fq));\n' +
+      '  float hc = h21(floor(p * 8.0) + 3.0); vec3 fcol = hc < 0.4 ? vec3(0.96, 0.95, 0.88) : (hc < 0.7 ? vec3(0.98, 0.84, 0.25) : vec3(0.72, 0.5, 0.86));\n' +
+      '  c = mix(c, fcol, fl * 0.85);\n' +
+      ' }\n' +
       ' float m = 1.0 + nr * (veg * (g * 0.9 + (bl2 - 0.5) * 0.28) + bare * (g * 0.7 + (fur - 0.5) * 0.09 * smoothstep(500.0, 100.0, dist)) + other * g * 0.45);\n' +
       ' c.g *= 1.0 + nr * veg * (n2 - 0.5) * 0.22; c.r *= 1.0 + nr * veg * (n1 - 0.5) * 0.14;\n' +
       ' gl_FragColor = vec4(c * m * uBr * vC, 1.0);\n#include <fog_fragment>\n}'
@@ -383,6 +398,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     im.onload = function () {
       var t = new THREE.Texture(im); t.needsUpdate = true; t.anisotropy = maxAniso0;
       satMat.uniforms.uSat.value = t; dirty = true;
+      waterReady.then(function () { try { shoreVeg(im); } catch (e) {} });
     };
     im.src = 'data:image/jpeg;base64,__SAT__';
   })();
@@ -812,6 +828,48 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   });
   crowns.castShadow = true; scene.add(crowns); scene.add(trunks);
 
+  /* ---------- riverside vegetation from the satellite colours: dark green -> dense riparian forest, light green -> shrubs and grass ---------- */
+  var shoreVegGroup = new THREE.Group(); scene.add(shoreVegGroup);
+  function shoreVeg(im) {
+    if (!waterBits) return;
+    var W = im.width, H = im.height, c = cv(W, H), g = c.getContext('2d'); g.drawImage(im, 0, 0); var px = g.getImageData(0, 0, W, H).data;
+    var CS = 30, CW = Math.ceil((SB[1] - SB[0]) / CS), CH = Math.ceil((SB[3] - SB[2]) / CS), dist = new Float32Array(CW * CH), i, cx, cy;
+    for (cy = 0; cy < CH; cy++) for (cx = 0; cx < CW; cx++) dist[cy * CW + cx] = inWater(SB[0] + (cx + 0.5) * CS, SB[3] - (cy + 0.5) * CS) ? 0 : 1e9;
+    for (cy = 0; cy < CH; cy++) for (cx = 0; cx < CW; cx++) { i = cy * CW + cx; var v = dist[i]; if (cx > 0) v = Math.min(v, dist[i - 1] + CS); if (cy > 0) { v = Math.min(v, dist[i - CW] + CS); if (cx > 0) v = Math.min(v, dist[i - CW - 1] + CS * 1.42); if (cx < CW - 1) v = Math.min(v, dist[i - CW + 1] + CS * 1.42); } dist[i] = v; }
+    for (cy = CH - 1; cy >= 0; cy--) for (cx = CW - 1; cx >= 0; cx--) { i = cy * CW + cx; var u = dist[i]; if (cx < CW - 1) u = Math.min(u, dist[i + 1] + CS); if (cy < CH - 1) { u = Math.min(u, dist[i + CW] + CS); if (cx < CW - 1) u = Math.min(u, dist[i + CW + 1] + CS * 1.42); if (cx > 0) u = Math.min(u, dist[i + CW - 1] + CS * 1.42); } dist[i] = u; }
+    var have = {}; treeList.forEach(function (t) { have[Math.floor(t[0] / 10) + ',' + Math.floor(t[1] / 10)] = 1; });
+    var Rn = mulberry(7731), trees = [], shrubs = [], MAXD = 260;
+    for (var y = SB[2] + 5; y < SB[3]; y += 10) for (var x = SB[0] + 5; x < SB[1]; x += 10) {
+      var d = dist[Math.floor((SB[3] - y) / CS) * CW + Math.floor((x - SB[0]) / CS)]; if (d < 1 || d > MAXD) continue;
+      var u0 = Math.floor((x - SB[0]) / (SB[1] - SB[0]) * W), v0 = Math.floor((SB[3] - y) / (SB[3] - SB[2]) * H), k = (v0 * W + u0) * 4, r = px[k], gg = px[k + 1], b = px[k + 2];
+      if (!(gg > r * 1.03 && gg > b * 1.1)) continue;
+      var lum = (0.3 * r + 0.59 * gg + 0.11 * b) / 255; if (lum > 0.42) continue;
+      var jx = x + (Rn() - 0.5) * 8, jy = y + (Rn() - 0.5) * 8;
+      if (inWater(jx, jy) || nearBuilding(jx, jy) || have[Math.floor(x / 10) + ',' + Math.floor(y / 10)]) continue;
+      if (lum < 0.22) { if (Rn() < 0.85) trees.push([jx, jy, r, gg, b, Rn()]); } else if (Rn() < 0.4) shrubs.push([jx, jy, r, gg, b, Rn()]);
+    }
+    function thin(a, cap) { if (a.length <= cap) return a; var p = cap / a.length; return a.filter(function () { return Rn() < p; }); }
+    trees = thin(trees, 16000); shrubs = thin(shrubs, 9000);
+    function make(list, geo, fn) {
+      if (!list.length) return null;
+      var mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: 0xffffff }), list.length), dm = new Object3D3(), cc = new THREE.Color();
+      list.forEach(function (t, j) { fn(t, dm, cc); dm.updateMatrix(); mesh.setMatrixAt(j, dm.matrix); mesh.setColorAt(j, cc); });
+      mesh.frustumCulled = false; shoreVegGroup.add(mesh); return mesh;
+    }
+    var Object3D3 = THREE.Object3D;
+    var tm = make(trees, new THREE.IcosahedronGeometry(1, 0), function (t, dm, cc) {
+      var h = 7 + t[5] * 6, rr = h * (0.3 + t[5] * 0.08), g0 = hAt(t[0], t[1]);
+      dm.position.set(t[0], g0 + h * 0.6, -t[1]); dm.scale.set(rr, rr * 1.25, rr); dm.rotation.set(0, t[5] * 9, 0);
+      cc.setRGB(Math.min(1, t[2] / 255 * 1.1 + 0.02), Math.min(1, t[3] / 255 * 1.25 + 0.05), Math.min(1, t[4] / 255 * 0.9)); cc.multiplyScalar(0.8 + t[5] * 0.4);
+    });
+    var sm = make(shrubs, new THREE.IcosahedronGeometry(1, 0), function (t, dm, cc) {
+      var rr = 0.9 + t[5] * 1.3, g0 = hAt(t[0], t[1]);
+      dm.position.set(t[0], g0 + rr * 0.45, -t[1]); dm.scale.set(rr, rr * 0.65, rr); dm.rotation.set(0, t[5] * 9, 0);
+      cc.setRGB(Math.min(1, t[2] / 255 * 1.3 + 0.04), Math.min(1, t[3] / 255 * 1.35 + 0.06), Math.min(1, t[4] / 255 * 1.0)); cc.multiplyScalar(0.8 + ((t[5] * 7) % 1) * 0.5);
+    });
+    var on = document.querySelector('[data-layer="trees"]').getAttribute('aria-pressed') === 'true'; shoreVegGroup.visible = on; dirty = true;
+  }
+
   /* ---------- 110 kV grid (from OpenStreetMap) ---------- */
   var powerGroup = new THREE.Group(); scene.add(powerGroup); var powerPick = [];
   (function () {
@@ -966,7 +1024,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var dirty = true;
   var hourEl = document.getElementById('hour');
   hourEl.addEventListener('input', function () { setHour(parseFloat(hourEl.value)); });
-  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup], roads: [roadMesh], trees: [crowns, trunks], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
+  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup], roads: [roadMesh], trees: [crowns, trunks, shoreVegGroup], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
   Array.prototype.forEach.call(document.querySelectorAll('.tog'), function (b) {
     b.addEventListener('click', function () {
       var on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on);
