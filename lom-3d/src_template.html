@@ -924,17 +924,58 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       if (treeList.length > 4500) break;
     }
   });
-  var crownGeo = new THREE.IcosahedronGeometry(1, 1), trunkGeo = new THREE.CylinderGeometry(0.18, 0.26, 1, 5);
-  var crowns = new THREE.InstancedMesh(crownGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), treeList.length);
+  /* ---------- foliage: crowns built from several displaced leaf clusters, with a procedural leaf pattern (light tips, dark gaps, ragged edge) in the shader ---------- */
+  function crownGeometry(nClust, seed) {
+    var Rg = mulberry(seed), pos = [], col = [], cen = [[0, 0.05, 0, 0.62]];
+    for (var k = 1; k < nClust; k++) { var a = (k / (nClust - 1)) * 6.283 + Rg() * 0.8, hh = -0.35 + Rg() * 0.95, rad = 0.38 + Rg() * 0.22; cen.push([Math.cos(a) * rad, hh * 0.7, Math.sin(a) * rad, 0.36 + Rg() * 0.2]); }
+    function hs(x, y, z) { var n = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453; return n - Math.floor(n); }
+    cen.forEach(function (c) {
+      var g = new THREE.IcosahedronGeometry(1, nClust > 3 ? 1 : 0), a = g.attributes.position.array;
+      for (var i = 0; i < a.length; i += 3) {
+        var x = a[i], y = a[i + 1], z = a[i + 2], j = 1 + (hs(Math.round(x * 50), Math.round(y * 50), Math.round(z * 50)) - 0.5) * 0.34;
+        var px = c[0] + x * c[3] * j, py = c[1] + y * c[3] * j * 0.88, pz = c[2] + z * c[3] * j;
+        pos.push(px, py, pz);
+        var out = Math.min(1, Math.hypot(px, pz) / 0.85), top = Math.max(0, Math.min(1, (py + 0.55) / 1.3)), b = 0.5 + 0.35 * top + 0.3 * out * top + 0.1 * (y * 0.5 + 0.5);
+        col.push(b, b, b);
+      }
+      g.dispose();
+    });
+    var geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.computeVertexNormals();
+    return geo;
+  }
+  function leafMat(holes) {
+    var m = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
+    m.customProgramCacheKey = function () { return 'leaf' + holes; };
+    m.onBeforeCompile = function (sh) {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vOP;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvOP = position;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+        varying vec3 vOP;
+        float h3(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+        float vn(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(mix(h3(i), h3(i + vec3(1,0,0)), f.x), mix(h3(i + vec3(0,1,0)), h3(i + vec3(1,1,0)), f.x), f.y),
+                     mix(mix(h3(i + vec3(0,0,1)), h3(i + vec3(1,0,1)), f.x), mix(h3(i + vec3(0,1,1)), h3(i + vec3(1,1,1)), f.x), f.y), f.z); }`)
+        .replace('#include <color_fragment>', `#include <color_fragment>
+        {
+          float l1 = vn(vOP * 17.0), l2 = vn(vOP * 41.0 + 7.0), l3 = vn(vOP * 7.0 + 3.0);
+          ${holes ? 'if (vn(vOP * 15.0 + 3.0) > 0.835 + 0.1 * (1.0 - smoothstep(0.35, 0.9, length(vOP)))) discard;' : ''}
+          float tone = 0.58 + 0.5 * l1 + 0.3 * (l2 - 0.5) + 0.25 * (l3 - 0.5);
+          vec3 tint = mix(vec3(0.78, 0.9, 0.62), vec3(1.12, 1.1, 0.78), smoothstep(0.62, 0.9, l1));
+          diffuseColor.rgb *= tone * mix(vec3(1.0), tint, 0.65);
+        }`);
+    };
+    return m;
+  }
+  var crownGeo = crownGeometry(6, 101), trunkGeo = new THREE.CylinderGeometry(0.18, 0.26, 1, 5);
+  var crowns = new THREE.InstancedMesh(crownGeo, leafMat(true), treeList.length);
   var trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshLambertMaterial({ color: 0x5b4636 }), treeList.length);
   var dummy = new THREE.Object3D(), tc = new THREE.Color();
   treeList.forEach(function (t, i) {
-    var h = t[2], rr = h * 0.34;
-    var th0 = hAt(t[0], t[1]); dummy.position.set(t[0], th0 + h * 0.55, -t[1]); dummy.scale.set(rr, rr * 1.15, rr); dummy.rotation.set(0, t[3] * 6, 0); dummy.updateMatrix(); crowns.setMatrixAt(i, dummy.matrix);
-    tc.setHSL(0.24 + t[3] * 0.07, 0.38 + t[3] * 0.12, 0.26 + t[3] * 0.1); crowns.setColorAt(i, tc);
+    var h = t[2], rr = h * 0.3;
+    var th0 = hAt(t[0], t[1]) + 0.35; dummy.position.set(t[0], th0 + h * 0.55, -t[1]); dummy.scale.set(rr, rr * 1.15, rr); dummy.rotation.set(0, t[3] * 6, 0); dummy.updateMatrix(); crowns.setMatrixAt(i, dummy.matrix);
+    tc.setHSL(0.24 + t[3] * 0.07, 0.38 + t[3] * 0.12, 0.32 + t[3] * 0.1); crowns.setColorAt(i, tc);
     dummy.position.set(t[0], th0 + h * 0.2, -t[1]); dummy.scale.set(1, h * 0.4, 1); dummy.rotation.set(0, 0, 0); dummy.updateMatrix(); trunks.setMatrixAt(i, dummy.matrix);
   });
-  crowns.castShadow = true; scene.add(crowns); scene.add(trunks);
+  crowns.castShadow = true; crowns.renderOrder = 3; trunks.renderOrder = 3; scene.add(crowns); scene.add(trunks);
 
   /* ---------- riverside vegetation from the satellite colours: dark green -> dense riparian forest, light green -> shrubs and grass ---------- */
   var shoreVegGroup = new THREE.Group(); scene.add(shoreVegGroup);
@@ -957,21 +998,21 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       if (lum < 0.22) { if (Rn() < 0.85) trees.push([jx, jy, r, gg, b, Rn()]); } else if (Rn() < 0.4) shrubs.push([jx, jy, r, gg, b, Rn()]);
     }
     function thin(a, cap) { if (a.length <= cap) return a; var p = cap / a.length; return a.filter(function () { return Rn() < p; }); }
-    trees = thin(trees, 16000); shrubs = thin(shrubs, 9000);
+    trees = thin(trees, 10000); shrubs = thin(shrubs, 6000);
     function make(list, geo, fn) {
       if (!list.length) return null;
-      var mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: 0xffffff }), list.length), dm = new Object3D3(), cc = new THREE.Color();
+      var mesh = new THREE.InstancedMesh(geo, leafMat(!!geo.userData.holes), list.length), dm = new Object3D3(), cc = new THREE.Color();
       list.forEach(function (t, j) { fn(t, dm, cc); dm.updateMatrix(); mesh.setMatrixAt(j, dm.matrix); mesh.setColorAt(j, cc); });
-      mesh.frustumCulled = false; shoreVegGroup.add(mesh); return mesh;
+      mesh.frustumCulled = false; mesh.renderOrder = 3; shoreVegGroup.add(mesh); return mesh;
     }
     var Object3D3 = THREE.Object3D;
-    var tm = make(trees, new THREE.IcosahedronGeometry(1, 0), function (t, dm, cc) {
-      var h = 7 + t[5] * 6, rr = h * (0.3 + t[5] * 0.08), g0 = hAt(t[0], t[1]);
+    var tgeo = crownGeometry(3, 202); tgeo.userData.holes = true; var tm = make(trees, tgeo, function (t, dm, cc) {
+      var h = 7 + t[5] * 6, rr = h * (0.3 + t[5] * 0.08), g0 = hAt(t[0], t[1]) + 0.35;
       dm.position.set(t[0], g0 + h * 0.6, -t[1]); dm.scale.set(rr, rr * 1.25, rr); dm.rotation.set(0, t[5] * 9, 0);
       cc.setRGB(Math.min(1, t[2] / 255 * 1.1 + 0.02), Math.min(1, t[3] / 255 * 1.25 + 0.05), Math.min(1, t[4] / 255 * 0.9)); cc.multiplyScalar(0.8 + t[5] * 0.4);
     });
-    var sm = make(shrubs, new THREE.IcosahedronGeometry(1, 0), function (t, dm, cc) {
-      var rr = 0.9 + t[5] * 1.3, g0 = hAt(t[0], t[1]);
+    var sgeo = crownGeometry(3, 303); var sm = make(shrubs, sgeo, function (t, dm, cc) {
+      var rr = 0.9 + t[5] * 1.3, g0 = hAt(t[0], t[1]) + 0.35;
       dm.position.set(t[0], g0 + rr * 0.45, -t[1]); dm.scale.set(rr, rr * 0.65, rr); dm.rotation.set(0, t[5] * 9, 0);
       cc.setRGB(Math.min(1, t[2] / 255 * 1.3 + 0.04), Math.min(1, t[3] / 255 * 1.35 + 0.06), Math.min(1, t[4] / 255 * 1.0)); cc.multiplyScalar(0.8 + ((t[5] * 7) % 1) * 0.5);
     });
