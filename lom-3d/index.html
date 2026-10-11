@@ -105,6 +105,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
       <button class="tog" data-layer="trees" aria-pressed="true">Дървета</button>
       <button class="tog" data-layer="water" aria-pressed="true">Вода</button>
       <button class="tog" data-layer="power" aria-pressed="true" title="110 kV от OSM; ниското напрежение е примерно">Ел. мрежа</button>
+      <button class="tog" data-layer="ant" aria-pressed="true" title="Условно разположение — няма отворени данни за мачтите">Антени (примерно)</button>
       <button class="tog" data-layer="water2" aria-pressed="false" title="Водопровод (синьо) и канал (кафяво) — примерни трасета по улиците">ВиК (примерно)</button>
       <button class="tog" data-layer="poi" aria-pressed="true">Места</button>
       <button class="tog" data-layer="ai" aria-pressed="true" title="Централната част: снимка, изострена с ИИ (SEN2SR). Детайлът е генериран, не е реален.">Остра снимка (ИИ)</button>
@@ -1485,6 +1486,21 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     }
     pipes(pipeW, 0x2a86e0); pipes(pipeS, 0x9a6a35);
     window.__infraStat = { poles: poles.length, wires: (wseg.length + dseg.length) / 6, ktp: tr.length, pipeKm: Math.round(pipeW.length / 4 * 42 / 1000) };
+    /* --- mobile-phone masts: no open data exists for this area, so these are illustrative: one mast on the highest ground of each built-up 800 m cell --- */
+    var antG = new THREE.Group(); antG.name = 'ant'; scene.add(antG); window.__antG = antG;
+    var ac = {}; BP.forEach(function (b) { var k = Math.floor(b[0] / 800) + ',' + Math.floor(b[1] / 800); (ac[k] || (ac[k] = [])).push(b); });
+    var mastsA = [];
+    for (var ak in ac) { var al = ac[ak]; if (al.length < 12) continue; var hb = al[0], hh = -1e9; al.forEach(function (b) { var h = hAt(b[0], b[1]); if (h > hh) { hh = h; hb = b; } }); mastsA.push([hb[0] + 11, hb[1] + 7, 0]); }
+    var lat = new THREE.CylinderGeometry(0.28, 0.6, 34, 3); lat.translate(0, 17, 0);
+    var steelA = new THREE.MeshLambertMaterial({ color: 0xc9ccd0 });
+    var mI = inst(lat, steelA, mastsA, true); antG.add(mI);
+    var ringG = new THREE.CylinderGeometry(1.6, 1.6, 0.25, 12); ringG.translate(0, 32.5, 0); antG.add(inst(ringG, steelA, mastsA, false));
+    var pan = new THREE.BoxGeometry(0.35, 1.7, 0.12), panM = new THREE.MeshLambertMaterial({ color: 0xeeeeea }), panI = new THREE.InstancedMesh(pan, panM, Math.max(1, mastsA.length * 9));
+    var pc = 0, o4 = new THREE.Object3D(); var opCol = [0xe30613, 0xd2232a, 0x7a2c90];
+    mastsA.forEach(function (q, mi) { var hz = hAt(q[0], q[1]); for (var sct = 0; sct < 3; sct++) for (var op = 0; op < 3; op++) { var a = sct * 2.094 + 0.4 + (op - 1) * 0.12, r = 1.9; o4.position.set(q[0] + Math.sin(a) * r, hz + 32.5 + (op - 1) * 1.1, -q[1] + Math.cos(a) * r); o4.rotation.set(0, a, 0); o4.updateMatrix(); if (sct === 0 || true) { panI.setMatrixAt(pc++, o4.matrix); } if (pc >= mastsA.length * 9) break; } });
+    panI.count = pc; panI.frustumCulled = false; antG.add(panI);
+    mastsA.forEach(function (q) { var m = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 36, 6), new THREE.MeshBasicMaterial({ visible: false })); m.position.set(q[0], hAt(q[0], q[1]) + 18, -q[1]); m.userData = { title: 'Антена на мобилен оператор (примерно)', text: 'Условно разположение: няма отворени данни за мачтите на операторите. Поставена е на най-високото място на населената част.' }; antG.add(m); powerPick.push(m); });
+    window.__infraStat.ant = mastsA.length;
   })();
 
 
@@ -1594,7 +1610,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var dirty = true;
   var hourEl = document.getElementById('hour');
   hourEl.addEventListener('input', function () { setHour(parseFloat(hourEl.value)); });
-  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup, houseDetailGroup, outerGroup], roads: [roadMesh, railMesh], trees: [crowns, trunks, shoreVegGroup, vegGroup], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup, infraGroup, elecLocal], water2: [waterNetGroup], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
+  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup, houseDetailGroup, outerGroup], roads: [roadMesh, railMesh], trees: [crowns, trunks, shoreVegGroup, vegGroup], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup, infraGroup, elecLocal], water2: [waterNetGroup], ant: [window.__antG], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
   Array.prototype.forEach.call(document.querySelectorAll('.tog'), function (b) {
     b.addEventListener('click', function () {
       var on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on);
