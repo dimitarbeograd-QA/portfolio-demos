@@ -1587,6 +1587,7 @@ body.walking .menubtn { left: auto; right: 16px; }
     cityG.add(inst(benchG, benchM, bl, false), inst(benchB, benchM, bl, false));
     var trunkG = new THREE.CylinderGeometry(0.15, 0.26, 5, 6); trunkG.translate(0, 2.5, 0);
     var crownG = new THREE.IcosahedronGeometry(2.7, 1); crownG.scale(1, 1.15, 1); crownG.translate(0, 6.2, 0);
+    ptrees = ptrees.filter(function (q) { return Math.hypot(q[0] + 110, q[1] - 1656) > 24; });
     var tI = new THREE.InstancedMesh(trunkG, new THREE.MeshLambertMaterial({ color: 0x5b4636 }), Math.max(1, ptrees.length)), cI = new THREE.InstancedMesh(crownG, new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.max(1, ptrees.length)), cc = new THREE.Color();
     ptrees.forEach(function (q, i) { o3.position.set(q[0], hAt(q[0], q[1]), -q[1]); o3.rotation.set(0, R2() * 6.28, 0); o3.scale.set(q[2], q[2], q[2]); o3.updateMatrix(); tI.setMatrixAt(i, o3.matrix); cI.setMatrixAt(i, o3.matrix); cc.setHSL(0.25 + R2() * 0.06, 0.38, 0.16 + R2() * 0.1); cI.setColorAt(i, cc); });
     tI.frustumCulled = cI.frustumCulled = false; tI.castShadow = cI.castShadow = true; cityG.add(tI, cI); o3.scale.set(1, 1, 1);
@@ -1777,6 +1778,17 @@ body.walking .menubtn { left: auto; right: 16px; }
         var sAcc = new Acc(10, 0.09); sAcc.uv = []; addRibbon(sAcc, line, 3.2, 3.2, col(0xffffff), true);
         var sm = sAcc.mesh(2.97); sm.material.map = tx; sm.material.needsUpdate = true; cityG.add(sm);
       })();
+    })();
+    /* ---- amphitheatre in the Danube park (place from OSM; tiers and stage are generic) ---- */
+    (function () {
+      var ax = -110, ay = 1656, g = new THREE.Group(), conc = new THREE.MeshLambertMaterial({ color: 0xd2cdc2 }), conc2 = new THREE.MeshLambertMaterial({ color: 0xbdb8ac }), stg = new THREE.MeshLambertMaterial({ color: 0x8a8378 }), wl = new THREE.MeshLambertMaterial({ color: 0xe6dfcf }), rf = new THREE.MeshLambertMaterial({ color: 0x56606a });
+      function add(geo, mat, x, y, z) { var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; }
+      for (var i = 8; i >= 0; i--) { var R = 9.5 + i * 1.25, h = (i + 1) * 0.42; var m = add(new THREE.CylinderGeometry(R, R, h + 1.6, 40, 1, false, -Math.PI / 2, Math.PI), i % 2 ? conc : conc2, 0, (h - 1.6) / 2, 0); }
+      add(new THREE.CylinderGeometry(8.6, 8.6, 1.5, 36, 1, false, -Math.PI / 2, Math.PI), stg, 0, -0.6, 0).rotation.y = Math.PI;
+      add(new THREE.BoxGeometry(15, 0.7, 7.5), stg, 0, 0.35, -5.5); add(new THREE.BoxGeometry(15, 5.6, 0.6), wl, 0, 3.1, -9.6);
+      add(new THREE.BoxGeometry(17, 0.45, 9), rf, 0, 6.2, -6); [-7, 7].forEach(function (px) { add(new THREE.BoxGeometry(0.4, 5.6, 0.4), wl, px, 3.1, -9.2); add(new THREE.BoxGeometry(0.3, 5.4, 0.3), wl, px, 3.0, -1.8); });
+      var h0 = hAt(ax, ay); g.position.set(ax, h0 + 0.2, -ay); cityG.add(g);
+      var pk = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, 10, 8), new THREE.MeshBasicMaterial({ visible: false })); pk.position.set(ax, h0 + 5, -ay); pk.userData = { title: 'Амфитеатър', text: 'Мястото е по OpenStreetMap. Редовете, сцената и покривът са условни и не са по плана на обекта.' }; cityG.add(pk); window.__monPick.push(pk);
     })();
     window.__infraStat.lamps = lamps.length; window.__infraStat.ptrees = ptrees.length;
 
