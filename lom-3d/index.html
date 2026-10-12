@@ -2006,8 +2006,17 @@ body.walking .menubtn { left: auto; right: 16px; }
       waterReady.then(function () {
         var xs = [], cr = 0;
         function edgeN(x) { /* northern water edge seen from the land at y = 1900 */ if (inWater(x, 1900)) return null; for (var y = 1900; y < 2400; y += 2) if (inWater(x, y)) return y; return null; }
-        for (var x = 380; x < 900 && cr < 9; x += 22) { var e = edgeN(x); if (e === null || e > 2300) continue; var back = edgeN(x + 6), y2 = e - 9; if (inWater(x, y2) || e - 1900 < 30) continue; crane(x, y2, (cr % 3 - 1) * 0.12); xs.push([x, e]); cr++; }
-        if (xs.length) { var m = xs[Math.floor(xs.length / 2)], wy = m[1] - 70; if (!inWater(m[0], wy)) { var wh = new THREE.Mesh(new THREE.BoxGeometry(60, 9, 18), new THREE.MeshLambertMaterial({ color: 0x9eb0bd })); wh.position.set(m[0], hAt(m[0], wy) + 4.5, -wy); wh.castShadow = true; cityG.add(wh); } }
+        for (var x = 380; x < 900 && cr < 4; x += 66) { var e = edgeN(x); if (e === null || e > 2300) continue; var back = edgeN(x + 6), y2 = e - 9; if (inWater(x, y2) || e - 1900 < 30) continue; crane(x, y2, (cr % 3 - 1) * 0.12); xs.push([x, e]); cr++; }
+        if (xs.length) { var m = xs[Math.floor(xs.length / 2)], wy = m[1] - 62, vm = new THREE.MeshLambertMaterial({ color: 0x9aa3ab, side: THREE.DoubleSide });
+          [-12, 12].forEach(function (dz) { var yy = wy + dz, hv = new THREE.CylinderGeometry(10, 10, 62, 14, 1, true, 0, Math.PI); hv.rotateZ(Math.PI / 2); var vh = new THREE.Mesh(hv, vm); vh.scale.set(1, 0.55, 1); vh.position.set(m[0], hAt(m[0], yy) + 0.3, -yy); vh.rotation.y = 0; vh.castShadow = true; cityG.add(vh);
+            [-31, 31].forEach(function (ex) { var cap = new THREE.Mesh(new THREE.CircleGeometry(10, 14, 0, Math.PI), vm); cap.scale.set(1, 0.55, 1); cap.rotation.y = Math.PI / 2; cap.position.set(m[0] + ex, hAt(m[0], yy) + 0.3, -yy); cityG.add(cap); }); }); }
+        /* basin quay (east side of the peninsula): cranes facing east, found with the water mask */
+        var bq = [], lastY = -1e9;
+        for (var by = 1750; by < 2300; by += 4) { var land = false, ex = null; for (var bx = 420; bx < 1300; bx += 2) { var w = inWater(bx, by); if (!w) land = true; else if (land) { ex = bx; break; } } if (ex !== null && ex > 700 && inWater(ex + 30, by) && inWater(ex + 60, by) && by - lastY >= 52) { bq.push([ex, by]); lastY = by; } }
+        bq.slice(0, 6).forEach(function (q, i) { var cx = q[0] - 9; if (inWater(cx, q[1])) cx -= 4; crane(cx, q[1], -Math.PI / 2 + (i % 2 ? 0.1 : -0.06)); });
+        var br = [[0x6b3f2c, 0x8a5a40], [0x6a6f72, 0x8a8d90]];
+        bq.slice(1, 3).forEach(function (q, i) { var bg = new THREE.Mesh(new THREE.BoxGeometry(11, 2.2, 52), new THREE.MeshLambertMaterial({ color: br[i][0] })); bg.position.set(q[0] + 8, 0.6, -(q[1] + 22)); bg.castShadow = true; cityG.add(bg); var dk = new THREE.Mesh(new THREE.BoxGeometry(9.4, 0.3, 46), new THREE.MeshLambertMaterial({ color: br[i][1] })); dk.position.set(q[0] + 8, 1.8, -(q[1] + 22)); cityG.add(dk); });
+        window.__portBasin = bq;
         window.__portDbg = { cr: cr, xs: xs }; dirty = true;
       });
       /* pontoon, gangway and a moored river cruise ship, placed from the water mask */
