@@ -1764,15 +1764,32 @@ body.walking .menubtn { left: auto; right: 16px; }
         if (xs.length) { var m = xs[Math.floor(xs.length / 2)], wy = m[1] - 70; if (!inWater(m[0], wy)) { var wh = new THREE.Mesh(new THREE.BoxGeometry(60, 9, 18), new THREE.MeshLambertMaterial({ color: 0x9eb0bd })); wh.position.set(m[0], hAt(m[0], wy) + 4.5, -wy); wh.castShadow = true; cityG.add(wh); } }
         window.__portDbg = { cr: cr, xs: xs }; dirty = true;
       });
-      /* pontoon, ramp and ship near the east end of the Danube park */
-      var px = -120, py = 1812;
-      if (py !== null) {
-        var g = new THREE.Group();
-        function a2(geo, mat, X, Y, Z) { var m = new THREE.Mesh(geo, mat); m.position.set(X, Y, Z); m.castShadow = true; g.add(m); return m; }
-        a2(new THREE.BoxGeometry(16, 0.9, 6), rustM, 0, 0.45, 50); a2(new THREE.BoxGeometry(2.4, 0.3, 46), orange, 0, 1.3, 26);
-        a2(new THREE.BoxGeometry(44, 2.2, 8), hull, 0, 1.2, 64); a2(new THREE.BoxGeometry(34, 2.4, 7), whiteM, -2, 3.4, 64); a2(new THREE.BoxGeometry(24, 2.2, 6), whiteM, -2, 5.6, 64); a2(new THREE.BoxGeometry(8, 1.6, 5), whiteM, -6, 7.4, 64);
-        g.position.set(px, 0, -py); g.rotation.y = Math.PI; g.position.y = 0.2; cityG.add(g);
-      }
+      /* pontoon, gangway and a moored river cruise ship, placed from the water mask */
+      waterReady.then(function () {
+        var WC = window.__WCH || []; if (WC.length < 2) return;
+        var x0 = -120, yw = null, k; for (k = 0; k < WC.length - 1; k++) if (WC[k][0] <= x0 && WC[k + 1][0] >= x0) { var t = (x0 - WC[k][0]) / ((WC[k + 1][0] - WC[k][0]) || 1); yw = WC[k][1] + t * (WC[k + 1][1] - WC[k][1]); break; }
+        if (yw === null) return;
+        var ye = null; for (var y = yw + 15; y < yw + 160; y += 1) if (inWater(x0, y)) { ye = y; break; } if (ye === null) return;
+        var gp = new THREE.Group();
+        function m2(geo, mat, X, Y, Z) { var m = new THREE.Mesh(geo, mat); m.position.set(X, Y, Z); m.castShadow = true; gp.add(m); return m; }
+        var hullM = new THREE.MeshLambertMaterial({ color: 0x1f3a66 }), whiteS = new THREE.MeshLambertMaterial({ color: 0xf0f1f0 }), glass = new THREE.MeshLambertMaterial({ color: 0x25384a }), redS = new THREE.MeshLambertMaterial({ color: 0xb03a2a }), deckM = new THREE.MeshLambertMaterial({ color: 0xc9c4b8 });
+        /* pontoon */
+        var pcx = x0, pcy = ye + 3.5; m2(new THREE.BoxGeometry(14, 1.0, 6), rustM, pcx, 0.0, -pcy); m2(new THREE.BoxGeometry(14.2, 0.12, 6.2), deckM, pcx, 0.55, -pcy);
+        /* gangway from the quay walk to the pontoon */
+        var topY = ye - 3, topH = hAt(x0, topY) + 0.9, botY = pcy - 2.5, botH = 0.75, dy = botY - topY, dh = topH - botH, len = Math.hypot(dy, dh);
+        var gw = m2(new THREE.BoxGeometry(2.4, 0.18, len), orange, x0, (topH + botH) / 2, -(topY + botY) / 2); gw.rotation.x = -Math.atan2(dh, dy); 
+        /* ship, bow to the east, hull in the water */
+        var shape = new THREE.Shape(); shape.moveTo(-30, -4.6); shape.lineTo(24, -4.6); shape.lineTo(32, -1.6); shape.lineTo(34, 0); shape.lineTo(32, 1.6); shape.lineTo(24, 4.6); shape.lineTo(-30, 4.6); shape.lineTo(-30, -4.6);
+        var hg = new THREE.ExtrudeGeometry(shape, { depth: 3.4, bevelEnabled: false }); hg.rotateX(-Math.PI / 2); hg.translate(0, -1.2, 0);
+        var sy = pcy + 3 + 5.2;
+        var ship = new THREE.Group(); ship.position.set(x0 + 4, 0.1, -sy);
+        function m3(geo, mat, X, Y, Z) { var m = new THREE.Mesh(geo, mat); m.position.set(X, Y, Z); m.castShadow = true; ship.add(m); return m; }
+        m3(hg, hullM, 0, 0, 0);
+        [0, 1, 2].forEach(function (d) { var L = 52 - d * 8; m3(new THREE.BoxGeometry(L, 2.3, 8.2 - d * 1.0), whiteS, -3 - d * 1.5, 3.6 + d * 2.35, 0); m3(new THREE.BoxGeometry(L - 1, 1.0, 8.4 - d * 1.0), glass, -3 - d * 1.5, 3.7 + d * 2.35, 0); });
+        m3(new THREE.BoxGeometry(9, 2.6, 5.6), whiteS, 9, 10.0, 0); m3(new THREE.BoxGeometry(7, 1.0, 5.8), glass, 9.5, 10.1, 0);
+        m3(new THREE.CylinderGeometry(1.2, 1.5, 3.4, 10), redS, -12, 11.2, 0); m3(new THREE.BoxGeometry(46, 0.4, 7), deckM, -4, 8.7, 0);
+        gp.add(ship); gp.position.set(0, 0, 0); cityG.add(gp); dirty = true;
+      });
       /* stone-faced embankment between the quay and the beach */
       (function () {
         var pk0 = parks[0]; if (!pk0 || !/Дунав/.test(pk0.n || '') || !window.__WCH) return;
