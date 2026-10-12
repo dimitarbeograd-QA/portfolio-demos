@@ -2008,9 +2008,21 @@ body.walking .menubtn { left: auto; right: 16px; }
         var xs = [], cr = 0;
         function edgeN(x) { /* northern water edge seen from the land at y = 1900 */ if (inWater(x, 1900)) return null; for (var y = 1900; y < 2400; y += 2) if (inWater(x, y)) return y; return null; }
         for (var x = 380; x < 900 && cr < 4; x += 66) { var e = edgeN(x); if (e === null || e > 2300) continue; var back = edgeN(x + 6), y2 = e - 9; if (inWater(x, y2) || e - 1900 < 30) continue; crane(x, y2, (cr % 3 - 1) * 0.12); xs.push([x, e]); cr++; }
-        if (xs.length) { var m = xs[Math.floor(xs.length / 2)], wy = m[1] - 62, vm = new THREE.MeshLambertMaterial({ color: 0x9aa3ab, side: THREE.DoubleSide });
-          [-12, 12].forEach(function (dz) { var yy = wy + dz, hv = new THREE.CylinderGeometry(10, 10, 62, 14, 1, true, 0, Math.PI); hv.rotateZ(Math.PI / 2); var vh = new THREE.Mesh(hv, vm); vh.scale.set(1, 0.55, 1); vh.position.set(m[0], hAt(m[0], yy) + 0.3, -yy); vh.rotation.y = 0; vh.castShadow = true; cityG.add(vh);
-            [-31, 31].forEach(function (ex) { var cap = new THREE.Mesh(new THREE.CircleGeometry(10, 14, 0, Math.PI), vm); cap.scale.set(1, 0.55, 1); cap.rotation.y = Math.PI / 2; cap.position.set(m[0] + ex, hAt(m[0], yy) + 0.3, -yy); cityG.add(cap); }); }); }
+        if (xs.length > 1) {
+          var e0 = xs[0], e1 = xs[Math.min(2, xs.length - 1)], ux = e1[0] - e0[0], uy = e1[1] - e0[1], ul = Math.hypot(ux, uy); ux /= ul; uy /= ul; var nx = uy, ny = -ux; if (ny > 0) { nx = -nx; ny = -ny; }
+          var vm = new THREE.MeshLambertMaterial({ color: 0x9aa3ab, side: THREE.DoubleSide }), ang = Math.atan2(uy, ux);
+          function toWorld(a, d) { return [e0[0] + ux * a + nx * d, e0[1] + uy * a + ny * d]; }
+          /* concrete apron along the quay (joint pattern) */
+          var cc = cv(256, 256), ck = cc.getContext('2d'); ck.fillStyle = '#b5b0a4'; ck.fillRect(0, 0, 256, 256); ck.strokeStyle = 'rgba(90,86,78,.55)'; ck.lineWidth = 2; for (var g = 0; g <= 256; g += 32) { ck.beginPath(); ck.moveTo(g, 0); ck.lineTo(g, 256); ck.stroke(); ck.beginPath(); ck.moveTo(0, g); ck.lineTo(256, g); ck.stroke(); }
+          var ct = new THREE.CanvasTexture(cc); ct.wrapS = ct.wrapT = THREE.RepeatWrapping; ct.repeat.set(0.25, 0.25);
+          var lastA = Math.hypot(xs[xs.length - 1][0] - e0[0], xs[xs.length - 1][1] - e0[1]);
+          var apm = new THREE.MeshLambertMaterial({ map: ct, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 });
+          for (var ta = -20; ta < lastA + 30; ta += 8) for (var td = 2; td < 46; td += 8) { var q0 = toWorld(ta, td), q1 = toWorld(ta + 8, td + 8), q2 = toWorld(ta, td + 8), q3 = toWorld(ta + 8, td); if (inWater(q0[0], q0[1]) || inWater(q1[0], q1[1]) || inWater(q2[0], q2[1]) || inWater(q3[0], q3[1])) continue; var pc3 = toWorld(ta + 4, td + 4), tl = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), apm); tl.rotation.x = -Math.PI / 2; tl.rotation.z = ang; tl.position.set(pc3[0], hAt(pc3[0], pc3[1]) + 0.3, -pc3[1]); tl.renderOrder = 7; cityG.add(tl); }
+          /* two barrel-vault hangars set back from the quay, axis along the quay */
+          var dIn = 78; for (var tryD = 0; tryD < 6; tryD++) { var t1 = toWorld(0, dIn), t2 = toWorld(0, dIn + 26); if (!inWater(t1[0], t1[1]) && !inWater(t2[0], t2[1]) && !inWater(toWorld(30, dIn)[0], toWorld(30, dIn)[1]) && !inWater(toWorld(-30, dIn)[0], toWorld(-30, dIn)[1])) break; dIn += 6; }
+          [0, 26].forEach(function (off) { var p = toWorld(40, dIn + off), hv = new THREE.CylinderGeometry(10, 10, 62, 14, 1, true, 0, Math.PI); hv.rotateZ(Math.PI / 2); var vh = new THREE.Mesh(hv, vm); vh.scale.set(1, 0.55, 1); vh.position.set(p[0], hAt(p[0], p[1]) + 0.3, -p[1]); vh.rotation.y = ang; vh.castShadow = true; cityG.add(vh);
+            [-31, 31].forEach(function (ex) { var cap = new THREE.Mesh(new THREE.CircleGeometry(10, 14, 0, Math.PI), vm); cap.scale.set(1, 0.55, 1); cap.rotation.y = Math.PI / 2 + ang; cap.position.set(p[0] + Math.cos(ang) * ex, hAt(p[0], p[1]) + 0.3, -(p[1] + Math.sin(ang) * ex)); cityG.add(cap); }); });
+          window.__hang = [e0, e1, ang, dIn]; }
         /* basin quay (east side of the peninsula): cranes facing east, found with the water mask */
         var bq = [], lastY = -1e9;
         for (var by = 1750; by < 2300; by += 4) { var land = false, ex = null; for (var bx = 420; bx < 1300; bx += 2) { var w = inWater(bx, by); if (!w) land = true; else if (land) { ex = bx; break; } } if (ex !== null && ex > 700 && inWater(ex + 30, by) && inWater(ex + 60, by) && by - lastY >= 52) { bq.push([ex, by]); lastY = by; } }
