@@ -288,7 +288,7 @@ body.walking .menubtn { left: auto; right: 16px; }
   function addPoly(acc, p, color) {
     try {
       var g = new THREE.ShapeGeometry(shapeOf(p)).toNonIndexed(), a = g.attributes.position.array;
-      for (var i = 0; i < a.length; i += 9) acc.tri([a[i], a[i + 1]], [a[i + 3], a[i + 4]], [a[i + 6], a[i + 7]], 0, color);
+      for (var i = 0; i < a.length; i += 9) { var us = acc.uvs ? [a[i] / acc.uvs, a[i + 1] / acc.uvs, a[i + 3] / acc.uvs, a[i + 4] / acc.uvs, a[i + 6] / acc.uvs, a[i + 7] / acc.uvs] : null; acc.tri([a[i], a[i + 1]], [a[i + 3], a[i + 4]], [a[i + 6], a[i + 7]], 0, color, us); }
       g.dispose();
     } catch (e) { /* skip a degenerate outline */ }
   }
@@ -387,11 +387,12 @@ body.walking .menubtn { left: auto; right: 16px; }
     ' if (mz > 0.0) { vec3 v = mix(c, vec3(0.13, 0.36, 0.09) * (0.85 + 0.3 * fv), 0.55); v *= 1.0 + (row - 0.5) * 0.4 * aa + (vn(vec2(q.x * 0.9, q.y * 0.2)) - 0.5) * 0.18 * aa;\n' +
     '  o = mix(o, v, mz * strength); }\n' +
     ' return o;\n}\n';
+  var NEUTRAL_T = (function () { var c = document.createElement('canvas'); c.width = c.height = 2; var g = c.getContext('2d'); g.fillStyle = 'rgb(128,128,128)'; g.fillRect(0, 0, 2, 2); return new THREE.CanvasTexture(c); })();
   var satMat = new THREE.ShaderMaterial({
     transparent: false, depthWrite: false, fog: true, vertexColors: true,
-    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uCls: { value: null }, uCls2: { value: null }, uClsB: { value: new THREE.Vector4(-22500, -12500, 1 / 44000, 1 / 17500) }, uSat: { value: null }, uWm: { value: null }, uBr: { value: new THREE.Vector3(1, 1, 1) }, uTexel: { value: new THREE.Vector2(1 / 1400, 1 / 1610) } }]),
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uCls: { value: null }, uCls2: { value: null }, uClsB: { value: new THREE.Vector4(-22500, -12500, 1 / 44000, 1 / 17500) }, uSat: { value: null }, uWm: { value: null }, uBr: { value: new THREE.Vector3(1, 1, 1) }, uTexel: { value: new THREE.Vector2(1 / 1400, 1 / 1610) }, uDetG: { value: NEUTRAL_T }, uDetB: { value: NEUTRAL_T } }]),
     vertexShader: 'varying vec2 vUv; varying vec3 vW; varying vec3 vC;\n#include <fog_pars_vertex>\nvoid main(){ vUv = uv; vC = color; vec4 wp = modelMatrix * vec4(position, 1.0); vW = wp.xyz; vec4 mvPosition = viewMatrix * wp; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}',
-    fragmentShader: 'uniform sampler2D uSat; uniform sampler2D uWm; uniform vec3 uBr; uniform vec2 uTexel; varying vec2 vUv; varying vec3 vW; varying vec3 vC;\n#include <common>\n#include <fog_pars_fragment>\n' +
+    fragmentShader: 'uniform sampler2D uSat; uniform sampler2D uWm; uniform sampler2D uDetG; uniform sampler2D uDetB; uniform vec3 uBr; uniform vec2 uTexel; varying vec2 vUv; varying vec3 vW; varying vec3 vC;\n#include <common>\n#include <fog_pars_fragment>\n' +
       'float h21(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }\n' +
       'float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); vec2 a = mod(i, 251.0), b = mod(i + 1.0, 251.0); return mix(mix(h21(a), h21(vec2(b.x, a.y)), f.x), mix(h21(vec2(a.x, b.y)), h21(b), f.x), f.y); }\n' + CROP_GLSL +
       'void main(){\n' +
@@ -439,8 +440,10 @@ body.walking .menubtn { left: auto; right: 16px; }
       ' }\n' +
       ' float m = 1.0 + nr * (veg * (g * 0.9 + (bl2 - 0.5) * 0.28) + bare * (g * 0.7 + (fur - 0.5) * 0.09 * smoothstep(500.0, 100.0, dist)) + other * g * 0.45);\n' +
       ' c.g *= 1.0 + nr * veg * (n2 - 0.5) * 0.22; c.r *= 1.0 + nr * veg * (n1 - 0.5) * 0.14;\n' +
+      ' { float nd = 1.0 - smoothstep(30.0, 240.0, dist); if (nd > 0.01) { float gd = (texture2D(uDetG, p * 0.7).r + texture2D(uDetG, p * 0.17 + 0.37).r) * 0.5 - 0.5; float sd = (texture2D(uDetB, p * 0.5).r + texture2D(uDetB, p * 0.13 + 0.2).r) * 0.5 - 0.5; c *= 1.0 + nd * (veg * gd * 1.1 + bare * sd * 1.9 + other * sd * 0.9); } }\n' +
       ' gl_FragColor = vec4(c * m * uBr * vC, 1.0);\n#include <fog_fragment>\n}'
   });
+  onMat(function () { ['uDetG', 'uDetB'].forEach(function (u, i) { var im = MATI[i ? 'soilD' : 'grassD']; if (!im || !im.width) return; var t = new THREE.Texture(im); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; t.needsUpdate = true; satMat.uniforms[u].value = t; }); });
 
   /* ---------- the whole municipality: coarse Sentinel-2 (12.5 m) on a 100 m terrain, drawn under the detailed city layers ---------- */
   var OB = [-22500, 21500, -12500, 5000];
@@ -1530,8 +1533,10 @@ body.walking .menubtn { left: auto; right: 16px; }
     var lampG = new THREE.Group(), cityG = new THREE.Group(); scene.add(lampG); scene.add(cityG); window.__lampG = lampG; window.__cityG = cityG; window.__monPick = [];
     function inPoly(x, y, q) { var c = false; for (var i = 0, j = q.length - 1; i < q.length; j = i++) if ((q[i][1] > y) !== (q[j][1] > y) && x < (q[j][0] - q[i][0]) * (y - q[i][1]) / (q[j][1] - q[i][1]) + q[i][0]) c = !c; return c; }
     var parks = C2.park.map(function (z) { var q = pts(z.p); return { q: q, n: z.n, a: polyArea(z.p) }; });
-    var parkAcc = new Acc(40, 0.12); C2.park.forEach(function (z) { addPoly(parkAcc, z.p, col(0x5b8e42)); });
+    var parkAcc = new Acc(40, 0.12); parkAcc.uv = []; parkAcc.uvs = 4; C2.park.forEach(function (z) { addPoly(parkAcc, z.p, col(0xffffff)); });
     var parkMesh = parkAcc.mesh(2.8); cityG.add(parkMesh);
+    (function () { var gc = cv(256, 256), gg = gc.getContext('2d'); gg.fillStyle = '#5b8e42'; gg.fillRect(0, 0, 256, 256); var gt = new THREE.CanvasTexture(gc); gt.wrapS = gt.wrapT = THREE.RepeatWrapping; gt.anisotropy = 4; parkMesh.material.map = gt; parkMesh.material.needsUpdate = true;
+      onMat(function () { var im = MATI.grassC; if (im && im.width) { gg.drawImage(im, 0, 0, 256, 256); gt.needsUpdate = true; } }); })();
     var promAcc = new Acc(40, 0.11); C2.prom.forEach(function (z) { addRibbon(promAcc, pts(z.p), 3.2, 3.2, col(0xded5c3), false); });
     var promMesh = promAcc.mesh(2.95); cityG.add(promMesh);
     /* lamps: [x, y, heightKind] ; benches ; trees */
