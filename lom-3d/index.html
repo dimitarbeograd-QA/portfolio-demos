@@ -62,6 +62,16 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
 .hidebtn { font: 500 13px var(--font-body); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--panel-line); background: var(--chip-off); color: var(--muted); cursor: pointer; margin-left: auto; }
 .hidebtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .card { position: absolute; left: 16px; right: 16px; bottom: calc(12px + 152px); max-width: 420px; margin-inline: auto; border-radius: 12px; padding: 12px 14px; }
+
+#walkUI[hidden], #walkTp[hidden] { display: none; }
+.wbtn { position: absolute; top: 16px; left: 16px; font: 600 14px var(--font-body); padding: 10px 16px; border-radius: 999px; background: var(--panel); border: 1px solid var(--panel-line); color: var(--fg); cursor: pointer; z-index: 6; }
+.wbtn.wr { top: 64px; } .wbtn.wr[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); } .wbtn.wp { top: 112px; }
+#walkTp { position: absolute; top: 160px; left: 16px; display: grid; gap: 6px; max-height: 50vh; overflow: auto; z-index: 6; }
+#walkTp button { text-align: left; font: 500 14px var(--font-body); padding: 9px 14px; border-radius: 10px; background: var(--panel); border: 1px solid var(--panel-line); color: var(--fg); cursor: pointer; }
+#joy { position: absolute; left: 28px; bottom: 36px; width: 124px; height: 124px; border-radius: 50%; background: rgba(255,255,255,.14); border: 2px solid rgba(255,255,255,.45); touch-action: none; z-index: 6; display: grid; place-items: center; }
+#joyK { width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,.75); box-shadow: 0 2px 8px rgba(0,0,0,.35); pointer-events: none; }
+body.walking .zoom, body.walking .chip, body.walking #compass, body.walking #card { display: none !important; }
+body.walking .menubtn { left: auto; right: 16px; }
 .zoom { position: absolute; right: 16px; top: 104px; display: grid; gap: 8px; }
 .zoom button { width: 48px; height: 48px; border-radius: 50%; font: 500 24px/1 var(--font-body); background: var(--panel); border: 1px solid var(--panel-line); color: var(--fg); cursor: pointer; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .zoom button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -84,7 +94,14 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   <button id="compass" aria-label="Обърни на север" title="Север">
     <svg viewBox="0 0 32 32" id="needle" aria-hidden="true"><path class="n" d="M16 2 L22 16 L10 16 Z"/><path class="s" d="M16 30 L22 16 L10 16 Z"/></svg>
   </button>
-  <div class="zoom"><button id="zin" aria-label="Приближи">+</button><button id="zout" aria-label="Отдалечи">−</button></div>
+  <div class="zoom"><button id="zin" aria-label="Приближи">+</button><button id="zout" aria-label="Отдалечи">−</button><button id="walkBtn" aria-label="Разходка" title="Разходка от първо лице">🚶</button></div>
+  <div id="walkUI" hidden>
+    <button class="wbtn" id="walkExit">✕ Изход</button>
+    <button class="wbtn wr" id="walkRun" aria-pressed="false">Бягай</button>
+    <button class="wbtn wp" id="walkPlaces">Места ▾</button>
+    <div id="walkTp" hidden></div>
+    <div id="joy" aria-label="Джойстик"><div id="joyK"></div></div>
+  </div>
   <div class="card" id="card" hidden>
     <button class="x" id="closeCard" aria-label="Затвори">×</button>
     <h2 id="cardTitle"></h2><p id="cardText"></p>
@@ -1489,7 +1506,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
     pipes(pipeW, 0x2a86e0); pipes(pipeS, 0x9a6a35);
     window.__infraStat = { poles: poles.length, wires: (wseg.length + dseg.length) / 6, ktp: tr.length, pipeKm: Math.round(pipeW.length / 4 * 42 / 1000) };
     /* --- street lighting, parks, the Danube promenade and monuments (OSM: parks, promenade and monuments are real; lamps are placed along streets with houses) --- */
-    var C2 = {"mon":[{"p":[3942,10046],"n":"","k":"monument","sub":""},{"p":[4637,10301],"n":"Кръстьо Пишурка","k":"monument","sub":""},{"p":[4651,9881],"n":"Никола Първанов","k":"monument","sub":""},{"p":[-2765,17138],"n":"Шлеп-паметник","k":"memorial","sub":""},{"p":[3554,10381],"n":"","k":"monument","sub":""},{"p":[-2398,17037],"n":"полк. Стефан Илиев","k":"monument","sub":""},{"p":[-2467,16994],"n":"100 години от Чеганската епопея","k":"monument","sub":""},{"p":[3547,9565],"n":"Васил Левски","k":"monument","sub":""}],"park":[{"p":[-6208,16636,-5811,16879,-5351,17160,-5390,17282,-5251,17334,-5220,17241,-4879,17449,-2687,17899,-20,18249,177,16970,-524,16866,-689,16484,-910,16144,-1305,16330,-1488,16676,-1843,16614,-1887,16865,-2432,16831,-4385,16568,-4611,16537,-5156,16463,-6016,16347,-6044,16389,-6130,16520,-6208,16636],"n":"Дунавски парк"},{"p":[3902,5616,6299,5793,6384,4908,5940,4920,5882,5500,5490,5472,3921,5350,3902,5616],"n":""},{"p":[3770,10547,4500,10627,4809,10663,4909,9624,4534,9590,4038,9549,3849,9535,3817,9954,3802,10142,3784,10371,3770,10547],"n":""},{"p":[3950,4932,3658,4925,3655,4957,3616,5404,3466,7108,3370,8862,3641,8893,3762,7322,3886,5843,3902,5616,3921,5350,3950,4932],"n":""},{"p":[2817,-8520,2981,-7746,3698,-7828,3644,-8800,2817,-8520],"n":""},{"p":[4134,3115,3863,3088,3720,4701,3988,4723,4134,3115],"n":""}],"prom":[{"p":[2215,11857,1960,12425,1931,12491,1459,13508,1417,13545,1228,13989,905,14714,727,15101,313,16001]},{"p":[3040,10379,2624,11119,2273,11746]},{"p":[1687,12299,1960,12425]},{"p":[1690,12542,1931,12491]},{"p":[727,14700,905,14714]}],"lamp":[[8312,12070],[4552,17803],[5029,18609],[2917,18072],[6835,8862],[7120,7173]],"play":[]};
+    var C2 = {"mon":[{"p":[3942,10046],"n":"","k":"monument","sub":""},{"p":[4637,10301],"n":"Кръстьо Пишурка","k":"monument","sub":""},{"p":[4651,9881],"n":"Никола Първанов","k":"monument","sub":""},{"p":[-2765,17138],"n":"Шлеп-паметник","k":"memorial","sub":""},{"p":[3554,10381],"n":"","k":"monument","sub":""},{"p":[-2398,17037],"n":"полк. Стефан Илиев","k":"monument","sub":""},{"p":[-2467,16994],"n":"100 години от Чеганската епопея","k":"monument","sub":""},{"p":[3547,9565],"n":"Васил Левски","k":"monument","sub":""}],"park":[{"p":[-6208,16636,-5811,16879,-5351,17160,-5390,17282,-5251,17334,-5220,17241,-4879,17449,-2687,17899,-20,18249,177,16970,-524,16866,-689,16484,-910,16144,-1305,16330,-1488,16676,-1843,16614,-1887,16865,-2432,16831,-4385,16568,-4611,16537,-5156,16463,-6016,16347,-6044,16389,-6130,16520,-6208,16636],"n":"Дунавски парк"},{"p":[3902,5616,6299,5793,6384,4908,5940,4920,5882,5500,5490,5472,3921,5350,3902,5616],"n":""},{"p":[3770,10547,4500,10627,4809,10663,4909,9624,4534,9590,4038,9549,3849,9535,3817,9954,3802,10142,3784,10371,3770,10547],"n":""},{"p":[3950,4932,3658,4925,3655,4957,3616,5404,3466,7108,3370,8862,3641,8893,3762,7322,3886,5843,3902,5616,3921,5350,3950,4932],"n":""},{"p":[2817,-8520,2981,-7746,3698,-7828,3644,-8800,2817,-8520],"n":""},{"p":[4134,3115,3863,3088,3720,4701,3988,4723,4134,3115],"n":""}],"prom":[{"p":[2215,11857,1960,12425,1931,12491,1459,13508,1417,13545,1228,13989,905,14714,727,15101,313,16001]},{"p":[3040,10379,2624,11119,2273,11746]},{"p":[1687,12299,1960,12425]},{"p":[1690,12542,1931,12491]},{"p":[727,14700,905,14714]}],"lamp":[[8312,12070],[4552,17803],[5029,18609],[2917,18072],[6835,8862],[7120,7173]],"play":[]}; window.__C2 = C2;
     var lampG = new THREE.Group(), cityG = new THREE.Group(); scene.add(lampG); scene.add(cityG); window.__lampG = lampG; window.__cityG = cityG; window.__monPick = [];
     function inPoly(x, y, q) { var c = false; for (var i = 0, j = q.length - 1; i < q.length; j = i++) if ((q[i][1] > y) !== (q[j][1] > y) && x < (q[j][0] - q[i][0]) * (y - q[i][1]) / (q[j][1] - q[i][1]) + q[i][0]) c = !c; return c; }
     var parks = C2.park.map(function (z) { var q = pts(z.p); return { q: q, n: z.n, a: polyArea(z.p) }; });
@@ -1751,7 +1768,7 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   var ray = new THREE.Raycaster(), ptr = new THREE.Vector2(), down = null;
   renderer.domElement.addEventListener('pointerdown', function (e) { down = [e.clientX, e.clientY, performance.now()]; });
   renderer.domElement.addEventListener('pointerup', function (e) {
-    if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6 || performance.now() - down[2] > 450) return;
+    if (window.__walkOn || !down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6 || performance.now() - down[2] > 450) return;
     var r = renderer.domElement.getBoundingClientRect();
     ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ptr, camera);
@@ -1822,11 +1839,95 @@ input[type=range] { flex: 1; min-width: 120px; accent-color: var(--accent); heig
   window.addEventListener('resize', resize);
   if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
 
+  /* ---------- walking mode: first person at eye height, joystick + drag to look, WASD on a computer ---------- */
+  var WALK = window.__walk = { on: false, x: 0, y: 0, yaw: 0, pitch: 0, jx: 0, jy: 0, run: false, keys: {}, last: 0, eye: 1.7, vb: null, vbOK: false };
+  var walkUI = document.getElementById('walkUI'), joy = document.getElementById('joy'), joyK = document.getElementById('joyK'), walkTp = document.getElementById('walkTp');
+  function buildVB() {
+    if (WALK.vbOK) return; WALK.vbOK = true; WALK.vb = {};
+    for (var k in OUT.cells) OUT.cells[k].forEach(function (q) { var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (var i = 0; i < q.length; i += 2) { x0 = Math.min(x0, q[i]); x1 = Math.max(x1, q[i]); y0 = Math.min(y0, q[i + 1]); y1 = Math.max(y1, q[i + 1]); } var b = [x0 / 10, x1 / 10, y0 / 10, y1 / 10]; for (var gx = Math.floor(b[0] / 50); gx <= Math.floor(b[1] / 50); gx++) for (var gy = Math.floor(b[2] / 50); gy <= Math.floor(b[3] / 50); gy++) (WALK.vb[gx + ',' + gy] || (WALK.vb[gx + ',' + gy] = [])).push(b); });
+  }
+  function blockedAt(x, y) {
+    if (nearBuilding(x, y)) return true;
+    var c = WALK.vb[Math.floor(x / 50) + ',' + Math.floor(y / 50)];
+    if (c) for (var i = 0; i < c.length; i++) { var k = c[i]; if (x > k[0] - 0.3 && x < k[1] + 0.3 && y > k[2] - 0.3 && y < k[3] + 0.3) return true; }
+    return hAt(x, y) < 0.6;
+  }
+  function blocked(x, y) { var r = 0.45; return blockedAt(x, y) || blockedAt(x + r, y) || blockedAt(x - r, y) || blockedAt(x, y + r) || blockedAt(x, y - r); }
+  function freeSpot(x, y) { if (!blocked(x, y)) return [x, y]; for (var r = 3; r < 90; r += 3) for (var a = 0; a < 6.28; a += 0.5) { var px = x + Math.cos(a) * r, py = y + Math.sin(a) * r; if (!blocked(px, py)) return [px, py]; } return [x, y]; }
+  function walkApply() {
+    var h = hAt(WALK.x, WALK.y) + WALK.eye;
+    camera.position.set(WALK.x, h, -WALK.y); camera.rotation.set(WALK.pitch, WALK.yaw, 0, 'YXZ');
+    controls.target.set(WALK.x - Math.sin(WALK.yaw) * 12, h, -WALK.y - Math.cos(WALK.yaw) * 12);
+  }
+  function walkStep() {
+    var now = performance.now(), dt = Math.min(0.1, (now - (WALK.last || now)) / 1000); WALK.last = now;
+    var fx = -Math.sin(WALK.yaw), fz = -Math.cos(WALK.yaw), rx = Math.cos(WALK.yaw), rz = -Math.sin(WALK.yaw);
+    var f = WALK.jy + (WALK.keys.w || WALK.keys.arrowup ? 1 : 0) - (WALK.keys.s || WALK.keys.arrowdown ? 1 : 0), r = WALK.jx + (WALK.keys.d ? 1 : 0) - (WALK.keys.a ? 1 : 0);
+    var m = Math.hypot(f, r); if (m > 1) { f /= m; r /= m; }
+    var sp = (WALK.run || WALK.keys.shift ? 5 : 1.8) * dt;
+    if (f || r) {
+      var dx = (fx * f + rx * r) * sp, dz = (fz * f + rz * r) * sp;
+      var nx = WALK.x + dx, ny = WALK.y - dz;
+      if (!blocked(nx, ny)) { WALK.x = nx; WALK.y = ny; } else if (!blocked(nx, WALK.y)) WALK.x = nx; else if (!blocked(WALK.x, ny)) WALK.y = ny;
+      WALK.x = Math.max(-21600, Math.min(20500, WALK.x)); WALK.y = Math.max(-12000, Math.min(4300, WALK.y));
+    }
+    var sig = WALK.x + ',' + WALK.y + ',' + WALK.yaw + ',' + WALK.pitch;
+    if (sig !== WALK.sig) { WALK.sig = sig; walkApply(); dirty = true; }
+  }
+  function walkTo(x, y, yaw) { var s = freeSpot(x, y); WALK.x = s[0]; WALK.y = s[1]; if (yaw !== undefined) WALK.yaw = yaw; WALK.pitch = 0; walkApply(); outUpdate(); vegUpdate(); dirty = true; }
+  function walkStart() {
+    buildVB(); WALK.on = true; window.__walkOn = true; document.body.classList.add('walking'); walkUI.hidden = false; controls.enabled = false;
+    var t = controls.target, fw = camera.getWorldDirection(new THREE.Vector3());
+    WALK.yaw = Math.atan2(-fw.x, -fw.z); WALK.last = 0; camera.near = 0.15; camera.updateProjectionMatrix();
+    houseDetailGroup.children.forEach(function (m) { m.visible = true; });
+    var s = freeSpot(t.x, -t.z); WALK.x = s[0]; WALK.y = s[1]; WALK.pitch = 0; walkApply();
+  }
+  function walkStop() {
+    WALK.on = false; window.__walkOn = false; document.body.classList.remove('walking'); walkUI.hidden = true; walkTp.hidden = true; controls.enabled = true;
+    var gx = WALK.x, gy = WALK.y, g = hAt(gx, gy), bx = Math.sin(WALK.yaw) * 90, bz = Math.cos(WALK.yaw) * 90;
+    controls.target.set(gx, g, -gy); camera.position.set(gx + bx, g + 70, -gy + bz); camera.rotation.set(0, 0, 0); controls.update(); controls.dispatchEvent({ type: 'change' }); dirty = true;
+  }
+  document.getElementById('walkBtn').addEventListener('click', function () { walkStart(); });
+  document.getElementById('walkExit').addEventListener('click', walkStop);
+  document.getElementById('walkRun').addEventListener('click', function () { WALK.run = !WALK.run; this.setAttribute('aria-pressed', WALK.run); });
+  document.getElementById('walkPlaces').addEventListener('click', function () { walkTp.hidden = !walkTp.hidden; });
+  (function () {
+    var C = window.__C2, places = [];
+    if (C) {
+      if (C.prom[0]) places.push(['Дунавска алея', C.prom[0].p[0] / 10, C.prom[0].p[1] / 10, 0]);
+      var pk = C.park[0]; if (pk) { var sx = 0, sy = 0, n = pk.p.length / 2; for (var i = 0; i < pk.p.length; i += 2) { sx += pk.p[i]; sy += pk.p[i + 1]; } places.push(['Дунавски парк', sx / n / 10, sy / n / 10, 0]); }
+      C.mon.forEach(function (m) { if (m.n) places.push(['Паметник: ' + m.n, m.p[0] / 10 + 6, m.p[1] / 10, 1.57]); });
+    }
+    if (STN[0]) places.push(['Гарата', STN[0][0], STN[0][1] - 20, 0]);
+    D.power.subs.forEach(function (s) { places.push(['Подстанция Лом', s.p[0] / 10, s.p[1] / 10 - 30, 0]); });
+    places.push(['Центърът', cx, cy, 0]);
+    places.forEach(function (p) { var b = document.createElement('button'); b.textContent = p[0]; b.addEventListener('click', function () { walkTo(p[1], p[2], p[3]); walkTp.hidden = true; }); walkTp.appendChild(b); });
+  })();
+  /* joystick */
+  (function () {
+    var id = null, R = 52;
+    function mv(e) { var b = joy.getBoundingClientRect(), dx = e.clientX - (b.left + b.width / 2), dy = e.clientY - (b.top + b.height / 2), d = Math.hypot(dx, dy) || 1, k = Math.min(1, d / R); dx = dx / d * k; dy = dy / d * k; joyK.style.transform = 'translate(' + (dx * R) + 'px,' + (dy * R) + 'px)'; WALK.jx = dx; WALK.jy = -dy; }
+    joy.addEventListener('pointerdown', function (e) { id = e.pointerId; joy.setPointerCapture(id); mv(e); e.preventDefault(); });
+    joy.addEventListener('pointermove', function (e) { if (e.pointerId === id) mv(e); });
+    function up(e) { if (e.pointerId !== id) return; id = null; WALK.jx = WALK.jy = 0; joyK.style.transform = ''; }
+    joy.addEventListener('pointerup', up); joy.addEventListener('pointercancel', up);
+  })();
+  /* look: drag anywhere else on the picture */
+  (function () {
+    var id = null, lx = 0, ly = 0, el = renderer.domElement;
+    el.addEventListener('pointerdown', function (e) { if (!WALK.on) return; id = e.pointerId; lx = e.clientX; ly = e.clientY; });
+    el.addEventListener('pointermove', function (e) { if (!WALK.on || e.pointerId !== id) return; WALK.yaw -= (e.clientX - lx) * 0.0042; WALK.pitch = Math.max(-1.25, Math.min(1.25, WALK.pitch - (e.clientY - ly) * 0.0036)); lx = e.clientX; ly = e.clientY; });
+    function up(e) { if (e.pointerId === id) id = null; }
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  })();
+  window.addEventListener('keydown', function (e) { if (!WALK.on) return; var k = e.key.toLowerCase(); WALK.keys[k] = true; if (k === 'escape') walkStop(); if (/^arrow/.test(k)) e.preventDefault(); });
+  window.addEventListener('keyup', function (e) { WALK.keys[e.key.toLowerCase()] = false; });
+
   function loop() {
     requestAnimationFrame(loop);
     if (zAnim && zAnim(performance.now())) zAnim = null;
-    controls.update();
-    var az = controls.getAzimuthalAngle();
+    if (WALK.on) walkStep(); else controls.update();
+    var az = WALK.on ? WALK.yaw : controls.getAzimuthalAngle();
     needle.style.transform = 'rotate(' + (az * 180 / Math.PI).toFixed(1) + 'deg)';
     if (outQ.length || outJob) { outStep(6); }
     if ((window.__ou = (window.__ou || 0) + 1) % 20 === 0) { outUpdate(); vegUpdate(); }
