@@ -1664,6 +1664,40 @@ body.walking .menubtn { left: auto; right: 16px; }
     bins.forEach(function (q, i) { sc.setHex(bCol[q[4]]); bnI.setColorAt(i, sc); });
     streetG.add(bnI);
     window.__infraStat.zebra = zeb.length; window.__infraStat.lights = lights.length; window.__infraStat.signs = signs.length; window.__infraStat.bins = bins.length;
+
+    /* --- urban trees: alleys along streets and single trees in yards (illustrative, placed by rule) --- */
+    var urbG = new THREE.Group(); scene.add(urbG); window.__urbG = urbG;
+    var rg = {};
+    ROADS.concat(D.roads.concat(OUT.roads).filter(function (r) { return /^(footway|pedestrian|path)$/.test(r.c); })).forEach(function (r) {
+      var p = pts(r.p), hw = r.w / 2 + 1;
+      for (var i = 0; i < p.length - 1; i++) {
+        var a = p[i], b = p[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.ceil(L / 10));
+        for (var k = 0; k <= n; k++) { var x = a[0] + (b[0] - a[0]) * k / n, y = a[1] + (b[1] - a[1]) * k / n, key = Math.floor(x / 12) + ',' + Math.floor(y / 12); (rg[key] || (rg[key] = [])).push([x, y, hw]); }
+      }
+    });
+    function roadClear(x, y, extra) { var cx = Math.floor(x / 12), cy = Math.floor(y / 12); for (var i = -1; i <= 1; i++) for (var j = -1; j <= 1; j++) { var c = rg[(cx + i) + ',' + (cy + j)]; if (c) for (var q = 0; q < c.length; q++) if (Math.hypot(x - c[q][0], y - c[q][1]) < c[q][2] + extra) return false; } return true; }
+    var utr = [], R4 = mulberry(4242);
+    ROADS.forEach(function (r, ri) {
+      if (r.c === 'service' || utr.length > 7500) return; var p = pts(r.p), off = r.w / 2 + 3.6;
+      walk(p, 19, function (x, y, tx, ty, k) {
+        if (bNear(x, y) < 3 || R4() < 0.2) return;
+        var s = (k % 2) ? 1 : -1, px = x - ty * s * off + (R4() - 0.5) * 1.5, py = y + tx * s * off + (R4() - 0.5) * 1.5;
+        if (nearBuilding(px, py) || !roadClear(px, py, 2.2) || hAt(px, py) < 0.8) return;
+        utr.push([px, py, 0.65 + R4() * 0.5, R4()]);
+      });
+    });
+    BP.forEach(function (b) {
+      if (b[2] > 320 || utr.length > 12500 || R4() > 0.6 || bNear(b[0], b[1]) < 2) return;
+      var a = R4() * 6.28, d = Math.sqrt(b[2]) * 0.5 + 4 + R4() * 7, px = b[0] + Math.cos(a) * d, py = b[1] + Math.sin(a) * d;
+      if (nearBuilding(px, py) || !roadClear(px, py, 3.5) || hAt(px, py) < 0.8) return;
+      utr.push([px, py, 0.55 + R4() * 0.55, R4()]);
+    });
+    var ut = new THREE.IcosahedronGeometry(2.5, 0); ut.scale(1, 1.2, 1); ut.translate(0, 5.6, 0);
+    var utk = new THREE.CylinderGeometry(0.14, 0.24, 4.6, 5); utk.translate(0, 2.3, 0);
+    var uCrown = new THREE.InstancedMesh(ut, new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), Math.max(1, utr.length)), uTrunk = new THREE.InstancedMesh(utk, new THREE.MeshLambertMaterial({ color: 0x5b4636 }), Math.max(1, utr.length)), uc = new THREE.Color();
+    utr.forEach(function (q, i) { o3.position.set(q[0], hAt(q[0], q[1]), -q[1]); o3.rotation.set(0, q[3] * 6.28, 0); o3.scale.set(q[2], q[2] * (0.85 + q[3] * 0.4), q[2]); o3.updateMatrix(); uCrown.setMatrixAt(i, o3.matrix); uTrunk.setMatrixAt(i, o3.matrix); uc.setHSL(0.22 + q[3] * 0.09, 0.4, 0.17 + q[3] * 0.1); uCrown.setColorAt(i, uc); });
+    uCrown.frustumCulled = uTrunk.frustumCulled = false; uCrown.castShadow = true; urbG.add(uCrown, uTrunk); o3.scale.set(1, 1, 1);
+    window.__infraStat.urbanTrees = utr.length;
     /* --- mobile-phone masts: no open data exists for this area, so these are illustrative: one mast on the highest ground of each built-up 800 m cell --- */
     var antG = new THREE.Group(); antG.name = 'ant'; scene.add(antG); window.__antG = antG;
     var ac = {}; BP.forEach(function (b) { var k = Math.floor(b[0] / 800) + ',' + Math.floor(b[1] / 800); (ac[k] || (ac[k] = [])).push(b); });
@@ -1789,7 +1823,7 @@ body.walking .menubtn { left: auto; right: 16px; }
   var dirty = true;
   var hourEl = document.getElementById('hour');
   hourEl.addEventListener('input', function () { setHour(parseFloat(hourEl.value)); });
-  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup, houseDetailGroup, outerGroup], roads: [roadMesh, railMesh], trees: [crowns, trunks, shoreVegGroup, vegGroup], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup, infraGroup, elecLocal], water2: [waterNetGroup], lamp: [window.__lampG], street: [window.__streetG], park: [window.__cityG], ant: [window.__antG], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
+  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup, houseDetailGroup, outerGroup], roads: [roadMesh, railMesh], trees: [crowns, trunks, shoreVegGroup, vegGroup, window.__urbG], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup, infraGroup, elecLocal], water2: [waterNetGroup], lamp: [window.__lampG], street: [window.__streetG], park: [window.__cityG], ant: [window.__antG], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
   Array.prototype.forEach.call(document.querySelectorAll('.tog'), function (b) {
     b.addEventListener('click', function () {
       var on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on);
