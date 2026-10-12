@@ -2160,16 +2160,20 @@ body.walking .menubtn { left: auto; right: 16px; }
       for (var k = 0; k < 90; k++) { var x = 378 + R() * 108, y = 952 + R() * 98, rr = 3.6 + R() * 2.6, h = hAt(x, y), tg = new THREE.Group(), tk = new THREE.Mesh(new THREE.CylinderGeometry(0.3 * rr / 4, 0.45 * rr / 4, rr * 1.2, 5), new THREE.MeshLambertMaterial({ color: 0x5b4636 })); tk.position.y = rr * 0.6; tg.add(tk); var cr = new THREE.Mesh(new THREE.IcosahedronGeometry(rr, 1), new THREE.MeshLambertMaterial({ color: R() < 0.5 ? 0x2a5528 : 0x3b7433, flatShading: true })); cr.scale.set(1, 0.85, 1); cr.position.y = rr * 1.6; cr.castShadow = true; tg.add(cr); tg.position.set(x, h, -y); cityG.add(tg); }
       var ar = new THREE.Mesh(new THREE.RingGeometry(3.2, 5.2, 20, 3, 0, Math.PI), new THREE.MeshLambertMaterial(Object.assign({ color: 0xd9d3c4, side: THREE.DoubleSide }, po(-9)))); ar.rotation.x = -Math.PI / 2; ar.position.set(466, hAt(466, 1018) + 0.4, -1018); ar.renderOrder = 10; cityG.add(ar);
     })();
-    /* ---- running track round the football pitch east of the court building (from the author's satellite screenshot; approximate) ---- */
+    /* ---- closed oval running track with football pitch (south) and hard court (north), read from the author's satellite screenshot; approximate ---- */
     (function () {
-      var cx = 566, hw = 10, yN = 990, yS = 1062, tw = 5.5, K = 12, W = 2 * (hw + tw) + 2, yT = yN, yB = yS + hw + tw + 1, H = yB - yT, cy0 = (yT + yB) / 2;
+      var cx = 566, R = 15.5, r = 10, ys = 996.5, yn = 1050.5, K = 12, yT = 980, yB = 1067.5, W = 2 * R + 2, H = yB - yT, cy0 = (yT + yB) / 2;
       var c = cv(Math.round(W * K), Math.round(H * K)), q = c.getContext('2d');
-      function X(x) { return (x - (cx - W / 2)) * K; } function Y(y) { return (y - yT) * K; }
-      function stad(r, y0) { q.beginPath(); q.moveTo(X(cx - r), Y(y0)); q.lineTo(X(cx - r), Y(yS)); q.arc(X(cx), Y(yS), r * K, Math.PI, 0, true); q.lineTo(X(cx + r), Y(y0)); q.closePath(); }
-      q.fillStyle = '#8c4b40'; stad(hw + tw, yT); q.fill(); q.fillStyle = '#4f9a46'; stad(hw, yT); q.fill();
-      q.strokeStyle = 'rgba(255,255,255,.9)'; q.lineWidth = 2; var y0 = 1000, y1 = 1056, pw = hw - 1, my = (y0 + y1) / 2;
-      q.strokeRect(X(cx - pw), Y(y0), 2 * pw * K, (y1 - y0) * K); q.beginPath(); q.moveTo(X(cx - pw), Y(my)); q.lineTo(X(cx + pw), Y(my)); q.stroke();
-      q.beginPath(); q.arc(X(cx), Y(my), 3.5 * K, 0, 7); q.stroke(); q.strokeRect(X(cx - 5), Y(y0), 10 * K, 7 * K); q.strokeRect(X(cx - 5), Y(y1 - 7), 10 * K, 7 * K);
+      function X(x) { return (x - (cx - W / 2)) * K; } function Y(y) { return (yB - y) * K; }
+      function oval(rr) { q.beginPath(); q.moveTo(X(cx - rr), Y(ys)); q.lineTo(X(cx - rr), Y(yn)); q.arc(X(cx), Y(yn), rr * K, Math.PI, 0, false); q.lineTo(X(cx + rr), Y(ys)); q.arc(X(cx), Y(ys), rr * K, 0, Math.PI, false); q.closePath(); }
+      q.fillStyle = '#8c4b40'; oval(R); q.fill(); q.fillStyle = '#5b8f48'; oval(r); q.fill();
+      function rect(x0, y0, x1, y1) { return [X(x0), Y(y1), (x1 - x0) * K, (y1 - y0) * K]; }
+      var fp = rect(556.5, 994, 576.5, 1038); q.fillStyle = '#3f8a3c'; q.fillRect.apply(q, fp);
+      q.strokeStyle = 'rgba(255,255,255,.9)'; q.lineWidth = 2; q.strokeRect.apply(q, fp);
+      q.beginPath(); q.moveTo(X(556.5), Y(1016)); q.lineTo(X(576.5), Y(1016)); q.stroke(); q.beginPath(); q.arc(X(566.5), Y(1016), 3 * K, 0, 7); q.stroke();
+      q.strokeRect.apply(q, rect(561.5, 994, 571.5, 1000)); q.strokeRect.apply(q, rect(561.5, 1032, 571.5, 1038));
+      var ct = rect(557.5, 1041, 575.5, 1065); q.fillStyle = '#9a9484'; q.fillRect.apply(q, ct); q.strokeStyle = 'rgba(70,90,70,.8)'; q.strokeRect.apply(q, ct);
+      q.beginPath(); q.moveTo(X(557.5), Y(1053)); q.lineTo(X(575.5), Y(1053)); q.stroke(); q.beginPath(); q.arc(X(566.5), Y(1053), 2.5 * K, 0, 7); q.stroke();
       var tx = new THREE.CanvasTexture(c); tx.anisotropy = 4;
       var g = new THREE.PlaneGeometry(W, H, Math.round(W), Math.round(H)); g.rotateX(-Math.PI / 2);
       var pos = g.attributes.position; for (var i = 0; i < pos.count; i++) { var wx = cx + pos.getX(i), wy = cy0 - pos.getZ(i); pos.setXYZ(i, wx, hAt(wx, wy) + 0.4, -wy); }
