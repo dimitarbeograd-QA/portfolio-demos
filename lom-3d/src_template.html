@@ -2176,7 +2176,7 @@ body.walking .menubtn { left: auto; right: 16px; }
       q.beginPath(); q.moveTo(X(557.5), Y(1053)); q.lineTo(X(575.5), Y(1053)); q.stroke(); q.beginPath(); q.arc(X(566.5), Y(1053), 2.5 * K, 0, 7); q.stroke();
       var tx = new THREE.CanvasTexture(c); tx.anisotropy = 4;
       var g = new THREE.PlaneGeometry(W, H, Math.round(W), Math.round(H)); g.rotateX(-Math.PI / 2);
-      var pos = g.attributes.position; for (var i = 0; i < pos.count; i++) { var wx = cx + pos.getX(i), wy = cy0 - pos.getZ(i); pos.setXYZ(i, wx, hAt(wx, wy) + 0.4, -wy); }
+      var pos = g.attributes.position; for (var i = 0; i < pos.count; i++) { var wx = cx - 5 + pos.getX(i), wy = cy0 - 7 - pos.getZ(i); pos.setXYZ(i, wx, hAt(wx, wy) + 0.4, -wy); }
       g.computeVertexNormals();
       var m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: tx, transparent: true, alphaTest: 0.3, polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -12 }));
       m.renderOrder = 12; cityG.add(m);
