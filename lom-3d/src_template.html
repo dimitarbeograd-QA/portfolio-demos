@@ -1673,8 +1673,9 @@ body.walking .menubtn { left: auto; right: 16px; }
         function add(geo, mat, px, py, pz) { var m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; }
         if (full) {
           add(new THREE.BoxGeometry(L, NH, W), wall, 0, NH / 2, 0);
-          var rf = new THREE.CylinderGeometry(W * 0.62, W * 0.62, L, 3, 1); rf.rotateZ(Math.PI / 2); rf.rotateX(Math.PI / 2 * 0); var rr = add(rf, roofM, 0, NH + 0.1, 0); rr.scale.set(1, 1, 1); rr.rotation.x = Math.PI / 2 * 0;
-          add(new THREE.CylinderGeometry(W * 0.5, W * 0.5, 2, 8, 1, false, 0, Math.PI), wall, L / 2 + 0.2, 1, 0).rotation.y = Math.PI / 2 * 0;
+          var rs = new THREE.Shape(); rs.moveTo(-W * 0.56, 0); rs.lineTo(W * 0.56, 0); rs.lineTo(0, W * 0.42); rs.lineTo(-W * 0.56, 0);
+          var rf = new THREE.ExtrudeGeometry(rs, { depth: L, bevelEnabled: false }); rf.translate(0, 0, -L / 2); rf.rotateY(Math.PI / 2); add(rf, roofM, 0, NH, 0);
+          add(new THREE.CylinderGeometry(W * 0.36, W * 0.36, NH * 0.8, 10, 1, false, 0, Math.PI), wall, L / 2 - 0.1, NH * 0.4, 0);
         }
         var dx = full ? 0 : 0;
         add(new THREE.CylinderGeometry(1.9, 2.1, 3, 12), wall, dx, NH + 1.7, 0);
@@ -1694,7 +1695,10 @@ body.walking .menubtn { left: auto; right: 16px; }
         var best = 0, ang = 0; for (i = 0; i < q.length; i++) { var j = (i + 1) % q.length, l = Math.hypot(q[j][0] - q[i][0], q[j][1] - q[i][1]); if (l > best) { best = l; ang = Math.atan2(q[j][1] - q[i][1], q[j][0] - q[i][0]); } }
         church(cx, cy, ang, Math.max(8, best), 7, false, b.n || 'Храм', CT);
       });
-      var us = ll(43.826444, 23.234889); church(us[0], us[1], 0, 20, 9, true, 'Храм „Успение Богородично“', 'Местоположение по Wikidata. Сградата и видът са условни.');
+      var us = ll(43.826444, 23.234889), ux = us[0], uy = us[1], ua = 0, uL = 20, uW = 9, ubd = 40;
+      D.buildings.map(function (b) { return b.p; }).concat((D.cad || []).map(function (c) { return c[0]; }), D.ms || []).forEach(function (pp) { var q = pts(pp), cx = 0, cy = 0; q.forEach(function (v) { cx += v[0]; cy += v[1]; }); cx /= q.length; cy /= q.length; var dd = Math.hypot(cx - us[0], cy - us[1]), ar = 0; q.forEach(function (v, i) { var w = q[(i + 1) % q.length]; ar += v[0] * w[1] - w[0] * v[1]; }); if (dd < ubd && q.length >= 4 && Math.abs(ar) / 2 > 120) { ubd = dd; var best = 0, an = 0; for (var i = 0; i < q.length; i++) { var j = (i + 1) % q.length, l = Math.hypot(q[j][0] - q[i][0], q[j][1] - q[i][1]); if (l > best) { best = l; an = Math.atan2(q[j][1] - q[i][1], q[j][0] - q[i][0]); } } var ca = Math.cos(an), sa = Math.sin(an), a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9; q.forEach(function (v) { var u = (v[0] - cx) * ca + (v[1] - cy) * sa, w = -(v[0] - cx) * sa + (v[1] - cy) * ca; a0 = Math.min(a0, u); a1 = Math.max(a1, u); b0 = Math.min(b0, w); b1 = Math.max(b1, w); }); if (ca < 0) { an += Math.PI; var t0 = a0; a0 = -a1; a1 = -t0; t0 = b0; b0 = -b1; b1 = -t0; } ux = cx + (Math.cos(an) * (a0 + a1) / 2 - Math.sin(an) * (b0 + b1) / 2); uy = cy + (Math.sin(an) * (a0 + a1) / 2 + Math.cos(an) * (b0 + b1) / 2); ua = an; uL = Math.max(12, a1 - a0); uW = Math.max(7, b1 - b0); } });
+      window.__usp = [ubd, ux, uy, ua, uL, uW];
+      church(ux, uy, ua, uL, uW, true, 'Храм „Успение Богородично“', 'Местоположение по Wikidata. Сградата и видът са условни.');
       /* monument to the 138th infantry regiment */
       var m1 = ll(43.832194, 23.233361), h1 = hAt(m1[0], m1[1]), gm = new THREE.Group();
       function addm(geo, mat, px, py, pz) { var m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); m.castShadow = true; gm.add(m); }
