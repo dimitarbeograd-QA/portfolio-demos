@@ -1042,7 +1042,19 @@ body.walking .menubtn { left: auto; right: 16px; }
   var msBox = [];
   var extra = (D.cad || []).map(function (c) { return { p: c[0], t: c[1], l: c[2], s: c[3] >= 0 ? (D.streets[c[3]] + (c[4] ? ' ' + c[4] : '')) : '' }; }).concat((D.ms || []).map(function (p) { return { p: p, t: 'yes', l: 0, s: '' }; }));
   var xInfo = [], xGrid = {};
+  /* two buildings drawn by hand later (church "Uspenie" and the Historical museum): do not extrude them here */
+  var SKIPB = {}; window.__skipB = { usp: -1, mus: -1 };
+  (function () {
+    var KXm = 111320 * Math.cos(43.8167 * Math.PI / 180), KYm = 110574, ux = (23.234889 - 23.2333) * KXm, uy = (43.826444 - 43.8167) * KYm, bd = 40, bi = -1, mi = -1, c2 = [];
+    extra.forEach(function (e, idx) { var q = pts(e.p), cx = 0, cy = 0, ar = 0; q.forEach(function (v, i) { cx += v[0]; cy += v[1]; var w = q[(i + 1) % q.length]; ar += v[0] * w[1] - w[0] * v[1]; }); cx /= q.length; cy /= q.length; ar = Math.abs(ar) / 2; var dd = Math.hypot(cx - ux, cy - uy);
+      if (dd < bd && q.length >= 4 && ar > 120) { bd = dd; bi = idx; }
+      if (/ЕРЕМИЯ/i.test(e.s || '') && /\s6$/.test((e.s || '').trim())) mi = idx;
+      if (dd < 90 && ar > 560 && ar < 800) c2.push([dd, idx]); });
+    if (mi < 0 && c2.length) { c2.sort(function (a, b) { return a[0] - b[0]; }); mi = c2[0][1]; }
+    if (bi >= 0) { SKIPB[bi] = 1; window.__skipB.usp = bi; } if (mi >= 0 && mi !== bi) { SKIPB[mi] = 1; window.__skipB.mus = mi; window.__skipB.musP = extra[mi].p; }
+  })();
   extra.forEach(function (e, idx) {
+    if (SKIPB[idx]) return;
     var p = e.p, area = polyArea(p), b = { id: 900000 + idx, t: e.t, l: e.l > 0 ? String(e.l) : undefined }, P = plan(b, area), g;
     if (e.t === 'yes' && P.st === 'shop' && area < 400) { P.st = 'house'; P.floors = 1 + (rnd(b.id) > 0.5 ? 1 : 0); P.H = P.floors * 3; P.pitch = true; }
     try { g = new THREE.ExtrudeGeometry(shapeOf(p), { depth: P.H, bevelEnabled: false, UVGenerator: WALL_UV }); } catch (e) { return; }
@@ -1668,20 +1680,32 @@ body.walking .menubtn { left: auto; right: 16px; }
       function pick(x, y, h, title, text) { var pk = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 18, 8), new THREE.MeshBasicMaterial({ visible: false })); pk.position.set(x, h + 9, -y); pk.userData = { title: title, text: text }; cityG.add(pk); window.__monPick.push(pk); }
       function cross(g, x, y, z) { var a = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.4, 0.12), gold), b = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.12, 0.12), gold); a.position.set(x, y + 0.7, z); b.position.set(x, y + 1.0, z); g.add(a, b); }
       /* an orthodox church: nave along local X, dome on a drum, bell tower at the west end; full = also walls and roof */
-      function church(x, y, ang, L, W, full, title, text) {
+      /* procedural textures for the two hand-built buildings (colours from the author's photos) */
+      function texOf(c, rx, ry) { var t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx || 1, ry || 1); t.anisotropy = 4; return t; }
+      function tileCanvas() { var c = cv(128, 128), q = c.getContext('2d'), r = mulberry(5); q.fillStyle = '#b4623e'; q.fillRect(0, 0, 128, 128); for (var yy = 0; yy < 16; yy++) for (var xx = 0; xx < 16; xx++) { var o = (yy % 2) * 4; q.fillStyle = 'rgba(' + (r() < 0.5 ? '90,40,22' : '210,130,90') + ',' + (0.1 + r() * 0.18) + ')'; q.fillRect(xx * 8 + o, yy * 8, 7, 7); } q.fillStyle = 'rgba(60,25,12,.35)'; for (var l = 0; l < 16; l++) q.fillRect(0, l * 8 + 7, 128, 1); return c; }
+      function facadeCanvas() { var c = cv(128, 256), q = c.getContext('2d'); q.fillStyle = '#f2f1ea'; q.fillRect(0, 0, 128, 256); q.fillStyle = '#bcd9c3'; q.fillRect(14, 36, 100, 188); q.fillStyle = '#f7f7f2'; q.fillRect(0, 0, 128, 16); q.fillRect(0, 0, 10, 224); q.fillRect(118, 0, 10, 224); q.fillStyle = '#9b9a94'; q.fillRect(0, 224, 128, 32);
+        [[150, 222], [58, 128]].forEach(function (w) { q.fillStyle = '#f7f7f2'; q.fillRect(34, w[0] - 4, 60, w[1] - w[0] + 8); q.fillStyle = '#1b1b1d'; q.fillRect(38, w[0], 52, w[1] - w[0]); q.strokeStyle = 'rgba(200,200,200,.55)'; q.lineWidth = 1.5; for (var k = 1; k < 5; k++) { q.beginPath(); q.moveTo(38 + k * 10.4, w[0]); q.lineTo(38 + k * 10.4, w[1]); q.stroke(); } for (var m = 1; m < 5; m++) { q.beginPath(); q.moveTo(38, w[0] + m * (w[1] - w[0]) / 5); q.lineTo(90, w[0] + m * (w[1] - w[0]) / 5); q.stroke(); } }); return c; }
+      function plasterCanvas() { var c = cv(128, 128), q = c.getContext('2d'); q.fillStyle = '#ece4d0'; q.fillRect(0, 0, 128, 128); q.fillStyle = '#c9bfa8'; q.fillRect(0, 118, 128, 10); q.fillStyle = '#2a2724'; q.fillRect(46, 44, 36, 66); q.beginPath(); q.arc(64, 44, 18, Math.PI, 0); q.fill(); q.strokeStyle = '#f6f1e4'; q.lineWidth = 3; q.strokeRect(44, 44, 40, 68); return c; }
+      function reliefCanvas() { var c = cv(512, 128), q = c.getContext('2d'), r = mulberry(11); q.fillStyle = '#a9773c'; q.fillRect(0, 0, 512, 128); for (var i = 0; i < 7; i++) { var bx = 20 + i * 70 + r() * 10; q.fillStyle = '#6c4620'; q.beginPath(); q.arc(bx + 16, 34, 11, 0, 6.3); q.fill(); q.fillRect(bx, 48, 32, 70); q.fillStyle = 'rgba(230,170,100,.55)'; q.fillRect(bx + 4, 52, 6, 62); q.fillStyle = '#6c4620'; q.fillRect(bx - 12 + (i % 2) * 40, 62, 14, 5); }
+        q.fillStyle = '#7d5226'; q.fillRect(0, 0, 512, 8); q.fillRect(0, 120, 512, 8); return c; }
+      function signCanvas() { var c = cv(512, 64), q = c.getContext('2d'); q.fillStyle = '#f4f3ee'; q.fillRect(0, 0, 512, 64); q.fillStyle = '#2d2d2d'; q.font = 'bold 36px Georgia,serif'; q.textAlign = 'center'; q.textBaseline = 'middle'; q.fillText('ИСТОРИЧЕСКИ МУЗЕЙ', 256, 34); return c; }
+      var tileTx = texOf(tileCanvas(), 0.35, 0.35), tileMat = new THREE.MeshLambertMaterial({ map: tileTx, side: THREE.DoubleSide });
+      function church(x, y, ang, L, W, full, title, text, style) {
         var h = hAt(x, y), g = new THREE.Group(), NH = full ? 6.5 : 4.2;
         function add(geo, mat, px, py, pz) { var m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; }
         if (full) {
-          add(new THREE.BoxGeometry(L, NH, W), wall, 0, NH / 2, 0);
+          if (style === 'usp') { var pl = function (rx) { return new THREE.MeshLambertMaterial({ map: texOf(plasterCanvas(), rx, 1) }); }; var wl = new THREE.Mesh(new THREE.BoxGeometry(L, NH, W), [pl(W / 4), pl(W / 4), wall, pl(L / 4), pl(L / 4)].slice(0, 2).concat([wall, wall, pl(L / 4), pl(L / 4)])); wl.position.y = NH / 2; wl.castShadow = true; g.add(wl); }
+          else add(new THREE.BoxGeometry(L, NH, W), wall, 0, NH / 2, 0);
           var rs = new THREE.Shape(); rs.moveTo(-W * 0.56, 0); rs.lineTo(W * 0.56, 0); rs.lineTo(0, W * 0.42); rs.lineTo(-W * 0.56, 0);
-          var rf = new THREE.ExtrudeGeometry(rs, { depth: L, bevelEnabled: false }); rf.translate(0, 0, -L / 2); rf.rotateY(Math.PI / 2); add(rf, roofM, 0, NH, 0);
+          var rf = new THREE.ExtrudeGeometry(rs, { depth: L, bevelEnabled: false }); rf.translate(0, 0, -L / 2); rf.rotateY(Math.PI / 2); add(rf, style === 'usp' ? tileMat : roofM, 0, NH, 0);
           add(new THREE.CylinderGeometry(W * 0.36, W * 0.36, NH * 0.8, 10, 1, false, 0, Math.PI), wall, L / 2 - 0.1, NH * 0.4, 0);
         }
-        var dx = full ? 0 : 0;
-        add(new THREE.CylinderGeometry(1.9, 2.1, 3, 12), wall, dx, NH + 1.7, 0);
+        var dx = full ? 0 : 0, RH = style === 'usp' ? W * 0.42 : 0;
+        if (style === 'usp') { [-0.22, 0.0, 0.22].forEach(function (f) { add(new THREE.CylinderGeometry(0.9, 1.0, 1.4, 10), wall, f * L, NH + RH + 0.5, 0); add(new THREE.SphereGeometry(1.0, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), lead, f * L, NH + RH + 1.2, 0); cross(g, f * L, NH + RH + 2.1, 0); }); }
+        else { add(new THREE.CylinderGeometry(1.9, 2.1, 3, 12), wall, dx, NH + 1.7, 0);
         add(new THREE.SphereGeometry(2.1, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), lead, dx, NH + 3.2, 0);
-        cross(g, dx, NH + 5.2, 0);
-        var tx = -L / 2 - 1.4;
+        cross(g, dx, NH + 5.2, 0); }
+        var tx = style === 'usp' ? -L / 2 + 1.8 : -L / 2 - 1.4;
         add(new THREE.BoxGeometry(3.2, 12, 3.2), wall, tx, 6, 0);
         add(new THREE.BoxGeometry(2.6, 2.6, 2.6), wall, tx, 13.3, 0);
         add(new THREE.ConeGeometry(2.1, 4.2, 4), lead, tx, 16.7, 0).rotation.y = Math.PI / 4;
@@ -1698,7 +1722,54 @@ body.walking .menubtn { left: auto; right: 16px; }
       var us = ll(43.826444, 23.234889), ux = us[0], uy = us[1], ua = 0, uL = 20, uW = 9, ubd = 40;
       D.buildings.map(function (b) { return b.p; }).concat((D.cad || []).map(function (c) { return c[0]; }), D.ms || []).forEach(function (pp) { var q = pts(pp), cx = 0, cy = 0; q.forEach(function (v) { cx += v[0]; cy += v[1]; }); cx /= q.length; cy /= q.length; var dd = Math.hypot(cx - us[0], cy - us[1]), ar = 0; q.forEach(function (v, i) { var w = q[(i + 1) % q.length]; ar += v[0] * w[1] - w[0] * v[1]; }); if (dd < ubd && q.length >= 4 && Math.abs(ar) / 2 > 120) { ubd = dd; var best = 0, an = 0; for (var i = 0; i < q.length; i++) { var j = (i + 1) % q.length, l = Math.hypot(q[j][0] - q[i][0], q[j][1] - q[i][1]); if (l > best) { best = l; an = Math.atan2(q[j][1] - q[i][1], q[j][0] - q[i][0]); } } var ca = Math.cos(an), sa = Math.sin(an), a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9; q.forEach(function (v) { var u = (v[0] - cx) * ca + (v[1] - cy) * sa, w = -(v[0] - cx) * sa + (v[1] - cy) * ca; a0 = Math.min(a0, u); a1 = Math.max(a1, u); b0 = Math.min(b0, w); b1 = Math.max(b1, w); }); if (ca < 0) { an += Math.PI; var t0 = a0; a0 = -a1; a1 = -t0; t0 = b0; b0 = -b1; b1 = -t0; } ux = cx + (Math.cos(an) * (a0 + a1) / 2 - Math.sin(an) * (b0 + b1) / 2); uy = cy + (Math.sin(an) * (a0 + a1) / 2 + Math.cos(an) * (b0 + b1) / 2); ua = an; uL = Math.max(12, a1 - a0); uW = Math.max(7, b1 - b0); } });
       window.__usp = [ubd, ux, uy, ua, uL, uW];
-      church(ux, uy, ua, uL, uW, true, 'Храм „Успение Богородично“', 'Местоположение по Wikidata. Сградата и видът са условни.');
+      church(ux, uy, ua, uL, uW, true, 'Храм „Успение Богородично“', 'Контурът е на реалната сграда (кадастър). Покривът с три малки купола и фасадата са по снимки; камбанарията е условна.', 'usp');
+      /* Historical museum Lom (ul. Eremiya Balgarov 6): footprint from the cadastre, 2 floors, hipped tile roof, green-white facade with grilles, relief fence */
+      (function () {
+        var mp = window.__skipB && window.__skipB.musP; if (!mp) return;
+        var q = pts(mp), n = q.length, i, ar = 0, cx = 0, cy = 0; q.forEach(function (v, k) { var w = q[(k + 1) % n]; ar += v[0] * w[1] - w[0] * v[1]; cx += v[0]; cy += v[1]; }); cx /= n; cy /= n; if (ar < 0) q.reverse();
+        var base = 1e9; q.forEach(function (v) { base = Math.min(base, hAt(v[0], v[1])); }); base += 0.05;
+        var HW = 7, HR = 10.4, fac = new THREE.MeshLambertMaterial({ map: texOf(facadeCanvas(), 1, 1), side: THREE.DoubleSide });
+        var best = 0, an = 0; for (i = 0; i < n; i++) { var j = (i + 1) % n, l = Math.hypot(q[j][0] - q[i][0], q[j][1] - q[i][1]); if (l > best) { best = l; an = Math.atan2(q[j][1] - q[i][1], q[j][0] - q[i][0]); } }
+        var g = new THREE.Group(), edges = [];
+        for (i = 0; i < n; i++) { var j2 = (i + 1) % n, a = q[i], b = q[j2], dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy); if (len < 0.5) continue; edges.push({ a: a, b: b, len: len, nx: dy / len, ny: -dx / len, tx: dx / len, ty: dy / len }); }
+        edges.forEach(function (e) {
+          var nu = Math.max(1, Math.round(e.len / 4)), gm = new THREE.BufferGeometry();
+          gm.setAttribute('position', new THREE.Float32BufferAttribute([e.a[0], base, -e.a[1], e.b[0], base, -e.b[1], e.b[0], base + HW, -e.b[1], e.a[0], base + HW, -e.a[1]], 3));
+          gm.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, nu, 0, nu, 1, 0, 1], 2)); gm.setIndex([0, 1, 2, 0, 2, 3]); gm.computeVertexNormals();
+          var m = new THREE.Mesh(gm, fac); m.castShadow = true; g.add(m);
+        });
+        /* hipped roof on the oriented bounding box */
+        var ca = Math.cos(an), sa = Math.sin(an), a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9; q.forEach(function (v) { var u = (v[0] - cx) * ca + (v[1] - cy) * sa, w = -(v[0] - cx) * sa + (v[1] - cy) * ca; a0 = Math.min(a0, u); a1 = Math.max(a1, u); b0 = Math.min(b0, w); b1 = Math.max(b1, w); });
+        var ev = 0.5; a0 -= ev; a1 += ev; b0 -= ev; b1 += ev; var long = (a1 - a0) >= (b1 - b0);
+        function P(u, w, H) { return [cx + u * ca - w * sa, base + H, -(cy + u * sa + w * ca)]; }
+        var pos = [], uv = [];
+        function tri(A, B, C, ua, ub, uc) { pos.push.apply(pos, A.concat(B, C)); uv.push.apply(uv, ua.concat(ub, uc)); }
+        var hh = (long ? (b1 - b0) : (a1 - a0)) / 2, um = (a0 + a1) / 2, wm = (b0 + b1) / 2;
+        if (long) { var r0 = a0 + hh, r1 = a1 - hh; if (r1 < r0) { r0 = r1 = um; }
+          var F0 = P(a0, b0, HW), F1 = P(a1, b0, HW), B1 = P(a1, b1, HW), B0 = P(a0, b1, HW), R0 = P(r0, wm, HR), R1 = P(r1, wm, HR);
+          tri(F0, F1, R1, [0, 0], [a1 - a0, 0], [r1 - a0, 3]); tri(F0, R1, R0, [0, 0], [r1 - a0, 3], [r0 - a0, 3]);
+          tri(B1, B0, R0, [0, 0], [a1 - a0, 0], [r0 - a0, 3]); tri(B1, R0, R1, [0, 0], [r0 - a0, 3], [r1 - a0, 3]);
+          tri(F1, B1, R1, [0, 0], [b1 - b0, 0], [hh, 3]); tri(B0, F0, R0, [0, 0], [b1 - b0, 0], [hh, 3]);
+        } else { var s0 = b0 + hh, s1 = b1 - hh; if (s1 < s0) { s0 = s1 = wm; }
+          var G0 = P(a0, b0, HW), G1 = P(a1, b0, HW), G2 = P(a1, b1, HW), G3 = P(a0, b1, HW), S0 = P(um, s0, HR), S1 = P(um, s1, HR);
+          tri(G1, G2, S1, [0, 0], [b1 - b0, 0], [s1 - b0, 3]); tri(G1, S1, S0, [0, 0], [s1 - b0, 3], [s0 - b0, 3]);
+          tri(G3, G0, S0, [0, 0], [b1 - b0, 0], [s0 - b0, 3]); tri(G3, S0, S1, [0, 0], [s0 - b0, 3], [s1 - b0, 3]);
+          tri(G0, G1, S0, [0, 0], [a1 - a0, 0], [hh, 3]); tri(G2, G3, S1, [0, 0], [a1 - a0, 0], [hh, 3]); }
+        var rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); rg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); rg.computeVertexNormals();
+        var rm = new THREE.Mesh(rg, tileMat); rm.castShadow = true; g.add(rm);
+        /* sign on the facade toward the main street (south-west), relief fence on the east side street */
+        var sg = null, rl = null, sb = -9, rb = -9; edges.forEach(function (e) { if (e.len < 8) return; var s1 = e.nx * -0.5 + e.ny * -0.85, s2 = e.nx * 0.95 + e.ny * 0.1; if (s1 > sb) { sb = s1; sg = e; } if (s2 > rb) { rb = s2; rl = e; } });
+        if (rl === sg) { rl = null; edges.forEach(function (e) { if (e !== sg && e.len >= 8 && (!rl || (e.nx * 0.95 + e.ny * 0.1) > (rl.nx * 0.95 + rl.ny * 0.1))) rl = e; }); }
+        if (sg) { var sw = Math.min(sg.len * 0.7, 13), sm = new THREE.Mesh(new THREE.PlaneGeometry(sw, sw / 8), new THREE.MeshLambertMaterial({ map: texOf(signCanvas(), 1, 1) })); sm.position.set((sg.a[0] + sg.b[0]) / 2 + sg.nx * 0.08, base + 5.3, -((sg.a[1] + sg.b[1]) / 2 + sg.ny * 0.08)); sm.rotation.y = Math.atan2(sg.nx, sg.ny); g.add(sm); }
+        if (rl) { var Lw = rl.len * 0.72, mx = (rl.a[0] + rl.b[0]) / 2 + rl.nx * 3.0, my = (rl.a[1] + rl.b[1]) / 2 + rl.ny * 3.0, th = Math.atan2(rl.ty, rl.tx), hb = hAt(mx, my) + 0.02;
+          var relM = new THREE.MeshLambertMaterial({ map: texOf(reliefCanvas(), Math.max(1, Lw / 12), 1) }), conc = new THREE.MeshLambertMaterial({ color: 0x7b6a58 }), brick = new THREE.MeshLambertMaterial({ color: 0x8a3b2a }), iron = new THREE.MeshLambertMaterial({ color: 0x2c2420 });
+          var fw = new THREE.Mesh(new THREE.BoxGeometry(Lw, 2.3, 0.5), [conc, conc, conc, conc, relM, relM]); fw.position.set(mx, hb + 1.15, -my); fw.rotation.y = th; fw.castShadow = true; g.add(fw);
+          var cap = new THREE.Mesh(new THREE.BoxGeometry(Lw + 0.2, 0.18, 0.7), brick); cap.position.set(mx, hb + 2.4, -my); cap.rotation.y = th; g.add(cap);
+          [-1, 1].forEach(function (sd) { var px = mx + rl.tx * sd * (Lw / 2 + 0.3), py = my + rl.ty * sd * (Lw / 2 + 0.3), p = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.9, 0.7), brick); p.position.set(px, hb + 1.45, -py); p.rotation.y = th; g.add(p); });
+          var gx = mx - rl.tx * (Lw / 2 + 1.7), gy = my - rl.ty * (Lw / 2 + 1.7), gt = new THREE.Mesh(new THREE.BoxGeometry(2.1, 2.3, 0.1), iron); gt.position.set(gx, hb + 1.15, -gy); gt.rotation.y = th; g.add(gt); }
+        cityG.add(g);
+        var pk = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, 14, 8), new THREE.MeshBasicMaterial({ visible: false })); pk.position.set(cx, base + 7, -cy); pk.userData = { title: 'Исторически музей Лом', text: 'ул. Еремия Българов 6. Контурът е от кадастъра. Фасадата, покривът, надписът и оградата с релефи са по снимки; размерите и височината (2 етажа) са приблизителни.' }; cityG.add(pk); window.__monPick.push(pk);
+      })();
       /* monument to the 138th infantry regiment */
       var m1 = ll(43.832194, 23.233361), h1 = hAt(m1[0], m1[1]), gm = new THREE.Group();
       function addm(geo, mat, px, py, pz) { var m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); m.castShadow = true; gm.add(m); }
