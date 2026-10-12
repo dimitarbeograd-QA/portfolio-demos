@@ -1609,11 +1609,40 @@ body.walking .menubtn { left: auto; right: 16px; }
         var sp = [[5.5, 0.8], [5.5, 3.6], [5.5, 6]]; sp.forEach(function (s, i) { add(new THREE.ConeGeometry(2.8 - i * 0.7, 3.2, 8), new THREE.MeshLambertMaterial({ color: 0x4c7f88, flatShading: true }), 5.5, 2.2 + i * 2.1, 1.2); });
       } else if (/Левски/.test(nm) || /Пишурка|Първанов|Илиев/.test(nm)) { add(new THREE.BoxGeometry(2.2, 2.6, 2.2), stone, 0, 1.5, 0); add(new THREE.CylinderGeometry(0.35, 0.45, 1.9, 8), bronze, 0, 3.8, 0); add(new THREE.SphereGeometry(0.3, 8, 6), bronze, 0, 5, 0); }
       else if (/Шлеп/.test(nm)) {
-        var sh = new THREE.Shape(); sh.moveTo(-12, -2.7); sh.lineTo(9, -2.7); sh.lineTo(12.5, 0); sh.lineTo(9, 2.7); sh.lineTo(-12, 2.7); sh.lineTo(-12, -2.7);
-        var hg = new THREE.ExtrudeGeometry(sh, { depth: 2.4, bevelEnabled: false }); hg.rotateX(-Math.PI / 2);
-        add(new THREE.BoxGeometry(30, 0.7, 9), new THREE.MeshLambertMaterial({ color: 0xa9a496 }), 0, 0.35, 0);
-        add(hg, new THREE.MeshLambertMaterial({ color: 0x3f4a50 }), 0, 0.7, 0); add(new THREE.BoxGeometry(23, 0.12, 5), new THREE.MeshLambertMaterial({ color: 0x6d6050 }), -1.5, 3.14, 0);
-        add(new THREE.BoxGeometry(5, 2.8, 3.6), new THREE.MeshLambertMaterial({ color: 0xe8e8e4 }), -8.5, 4.5, 0); add(new THREE.CylinderGeometry(0.1, 0.1, 5, 6), new THREE.MeshLambertMaterial({ color: 0xcccccc }), 6, 5.6, 0);
+        /* barge memorial after the author's photos: black rusty hull on a concrete basin, white rail, bollards, steering cage + rudder at the stern */
+        var HL = 22, HW = 4.2, HH = 3.8, concr = new THREE.MeshLambertMaterial({ color: 0xb9b3a4 });
+        var bt = cv(256, 128), bq = bt.getContext('2d'); bq.fillStyle = '#26231f'; bq.fillRect(0, 0, 256, 128); var br = mulberry(77);
+        for (var si = 0; si < 90; si++) { bq.fillStyle = 'rgba(' + (80 + br() * 40 | 0) + ',' + (50 + br() * 20 | 0) + ',32,' + (0.04 + br() * 0.09) + ')'; bq.fillRect(br() * 256, br() * 40, 2 + br() * 6, 30 + br() * 90); }
+        bq.strokeStyle = 'rgba(0,0,0,.45)'; for (var li = 1; li < 6; li++) { bq.beginPath(); bq.moveTo(0, li * 21); bq.lineTo(256, li * 21); bq.stroke(); }
+        var bTex = new THREE.CanvasTexture(bt); bTex.wrapS = bTex.wrapT = THREE.RepeatWrapping;
+        var hullM = new THREE.MeshLambertMaterial({ map: bTex, side: THREE.DoubleSide });
+        function wd(t) { if (t < 0.07) return HW * Math.sqrt(Math.max(0, 1 - Math.pow((0.07 - t) / 0.07, 2))) * 0.97 + 0.15; if (t > 0.76) return HW * Math.max(0.02, 1 - Math.pow((t - 0.76) / 0.24, 1.5)); return HW; }
+        function dh(t) { return HH + (t > 0.7 ? (t - 0.7) * 2.2 : 0) + (t < 0.1 ? (0.1 - t) * 1.5 : 0); }
+        var NS = 40, prof = [[1, 1], [0.97, 0.62], [0.78, 0.26], [0.36, 0.05]], P = [], U = [], IX = [];
+        for (var i = 0; i <= NS; i++) { var t = i / NS, X = (t - 0.5) * 2 * HL, w = wd(t), H = dh(t); for (var s = -1; s <= 1; s += 2) for (var j = 0; j < prof.length; j++) { P.push(X, 0.6 + prof[j][1] * H, s * w * prof[j][0]); U.push(t * 6, (s < 0 ? 0 : 0.5) + j * 0.12); } }
+        var rowN = prof.length * 2; function vi(i, s, j) { return i * rowN + (s < 0 ? 0 : prof.length) + j; }
+        for (var i2 = 0; i2 < NS; i2++) { for (var s2 = -1; s2 <= 1; s2 += 2) for (var j2 = 0; j2 < prof.length - 1; j2++) { IX.push(vi(i2, s2, j2), vi(i2 + 1, s2, j2), vi(i2, s2, j2 + 1), vi(i2 + 1, s2, j2), vi(i2 + 1, s2, j2 + 1), vi(i2, s2, j2 + 1)); } var K = prof.length - 1; IX.push(vi(i2, -1, K), vi(i2 + 1, -1, K), vi(i2, 1, K), vi(i2 + 1, -1, K), vi(i2 + 1, 1, K), vi(i2, 1, K)); }
+        var bgm = new THREE.BufferGeometry(); bgm.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); bgm.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); bgm.setIndex(IX); bgm.computeVertexNormals();
+        add(bgm, hullM, 0, 0, 0);
+        /* concrete basin: oval slab with a low curved wall */
+        var ov = new THREE.Shape(), oh = new THREE.Path(); ov.absellipse(0, 0, 31, 12, 0, Math.PI * 2, false); oh.absellipse(0, 0, 30.2, 11.3, 0, Math.PI * 2, true); ov.holes.push(oh);
+        var og = new THREE.ExtrudeGeometry(ov, { depth: 0.7, bevelEnabled: false }); og.rotateX(-Math.PI / 2); add(og, concr, 0, 0.25, 0);
+        var sl = new THREE.Mesh(new THREE.CircleGeometry(1, 40), new THREE.MeshLambertMaterial({ color: 0xa7a191 })); sl.scale.set(30.6, 11.6, 1); sl.rotation.x = -Math.PI / 2; sl.position.set(0, 0.3, 0); g.add(sl);
+        [-12, -3, 8].forEach(function (cx) { add(new THREE.BoxGeometry(5, 0.45, 2.6), new THREE.MeshLambertMaterial({ color: 0x9a9484 }), cx, 0.5, 0); });
+        /* white rail along both sides, posts every 2.4 m */
+        var rl = new THREE.MeshLambertMaterial({ color: 0xe9e8e2 });
+        for (var rs = -1; rs <= 1; rs += 2) { for (var px = -0.9; px <= 0.76; px += 0.045) { var tt = (px + 1) / 2, ww = wd(tt) * 0.97; add(new THREE.CylinderGeometry(0.04, 0.04, 1.0, 4), rl, px * HL, 0.6 + dh(tt) + 0.5, rs * ww); }
+          for (var rp = -0.95; rp < 0.78; rp += 0.05) { var t1 = (rp + 1) / 2, t2 = (rp + 1.05) / 2, a1 = [rp * HL, 0.6 + dh(t1) + 0.95, rs * wd(t1) * 0.97], a2 = [(rp + 0.05) * HL, 0.6 + dh(t2) + 0.95, rs * wd(t2) * 0.97], dx = a2[0] - a1[0], dy = a2[1] - a1[1], dz = a2[2] - a1[2], ln = Math.sqrt(dx * dx + dy * dy + dz * dz); var rb = add(new THREE.BoxGeometry(ln, 0.06, 0.06), rl, (a1[0] + a2[0]) / 2, (a1[1] + a2[1]) / 2, (a1[2] + a2[2]) / 2); rb.rotation.y = -Math.atan2(dz, dx); rb.rotation.z = Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)); } }
+        /* bollards, rusty stern box, steering cage with wheel, rudder plate */
+        var dk = new THREE.MeshLambertMaterial({ color: 0x1d1c1a }), rust = new THREE.MeshLambertMaterial({ color: 0x6a4a36 });
+        [[0.62, -1], [0.62, 1], [-0.7, -1], [-0.7, 1]].forEach(function (b) { var tt = (b[0] + 1) / 2; add(new THREE.CylinderGeometry(0.38, 0.45, 1.0, 10), dk, b[0] * HL, 0.6 + dh(tt) + 0.5, b[1] * wd(tt) * 0.55); });
+        add(new THREE.BoxGeometry(2.4, 1.8, 2.4), rust, -HL * 0.74, 0.6 + HH + 0.9, 0);
+        var cg = new THREE.MeshLambertMaterial({ color: 0x23201e }), cx0 = -HL * 0.9, cy0 = 0.6 + dh(0.05) + 0.2;
+        [[-1.4, -1.4], [-1.4, 1.4], [1.4, -1.4], [1.4, 1.4]].forEach(function (c) { add(new THREE.CylinderGeometry(0.06, 0.06, 4.2, 4), cg, cx0 + c[0], cy0 + 2.1, c[1]); });
+        [[0, 1.4], [0, -1.4]].forEach(function (c) { add(new THREE.BoxGeometry(2.9, 0.07, 0.07), cg, cx0, cy0 + 4.2, c[1]); add(new THREE.BoxGeometry(2.9, 0.07, 0.07), cg, cx0, cy0 + 1.2, c[1]); });
+        [[1.4, 0], [-1.4, 0]].forEach(function (c) { add(new THREE.BoxGeometry(0.07, 0.07, 2.9), cg, cx0 + c[0], cy0 + 4.2, c[1]); add(new THREE.BoxGeometry(0.07, 0.07, 2.9), cg, cx0 + c[0], cy0 + 1.2, c[1]); });
+        add(new THREE.TorusGeometry(0.85, 0.06, 6, 16), new THREE.MeshLambertMaterial({ color: 0x6b3d2a }), cx0, cy0 + 1.6, 0).rotation.y = Math.PI / 2;
+        var rd = add(new THREE.BoxGeometry(0.18, 4.4, 5.2), new THREE.MeshLambertMaterial({ color: 0x23211f }), -HL - 1.6, 2.5, 1.8); rd.rotation.y = 0.5;
       }
       else { add(new THREE.BoxGeometry(2, 1.3, 2), stone, 0, 0.8, 0); var ob = new THREE.CylinderGeometry(0.4, 0.8, 6, 4); add(ob, stone, 0, 4.4, 0); }
       g.position.set(x, h, -y); cityG.add(g);
