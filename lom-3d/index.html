@@ -996,6 +996,9 @@ body.walking .menubtn { left: auto; right: 16px; }
   var bGroup = new THREE.Group(); scene.add(bGroup);
   var bInfo = [], bbox = [];
   var cxSum = 0, cySum = 0, cnt = 0;
+  (function () { function tileC(c1, c2) { var c = cv(128, 128), q = c.getContext('2d'), r = mulberry(3); q.fillStyle = c1; q.fillRect(0, 0, 128, 128); for (var y = 0; y < 16; y++) for (var x = 0; x < 16; x++) { q.fillStyle = 'rgba(' + (r() < 0.5 ? c2 : '255,255,255') + ',' + (0.05 + r() * 0.12) + ')'; q.fillRect(x * 8 + (y % 2) * 4, y * 8, 7, 7); } q.fillStyle = 'rgba(40,20,10,.3)'; for (var l = 0; l < 16; l++) q.fillRect(0, l * 8 + 7, 128, 1); var t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(0.12, 0.12); return t; }
+    var brown = new THREE.MeshLambertMaterial({ map: tileC('#9a5a42', '80,40,25') }), cream = new THREE.MeshLambertMaterial({ color: 0x9c9a92 });
+    window.__roofOv = { 610526401: brown, 610520669: brown, 610520671: cream }; })();
   D.buildings.forEach(function (b) {
     if (b.id === 611224882 || b.id === 610532862) return;
     var q = pts(b.p), area = polyArea(b.p), P = plan(b, area), g;
@@ -1007,7 +1010,7 @@ body.walking .menubtn { left: auto; right: 16px; }
       try { ob = obb(q); } catch (e) { ob = null; }
       if (ob && ob.A > 0 && area / ob.A > 0.86 && ob.b >= 1.8 && ob.b <= (P.st === 'block' ? 7.5 : 9)) { pitched = true; rh = P.st === 'block' ? Math.max(1.2, Math.min(2.2, ob.b * 0.26)) : Math.max(1.1, Math.min(3.4, ob.b * 0.5)); }
     }
-    var m = new THREE.Mesh(g, [pitched ? gableMat(b.id) : flatMat(b.id), wallMat(P.st, b.id)]);
+    var m = new THREE.Mesh(g, [window.__roofOv && window.__roofOv[b.id] ? window.__roofOv[b.id] : (pitched ? gableMat(b.id) : flatMat(b.id)), wallMat(P.st, b.id)]);
     m.castShadow = true; m.receiveShadow = true; m.position.y = bz;
     m.userData = { i: bInfo.length, base: m.material, owner: null, roof: null };
     m.userData.owner = m;
@@ -2138,6 +2141,23 @@ body.walking .menubtn { left: auto; right: 16px; }
       function grove(cx, cy, rx, ry, n, rmin, rmax) { for (var i = 0; i < n; i++) { var a = R() * 6.283, d = Math.sqrt(R()), px = cx + Math.cos(a) * d * rx, py = cy + Math.sin(a) * d * ry, p = M(px, py), rr = rmin + R() * (rmax - rmin), h = hAt(p[0], p[1]), tg = new THREE.Group(), tk = new THREE.Mesh(new THREE.CylinderGeometry(0.25 * rr / 4, 0.4 * rr / 4, rr * 1.2, 5), new THREE.MeshLambertMaterial({ color: 0x5b4636 })); tk.position.y = rr * 0.6; tg.add(tk); var cr = new THREE.Mesh(new THREE.IcosahedronGeometry(rr, 1), new THREE.MeshLambertMaterial({ color: R() < 0.4 ? 0x2c5a2a : 0x3e7a35, flatShading: true })); cr.scale.set(1, 0.85, 1); cr.position.y = rr * 1.6; cr.castShadow = true; tg.add(cr); tg.position.set(p[0], h, -p[1]); cityG.add(tg); } }
       grove(330, 740, 100, 130, 14, 3.6, 5.4); grove(650, 930, 70, 70, 9, 3.4, 5.0); grove(100, 1200, 150, 90, 20, 3.8, 5.6); grove(400, 1200, 220, 90, 22, 3.8, 5.6); grove(80, 1000, 70, 120, 8, 3.5, 5.0); grove(70, 700, 70, 60, 5, 2.4, 3.6); grove(560, 1140, 90, 70, 8, 3.4, 4.8);
       for (var ci = 0; ci < 14; ci++) { var cp = M(40 + R() * 380, 700 + R() * 280), ch = hAt(cp[0], cp[1]), cn = new THREE.Mesh(new THREE.ConeGeometry(1.3, 4.5, 7), new THREE.MeshLambertMaterial({ color: 0x274d29, flatShading: true })); cn.position.set(cp[0], ch + 2.2, -cp[1]); cityG.add(cn); }
+    })();
+
+    /* ---- Central square, town park and market stalls (read from the author's satellite screenshots; positions approximate) ---- */
+    (function () {
+      var R = mulberry(8812), pj = cv(256, 256), pq = pj.getContext('2d'); pq.fillStyle = '#a6a193'; pq.fillRect(0, 0, 256, 256); pq.strokeStyle = 'rgba(80,76,68,.5)'; pq.lineWidth = 2; for (var g = 0; g <= 256; g += 32) { pq.beginPath(); pq.moveTo(g, 0); pq.lineTo(g, 256); pq.stroke(); pq.beginPath(); pq.moveTo(0, g); pq.lineTo(256, g); pq.stroke(); }
+      var pt = new THREE.CanvasTexture(pj); pt.wrapS = pt.wrapT = THREE.RepeatWrapping; pt.repeat.set(7, 6);
+      function flat(cx, cy, w, h, mat, lift, ro) { var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); m.rotation.x = -Math.PI / 2; m.position.set(cx, hAt(cx, cy) + lift, -cy); m.renderOrder = ro; cityG.add(m); return m; }
+      var po = function (f) { return { polygonOffset: true, polygonOffsetFactor: f, polygonOffsetUnits: f }; };
+      flat(350, 985, 72, 60, new THREE.MeshLambertMaterial(Object.assign({ map: pt }, po(-6))), 0.3, 7);
+      var bed = new THREE.MeshLambertMaterial(Object.assign({ color: 0x5f8a45 }, po(-9)));
+      [[336, 972, 4, 22], [346, 970, 14, 3], [350, 982, 8, 9], [338, 996, 4, 18], [362, 994, 12, 3]].forEach(function (b) { flat(b[0], b[1], b[2], b[3], bed, 0.36, 9); });
+      var fd = new THREE.Mesh(new THREE.CircleGeometry(2.4, 20), new THREE.MeshLambertMaterial(Object.assign({ color: 0x8a867c }, po(-10)))); fd.rotation.x = -Math.PI / 2; fd.position.set(330, hAt(330, 1008) + 0.4, -1008); fd.renderOrder = 10; cityG.add(fd);
+      var stall = new THREE.MeshLambertMaterial({ color: 0xf1f0ea });
+      for (var i = 0; i < 6; i++) { [[372 + i * 3.6, 960], [374 + i * 3.6, 952]].forEach(function (p) { var sb = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.3, 2.6), stall); sb.position.set(p[0], hAt(p[0], p[1]) + 1.2, -p[1]); sb.castShadow = true; cityG.add(sb); }); }
+      /* park: dense mixed grove with a small stepped arc */
+      for (var k = 0; k < 90; k++) { var x = 378 + R() * 108, y = 952 + R() * 98, rr = 3.6 + R() * 2.6, h = hAt(x, y), tg = new THREE.Group(), tk = new THREE.Mesh(new THREE.CylinderGeometry(0.3 * rr / 4, 0.45 * rr / 4, rr * 1.2, 5), new THREE.MeshLambertMaterial({ color: 0x5b4636 })); tk.position.y = rr * 0.6; tg.add(tk); var cr = new THREE.Mesh(new THREE.IcosahedronGeometry(rr, 1), new THREE.MeshLambertMaterial({ color: R() < 0.5 ? 0x2a5528 : 0x3b7433, flatShading: true })); cr.scale.set(1, 0.85, 1); cr.position.y = rr * 1.6; cr.castShadow = true; tg.add(cr); tg.position.set(x, h, -y); cityG.add(tg); }
+      var ar = new THREE.Mesh(new THREE.RingGeometry(3.2, 5.2, 20, 3, 0, Math.PI), new THREE.MeshLambertMaterial(Object.assign({ color: 0xd9d3c4, side: THREE.DoubleSide }, po(-9)))); ar.rotation.x = -Math.PI / 2; ar.position.set(466, hAt(466, 1018) + 0.4, -1018); ar.renderOrder = 10; cityG.add(ar);
     })();
     /* ---- OSM extras: retaining wall, sports pitches, better amphitheatre and barge memorial ---- */
     (function () {
