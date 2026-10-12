@@ -998,6 +998,7 @@ body.walking .menubtn { left: auto; right: 16px; }
   var bInfo = [], bbox = [];
   var cxSum = 0, cySum = 0, cnt = 0;
   D.buildings.forEach(function (b) {
+    if (b.id === 611224882) return;
     var q = pts(b.p), area = polyArea(b.p), P = plan(b, area), g;
     try { g = new THREE.ExtrudeGeometry(shapeOf(b.p), { depth: P.H, bevelEnabled: false, UVGenerator: WALL_UV }); } catch (e) { return; }
     g.rotateX(-Math.PI / 2);
@@ -1744,6 +1745,43 @@ body.walking .menubtn { left: auto; right: 16px; }
         [[[744, 345], [800, 345], [800, 520], [744, 520]], [[858, 345], [918, 345], [918, 520], [858, 520]], [[744, 540], [796, 540], [796, 725], [744, 725]], [[862, 540], [918, 540], [918, 725], [862, 725]]].forEach(function (bd) { flat(bd, new THREE.MeshLambertMaterial({ color: 0x5e8a40, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8 }), 0.18); });
         fence([[736, 330], [736, 735]], 0.5); fence([[925, 330], [925, 735]], 0.5); fence([[736, 735], [925, 735]], 0.5);
         tree(760, 730, 2.0, false); tree(905, 742, 2.2, false); tree(930, 560, 2.4, true);
+      })();
+
+      /* Club Arena / Lucky bet, ul. Dunavska 51 (OSM id 611224882): 3 levels, cream brick-pattern facade with square recessed windows, glazed ground floor, canopy, stairs with gold rails (from the author's street photos) */
+      (function () {
+        var bb = null; D.buildings.forEach(function (b) { if (b.id === 611224882) bb = b; }); if (!bb) return;
+        var q = pts(bb.p), n = q.length, i, ar = 0, cx = 0, cy = 0; q.forEach(function (v, k) { var w = q[(k + 1) % n]; ar += v[0] * w[1] - w[0] * v[1]; cx += v[0]; cy += v[1]; }); cx /= n; cy /= n; if (ar < 0) q.reverse();
+        var base = 1e9; q.forEach(function (v) { base = Math.min(base, hAt(v[0], v[1])); }); base += 0.05;
+        var HT = 10.8, HG = 5.0;
+        function brickCanvas() { var c = cv(256, 512), g2 = c.getContext('2d'), r = mulberry(21); g2.fillStyle = '#e9e1cc'; g2.fillRect(0, 0, 256, 512);
+          g2.fillStyle = '#d7cdb2'; for (var row = 0; row < 12; row++) for (var k = 0; k < 4; k++) { var off = (row % 2) * 32; g2.fillStyle = 'rgba(' + (200 + r() * 20 | 0) + ',' + (190 + r() * 20 | 0) + ',165,0.45)'; g2.fillRect(k * 64 + off + 2, 20 + row * 20 + 2, 60, 16); }
+          g2.strokeStyle = 'rgba(150,140,115,.7)'; g2.lineWidth = 1.5; for (var l = 0; l <= 12; l++) { g2.beginPath(); g2.moveTo(0, 20 + l * 20); g2.lineTo(256, 20 + l * 20); g2.stroke(); }
+          function rec(x0, y0) { g2.fillStyle = '#e4dcc6'; g2.beginPath(); g2.moveTo(x0, y0); g2.lineTo(x0 + 62, y0); g2.lineTo(x0 + 62, y0 + 62); g2.lineTo(x0, y0 + 62); g2.fill(); g2.fillStyle = '#c9bfa3'; g2.fillRect(x0 + 8, y0 + 8, 46, 46); g2.fillStyle = '#4a4a4c'; g2.fillRect(x0 + 15, y0 + 15, 32, 32); g2.fillStyle = 'rgba(160,185,200,.5)'; g2.fillRect(x0 + 15, y0 + 15, 32, 14); }
+          rec(96, 30); rec(96, 176);
+          g2.fillStyle = '#3c2c22'; g2.fillRect(0, 262, 256, 14); g2.fillStyle = '#6b5a45'; g2.fillRect(0, 276, 256, 236);
+          g2.fillStyle = '#1d2a33'; for (var w = 0; w < 3; w++) { g2.fillRect(14 + w * 80, 300, 66, 130); g2.fillStyle = 'rgba(140,170,190,.25)'; g2.fillRect(14 + w * 80, 300, 66, 40); g2.fillStyle = '#1d2a33'; }
+          g2.fillStyle = '#7d6b52'; g2.fillRect(0, 436, 256, 76); g2.fillStyle = '#5a4a38'; for (var d = 0; d < 6; d++) { g2.beginPath(); g2.moveTo(20 + d * 40, 446); g2.lineTo(34 + d * 40, 468); g2.lineTo(20 + d * 40, 490); g2.lineTo(6 + d * 40, 468); g2.fill(); }
+          return c; }
+        var wallM = new THREE.MeshLambertMaterial({ map: texOf(brickCanvas(), 1, 1), side: THREE.DoubleSide }), dark = new THREE.MeshLambertMaterial({ color: 0x4a3a2c }), gold = new THREE.MeshLambertMaterial({ color: 0xb8964a }), stairM = new THREE.MeshLambertMaterial({ color: 0xbdb3a2 }), stairR = new THREE.MeshLambertMaterial({ color: 0xa8553a });
+        var g = new THREE.Group(), edges = [];
+        for (i = 0; i < n; i++) { var j = (i + 1) % n, a = q[i], b = q[j], dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy); edges.push({ a: a, b: b, len: len, nx: dy / len, ny: -dx / len, tx: dx / len, ty: dy / len }); }
+        edges.forEach(function (e) { var nu = Math.max(1, Math.round(e.len / 5)), gm = new THREE.BufferGeometry();
+          gm.setAttribute('position', new THREE.Float32BufferAttribute([e.a[0], base, -e.a[1], e.b[0], base, -e.b[1], e.b[0], base + HT, -e.b[1], e.a[0], base + HT, -e.a[1]], 3));
+          gm.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, nu, 0, nu, 1, 0, 1], 2)); gm.setIndex([0, 1, 2, 0, 2, 3]); gm.computeVertexNormals(); var m = new THREE.Mesh(gm, wallM); m.castShadow = true; g.add(m); });
+        /* flat roof + parapet */
+        var rsh = new THREE.Shape(q.map(function (p) { return new THREE.Vector2(p[0], p[1]); })), rgeo = new THREE.ShapeGeometry(rsh); rgeo.rotateX(-Math.PI / 2); var roof = new THREE.Mesh(rgeo, new THREE.MeshLambertMaterial({ color: 0x8b6f5c })); roof.position.y = base + HT - 0.15; g.add(roof);
+        edges.forEach(function (e) { var p = new THREE.Mesh(new THREE.BoxGeometry(e.len, 0.7, 0.35), new THREE.MeshLambertMaterial({ color: 0xcfc6ae })); p.position.set((e.a[0] + e.b[0]) / 2, base + HT + 0.2, -(e.a[1] + e.b[1]) / 2); p.rotation.y = Math.atan2(e.ty, e.tx); g.add(p); });
+        /* front (entrance) side: the edge facing the street Panayot Hitov (north) */
+        var fr = null, fb = -9; edges.forEach(function (e) { if (e.len < 10) return; var sc = e.ny * 0.9 + e.nx * -0.2; if (sc > fb) { fb = sc; fr = e; } });
+        if (fr) { var th = Math.atan2(fr.ty, fr.tx), mx = (fr.a[0] + fr.b[0]) / 2, my = (fr.a[1] + fr.b[1]) / 2, ox = fr.nx, oy = fr.ny, W = fr.len, hb = base;
+          function put(mesh, lx, lz, y) { mesh.position.set(mx + fr.tx * lx + ox * lz, hb + y, -(my + fr.ty * lx + oy * lz)); mesh.rotation.y = th; g.add(mesh); return mesh; }
+          put(new THREE.Mesh(new THREE.BoxGeometry(W + 0.6, 0.45, 2.6), dark), 0, 1.3, HG + 0.2).castShadow = true;                       /* canopy */
+          put(new THREE.Mesh(new THREE.BoxGeometry(7.2, 3.6, 0.3), new THREE.MeshLambertMaterial({ color: 0x1e1a17 })), 0, 0.2, 2.1);        /* dark entrance recess */
+          for (var s = 0; s < 8; s++) put(new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.2, 3.4 - s * 0.38), s % 2 ? stairR : stairM), 0, 0.3 + (3.4 - s * 0.38) / 2, 0.1 + s * 0.2 - 1.2 + 1.2);
+          [-3.9, 3.9, 0].forEach(function (lx) { put(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0, 6), gold), lx, 3.3, 1.0); put(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 3.2), gold), lx, 1.7, 1.55).rotation.x = 0; });
+          [-1, 1].forEach(function (sd) { put(new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.4, 2.0), new THREE.MeshLambertMaterial({ color: 0xb9ae94 })), sd * (W / 2 - 3.6), 1.4, 0.7); }); }
+        cityG.add(g);
+        var pk = new THREE.Mesh(new THREE.CylinderGeometry(15, 15, 14, 8), new THREE.MeshBasicMaterial({ visible: false })); pk.position.set(cx, base + 7, -cy); pk.userData = { title: 'Club Arena / Lucky bet', text: 'ул. Дунавска 51, 3 етажа. Контурът е от OpenStreetMap; фасадата, козирката и стълбите са по снимки, размерите са приблизителни.' }; cityG.add(pk); window.__monPick.push(pk);
       })();
       /* Historical museum Lom (ul. Eremiya Balgarov 6): footprint from the cadastre, 2 floors, hipped tile roof, green-white facade with grilles, relief fence */
       (function () {
