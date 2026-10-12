@@ -517,7 +517,7 @@ body.walking .menubtn { left: auto; right: 16px; }
       ' col *= 0.22 + 0.78 * uDay; a *= 1.0 - smoothstep(3500.0, 7000.0, length(cameraPosition - vW)); gl_FragColor = vec4(col, a);\n#include <fog_fragment>\n}'
   });
   var waterBits = null, waterResolve, waterReady = new Promise(function (r) { waterResolve = r; });
-  function inWater(x, y) { if (!waterBits) return false; var c = Math.floor((x - SB[0]) / (SB[1] - SB[0]) * waterBits.w), r = Math.floor((SB[3] - y) / (SB[3] - SB[2]) * waterBits.h); return c >= 0 && r >= 0 && c < waterBits.w && r < waterBits.h && waterBits.a[r * waterBits.w + c] === 1; }
+  window.__inW = function (x, y) { return inWater(x, y); }; function inWater(x, y) { if (!waterBits) return false; var c = Math.floor((x - SB[0]) / (SB[1] - SB[0]) * waterBits.w), r = Math.floor((SB[3] - y) / (SB[3] - SB[2]) * waterBits.h); return c >= 0 && r >= 0 && c < waterBits.w && r < waterBits.h && waterBits.a[r * waterBits.w + c] === 1; }
   var waterSurf = new THREE.Mesh(terrainGeo(SB[0], SB[1], SB[2], SB[3], 30, 0.07, false, SB), waterMat);
   waterSurf.renderOrder = 2.7; waterSurf.frustumCulled = false; scene.add(waterSurf);
   (function () {
@@ -2034,6 +2034,12 @@ body.walking .menubtn { left: auto; right: 16px; }
             var land = false, ex = null; for (var bx = 420; bx < 1300; bx += 2) { var w = inWater(bx, by); if (!w) land = true; else if (land) { ex = bx; break; } }
             if (ex === null || ex < 560) continue;
             for (var d = 4; d < 28; d += 8) tile(ex - d, by + 4, conM);
+          }
+          /* coal yard on the east bank in the southern part of the basin, concrete apron across the south end */
+          for (var cy2 = 1240; cy2 < 1570; cy2 += 8) {
+            var e2 = null; for (var q2 = 600; q2 < 1000; q2 += 2) { if (inWater(q2, cy2 + 4)) { for (var q3 = q2; q3 < q2 + 200; q3 += 2) if (!inWater(q3, cy2 + 4)) { e2 = q3; break; } break; } }
+            if (e2 === null) { for (var xs3 = 680; xs3 < 860; xs3 += 8) if (cy2 < 1280) tile(xs3, cy2 + 4, conM); continue; }
+            for (var dd = 3; dd < 130; dd += 8) tile(e2 + dd, cy2 + 4, coalM);
           }
         })();
         window.__portBasin = bq;
