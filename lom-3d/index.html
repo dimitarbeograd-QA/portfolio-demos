@@ -1528,7 +1528,7 @@ body.walking .menubtn { left: auto; right: 16px; }
     pipes(pipeW, 0x2a86e0); pipes(pipeS, 0x9a6a35);
     window.__infraStat = { poles: poles.length, wires: (wseg.length + dseg.length) / 6, ktp: tr.length, pipeKm: Math.round(pipeW.length / 4 * 42 / 1000) };
     /* --- street lighting, parks, the Danube promenade and monuments (OSM: parks, promenade and monuments are real; lamps are placed along streets with houses) --- */
-    var C2 = {"mon":[{"p":[3942,10046],"n":"","k":"monument","sub":""},{"p":[4637,10301],"n":"Кръстьо Пишурка","k":"monument","sub":""},{"p":[4651,9881],"n":"Никола Първанов","k":"monument","sub":""},{"p":[-2765,17138],"n":"Шлеп-паметник","k":"memorial","sub":""},{"p":[3554,10381],"n":"","k":"monument","sub":""},{"p":[-2398,17037],"n":"полк. Стефан Илиев","k":"monument","sub":""},{"p":[-2467,16994],"n":"100 години от Чеганската епопея","k":"monument","sub":""},{"p":[3547,9565],"n":"Васил Левски","k":"monument","sub":""}],"park":[{"p":[-6208,16636,-5811,16879,-5351,17160,-5390,17282,-5251,17334,-5220,17241,-4879,17449,-2687,17899,-20,18249,177,16970,-524,16866,-689,16484,-910,16144,-1305,16330,-1488,16676,-1843,16614,-1887,16865,-2432,16831,-4385,16568,-4611,16537,-5156,16463,-6016,16347,-6044,16389,-6130,16520,-6208,16636],"n":"Дунавски парк"},{"p":[3902,5616,6299,5793,6384,4908,5940,4920,5882,5500,5490,5472,3921,5350,3902,5616],"n":""},{"p":[3770,10547,4500,10627,4809,10663,4909,9624,4534,9590,4038,9549,3849,9535,3817,9954,3802,10142,3784,10371,3770,10547],"n":""},{"p":[3950,4932,3658,4925,3655,4957,3616,5404,3466,7108,3370,8862,3641,8893,3762,7322,3886,5843,3902,5616,3921,5350,3950,4932],"n":""},{"p":[2817,-8520,2981,-7746,3698,-7828,3644,-8800,2817,-8520],"n":""},{"p":[4134,3115,3863,3088,3720,4701,3988,4723,4134,3115],"n":""}],"prom":[{"p":[2215,11857,1960,12425,1931,12491,1459,13508,1417,13545,1228,13989,905,14714,727,15101,313,16001]},{"p":[3040,10379,2624,11119,2273,11746]},{"p":[1687,12299,1960,12425]},{"p":[1690,12542,1931,12491]},{"p":[727,14700,905,14714]}],"lamp":[[8312,12070],[4552,17803],[5029,18609],[2917,18072],[6835,8862],[7120,7173]],"play":[]}; window.__C2 = C2;
+    var C2 = {"mon":[{"p":[3942,10046],"n":"","k":"monument","sub":""},{"p":[4637,10301],"n":"Кръстьо Пишурка","k":"monument","sub":""},{"p":[4651,9881],"n":"Никола Първанов","k":"monument","sub":""},{"p":[-2765,17138],"n":"Шлеп-паметник","k":"memorial","sub":""},{"p":[3554,10381],"n":"Дядо Цеко Войвода","k":"monument","sub":""},{"p":[-2398,17037],"n":"полк. Стефан Илиев","k":"monument","sub":""},{"p":[-2467,16994],"n":"100 години от Чеганската епопея","k":"monument","sub":""},{"p":[3547,9565],"n":"Васил Левски","k":"monument","sub":""}],"park":[{"p":[-6208,16636,-5811,16879,-5351,17160,-5390,17282,-5251,17334,-5220,17241,-4879,17449,-2687,17899,-20,18249,177,16970,-524,16866,-689,16484,-910,16144,-1305,16330,-1488,16676,-1843,16614,-1887,16865,-2432,16831,-4385,16568,-4611,16537,-5156,16463,-6016,16347,-6044,16389,-6130,16520,-6208,16636],"n":"Дунавски парк"},{"p":[3902,5616,6299,5793,6384,4908,5940,4920,5882,5500,5490,5472,3921,5350,3902,5616],"n":""},{"p":[3770,10547,4500,10627,4809,10663,4909,9624,4534,9590,4038,9549,3849,9535,3817,9954,3802,10142,3784,10371,3770,10547],"n":""},{"p":[3950,4932,3658,4925,3655,4957,3616,5404,3466,7108,3370,8862,3641,8893,3762,7322,3886,5843,3902,5616,3921,5350,3950,4932],"n":""},{"p":[2817,-8520,2981,-7746,3698,-7828,3644,-8800,2817,-8520],"n":""},{"p":[4134,3115,3863,3088,3720,4701,3988,4723,4134,3115],"n":""}],"prom":[{"p":[2215,11857,1960,12425,1931,12491,1459,13508,1417,13545,1228,13989,905,14714,727,15101,313,16001]},{"p":[3040,10379,2624,11119,2273,11746]},{"p":[1687,12299,1960,12425]},{"p":[1690,12542,1931,12491]},{"p":[727,14700,905,14714]}],"lamp":[[8312,12070],[4552,17803],[5029,18609],[2917,18072],[6835,8862],[7120,7173]],"play":[]}; window.__C2 = C2;
     var lampG = new THREE.Group(), cityG = new THREE.Group(); scene.add(lampG); scene.add(cityG); window.__lampG = lampG; window.__cityG = cityG; window.__monPick = [];
     function inPoly(x, y, q) { var c = false; for (var i = 0, j = q.length - 1; i < q.length; j = i++) if ((q[i][1] > y) !== (q[j][1] > y) && x < (q[j][0] - q[i][0]) * (y - q[i][1]) / (q[j][1] - q[i][1]) + q[i][0]) c = !c; return c; }
     var parks = C2.park.map(function (z) { var q = pts(z.p); return { q: q, n: z.n, a: polyArea(z.p) }; });
@@ -1592,10 +1592,20 @@ body.walking .menubtn { left: auto; right: 16px; }
     /* monuments */
     var stone = new THREE.MeshLambertMaterial({ color: 0xc8c3b8 }), bronze = new THREE.MeshLambertMaterial({ color: 0x5c6b52 }), plaza = new THREE.MeshLambertMaterial({ color: 0xaaa597 });
     C2.mon.forEach(function (m) {
-      var x = m.p[0] / 10, y = m.p[1] / 10, h = hAt(x, y), g = new THREE.Group(), nm = m.n || 'Паметник', ud = { title: nm, text: 'Паметник по данни от OpenStreetMap. Мястото е по данните, видът е условен.' };
+      var x = m.p[0] / 10, y = m.p[1] / 10, h = hAt(x, y), g = new THREE.Group(), nm = m.n || 'Паметник', ud = { title: nm, text: (/Цеко/.test(nm) ? 'Паметник на дядо Цеко Войвода със знамената на общината, България и ЕС. Видът е по снимки на автора, мястото е по OSM (може да е неточно).' : 'Паметник по данни от OpenStreetMap. Мястото е по данните, видът е условен.') };
       var disc = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 0.2, 16), plaza); disc.position.y = 0.1; g.add(disc);
       function add(geo, mat, px, py, pz) { var mm = new THREE.Mesh(geo, mat); mm.position.set(px, py, pz); mm.castShadow = true; g.add(mm); return mm; }
-      if (/Левски/.test(nm) || /Пишурка|Първанов|Илиев/.test(nm)) { add(new THREE.BoxGeometry(2.2, 2.6, 2.2), stone, 0, 1.5, 0); add(new THREE.CylinderGeometry(0.35, 0.45, 1.9, 8), bronze, 0, 3.8, 0); add(new THREE.SphereGeometry(0.3, 8, 6), bronze, 0, 5, 0); }
+      if (/Цеко/.test(nm)) {
+        var bz = new THREE.MeshLambertMaterial({ color: 0x3d3c36 });
+        add(new THREE.BoxGeometry(2.6, 1.5, 2.2), stone, 0, 0.9, 0); add(new THREE.BoxGeometry(1.9, 0.5, 1.6), stone, 0, 1.9, 0);
+        add(new THREE.CylinderGeometry(0.17, 0.2, 1.0, 8), bz, -0.22, 2.65, 0); add(new THREE.CylinderGeometry(0.17, 0.2, 1.0, 8), bz, 0.22, 2.65, 0);
+        add(new THREE.CylinderGeometry(0.34, 0.5, 1.3, 10), bz, 0, 3.55, 0); add(new THREE.BoxGeometry(0.85, 0.3, 0.42), bz, 0, 4.1, 0); add(new THREE.SphereGeometry(0.24, 10, 8), bz, 0, 4.4, 0); add(new THREE.CylinderGeometry(0.26, 0.28, 0.2, 10), bz, 0, 4.6, 0);
+        add(new THREE.BoxGeometry(0.12, 1.1, 0.12), bz, 0.5, 3.5, 0.1).rotation.z = -0.15; add(new THREE.BoxGeometry(0.06, 0.06, 1.3), new THREE.MeshLambertMaterial({ color: 0x777b80 }), -0.4, 3.0, 0.4);
+        function flagTex(kind) { var c = cv(96, 64), q = c.getContext('2d'); if (kind === 0) { q.fillStyle = '#5aa6dc'; q.fillRect(0, 0, 96, 64); q.fillStyle = '#fff'; q.beginPath(); q.arc(48, 32, 12, 0, 6.3); q.fill(); q.fillStyle = '#c8402e'; q.fillRect(44, 24, 8, 16); } else if (kind === 1) { q.fillStyle = '#fff'; q.fillRect(0, 0, 96, 22); q.fillStyle = '#00966e'; q.fillRect(0, 22, 96, 21); q.fillStyle = '#d62612'; q.fillRect(0, 43, 96, 21); } else { q.fillStyle = '#0b3fa0'; q.fillRect(0, 0, 96, 64); q.fillStyle = '#ffd400'; for (var i = 0; i < 12; i++) { q.beginPath(); q.arc(48 + Math.cos(i / 12 * 6.283) * 20, 32 + Math.sin(i / 12 * 6.283) * 20, 3, 0, 6.3); q.fill(); } } return new THREE.CanvasTexture(c); }
+        [0, 1, 2].forEach(function (i) { var px = -2.2 + i * 2.2; add(new THREE.CylinderGeometry(0.05, 0.06, 8, 6), new THREE.MeshLambertMaterial({ color: 0xcfd3d6 }), px, 4, -2.6); var fl = add(new THREE.PlaneGeometry(1.9, 1.2), new THREE.MeshLambertMaterial({ map: flagTex(i), side: THREE.DoubleSide }), px + 1.0, 7.2, -2.6); fl.rotation.y = 0.2; });
+        add(new THREE.CylinderGeometry(4.2, 4.2, 1.0, 16, 1, true, Math.PI * 0.15, Math.PI * 0.7), stone, 0, 0.6, -3.4);
+        var sp = [[5.5, 0.8], [5.5, 3.6], [5.5, 6]]; sp.forEach(function (s, i) { add(new THREE.ConeGeometry(2.8 - i * 0.7, 3.2, 8), new THREE.MeshLambertMaterial({ color: 0x4c7f88, flatShading: true }), 5.5, 2.2 + i * 2.1, 1.2); });
+      } else if (/Левски/.test(nm) || /Пишурка|Първанов|Илиев/.test(nm)) { add(new THREE.BoxGeometry(2.2, 2.6, 2.2), stone, 0, 1.5, 0); add(new THREE.CylinderGeometry(0.35, 0.45, 1.9, 8), bronze, 0, 3.8, 0); add(new THREE.SphereGeometry(0.3, 8, 6), bronze, 0, 5, 0); }
       else if (/Шлеп/.test(nm)) { add(new THREE.BoxGeometry(7, 0.9, 2.4), new THREE.MeshLambertMaterial({ color: 0x555a60 }), 0, 1, 0); add(new THREE.BoxGeometry(2, 1.2, 1.6), new THREE.MeshLambertMaterial({ color: 0x8a8d90 }), -1.5, 2, 0); }
       else { add(new THREE.BoxGeometry(2, 1.3, 2), stone, 0, 0.8, 0); var ob = new THREE.CylinderGeometry(0.4, 0.8, 6, 4); add(ob, stone, 0, 4.4, 0); }
       g.position.set(x, h, -y); cityG.add(g);
@@ -1654,6 +1664,76 @@ body.walking .menubtn { left: auto; right: 16px; }
       [[0, -15, 50, 1.4], [0, 15, 50, 1.4], [-25, 0, 1.4, 30], [25, 0, 1.4, 30]].forEach(function (s) { var m = new THREE.Mesh(new THREE.BoxGeometry(s[2], 1.6, s[3]), ruin); m.position.set(s[0], 0.8, s[1]); m.castShadow = true; ga.add(m); });
       [[-25, -15], [25, -15], [-25, 15], [25, 15]].forEach(function (s) { var m = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.3, 3, 10), ruin); m.position.set(s[0], 1.5, s[1]); m.castShadow = true; ga.add(m); });
       ga.position.set(al[0], ha, -al[1]); ga.rotation.y = 0.3; cityG.add(ga); pick(al[0], al[1], ha, 'Римска крепост Алмус', 'Място по Wikidata. Стените са условни и не следват разкопаното.');
+    })();
+    /* ---- Danube park, quay and beach (shapes from the author's photos; layout follows the park outline) ---- */
+    (function () {
+      var pk0 = parks[0]; if (!pk0 || !/Дунав/.test(pk0.n || '')) return;
+      var shore = pk0.q.slice(0, 9), RD = mulberry(2024), o4 = new THREE.Object3D();
+      function nrm(line, i) { var a = line[Math.max(0, i - 1)], b = line[Math.min(line.length - 1, i + 1)], tx = b[0] - a[0], ty = b[1] - a[1], l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l; var nx = -ty, ny = tx; if (inPoly(line[i][0] + nx * 4, line[i][1] + ny * 4, pk0.q)) { nx = -nx; ny = -ny; } return [nx, ny, tx, ty]; }
+      function offLine(line, d) { return line.map(function (p, i) { var n = nrm(line, i); return [p[0] + n[0] * d, p[1] + n[1] * d]; }); }
+      function sI(geo, mat, items, shadow) { var m = new THREE.InstancedMesh(geo, mat, Math.max(1, items.length)); items.forEach(function (q, i) { o4.position.set(q[0], hAt(q[0], q[1]) + (q[3] || 0), -q[1]); o4.rotation.set(0, q[2] || 0, 0); var s = q[4] || [1, 1, 1]; o4.scale.set(s[0], s[1], s[2]); o4.updateMatrix(); m.setMatrixAt(i, o4.matrix); }); m.count = items.length; m.castShadow = !!shadow; m.frustumCulled = false; cityG.add(m); return m; }
+      var dark = new THREE.MeshLambertMaterial({ color: 0x25272a }), concr = new THREE.MeshLambertMaterial({ color: 0xbfb9aa }), wood = new THREE.MeshLambertMaterial({ color: 0x5b3b27 }), roofW = new THREE.MeshLambertMaterial({ color: 0x5a2f26 }), white = new THREE.MeshLambertMaterial({ color: 0xe4e1d8 });
+      /* quay: concrete strip and black railing on its inner edge */
+      var qAcc = new Acc(20, 0.1); addRibbon(qAcc, offLine(shore, 3.2), 2.2, 2.2, col(0xc2bcad), false); cityG.add(qAcc.mesh(2.96));
+      var posts = [], rails = [], railLine = offLine(shore, 0.8);
+      walk(railLine, 3, function (x, y, tx, ty) { posts.push([x, y, 0]); rails.push([x + tx * 1.5, y + ty * 1.5, -Math.atan2(ty, tx) + 0, 0, [3, 1, 1]]); });
+      sI(new THREE.CylinderGeometry(0.04, 0.04, 1.15, 5).translate(0, 0.57, 0), dark, posts, false);
+      sI(new THREE.BoxGeometry(1, 0.05, 0.05).translate(0, 1.1, 0), dark, rails.map(function (r) { return [r[0], r[1], r[2], 0, [3, 1, 1]]; }), false);
+      sI(new THREE.BoxGeometry(1, 0.03, 0.03).translate(0, 0.55, 0), dark, rails.map(function (r) { return [r[0], r[1], r[2], 0, [3, 1, 1]]; }), false);
+      var bol = []; walk(offLine(shore, 3.4), 26, function (x, y) { bol.push([x, y, 0]); });
+      sI(new THREE.CylinderGeometry(0.28, 0.32, 0.55, 8).translate(0, 0.28, 0), white, bol, false);
+      /* beach: sand and gravel between the quay and the water, only where the terrain is above the water */
+      var bAcc = new Acc(6, 0.07), BR = mulberry(77), sandC = [0xd6c7a2, 0xcbbb95, 0xbfae8a, 0xb4a584, 0xd9ccaa];
+      walk(shore, 4, function (x, y, tx, ty) {
+        var n = nrm([[x - tx, y - ty], [x, y], [x + tx, y + ty]], 1);
+        for (var t = 6; t < 46; t += 3.6) {
+          var cx = x + n[0] * t, cy = y + n[1] * t, hh = hAt(cx, cy); if (hh < 0.9 || hh > 7) continue;
+          var c = col(0xcbbd99).multiplyScalar(0.93 + BR() * 0.09 - Math.min(0.12, hh * 0.02)), hx = tx * 2.1, hy = ty * 2.1, nx = n[0] * 1.9, ny = n[1] * 1.9;
+          var A = [cx - hx - nx, cy - hy - ny], B = [cx + hx - nx, cy + hy - ny], C = [cx + hx + nx, cy + hy + ny], Dd = [cx - hx + nx, cy - hy + ny];
+          bAcc.tri(A, B, C, 0, c); bAcc.tri(A, C, Dd, 0, c);
+        }
+      });
+      var bm = bAcc.mesh(2.75); cityG.add(bm);
+      /* brick path winding through the park */
+      var pathL = []; walk(offLine(shore, -16), 8, function (x, y, tx, ty, k) { var w = Math.sin(k * 0.55) * 4; pathL.push([x - ty * w, y + tx * w]); });
+      var pAcc = new Acc(12, 0.14); addRibbon(pAcc, pathL, 1.3, 1.3, col(0xa9795f), false); cityG.add(pAcc.mesh(2.97));
+      /* gazebos with benches (wooden, six posts, hipped roof) */
+      var gz = [], gl = offLine(shore, -26);
+      walk(gl, 90, function (x, y, tx, ty, k) { if (k > 0 || true) gz.push([x, y]); });
+      gz.forEach(function (c) {
+        var g = new THREE.Group(), x = c[0], y = c[1];
+        var fl = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 0.12, 12), new THREE.MeshLambertMaterial({ color: 0x9a8a78 })); fl.position.y = 0.06; g.add(fl);
+        for (var i = 0; i < 6; i++) { var a = i / 6 * Math.PI * 2, p = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.3, 0.16), wood); p.position.set(Math.cos(a) * 2.3, 1.2, Math.sin(a) * 2.3); p.castShadow = true; g.add(p); if (i % 2 === 0) { var b = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.08, 0.45), wood); b.position.set(Math.cos(a + 0.52) * 1.9, 0.5, Math.sin(a + 0.52) * 1.9); b.rotation.y = -(a + 0.52) + Math.PI / 2; g.add(b); } }
+        var ro = new THREE.Mesh(new THREE.ConeGeometry(3.6, 1.7, 6), roofW); ro.position.y = 3.15; ro.castShadow = true; g.add(ro);
+        g.position.set(x, hAt(x, y), -y); cityG.add(g);
+      });
+      /* trees: weeping willows near the quay, pines and a few blue spruces further in */
+      var wil = [], pin = [], spr = []; walk(offLine(shore, -9), 52, function (x, y, tx, ty, k) { wil.push([x + (RD() - 0.5) * 6, y + (RD() - 0.5) * 6, RD() * 6.28, 0, (function () { var s = 0.9 + RD() * 0.5; return [s, s, s]; })()]); });
+      walk(offLine(shore, -34), 34, function (x, y, tx, ty, k) { (k % 4 === 0 ? spr : pin).push([x + (RD() - 0.5) * 10, y + (RD() - 0.5) * 8, RD() * 6.28, 0, (function () { var s = 0.85 + RD() * 0.5; return [s, s, s]; })()]); });
+      sI(new THREE.CylinderGeometry(0.28, 0.5, 5, 6).translate(0, 2.5, 0), new THREE.MeshLambertMaterial({ color: 0x5b4a38 }), wil, true);
+      sI(new THREE.IcosahedronGeometry(4.2, 1).scale(1.15, 1.0, 1.15).translate(0, 6.5, 0), new THREE.MeshLambertMaterial({ color: 0x7a9a45, flatShading: true }), wil, true);
+      sI(new THREE.CylinderGeometry(0.15, 0.3, 3, 6).translate(0, 1.5, 0), new THREE.MeshLambertMaterial({ color: 0x4d3b2c }), pin.concat(spr), true);
+      sI(new THREE.ConeGeometry(2.6, 5.2, 7).translate(0, 5.2, 0), new THREE.MeshLambertMaterial({ color: 0x25492c, flatShading: true }), pin, true);
+      sI(new THREE.ConeGeometry(2.1, 4.2, 7).translate(0, 8, 0), new THREE.MeshLambertMaterial({ color: 0x25492c, flatShading: true }), pin, true);
+      sI(new THREE.ConeGeometry(2.4, 6.5, 7).translate(0, 5.6, 0), new THREE.MeshLambertMaterial({ color: 0x4c7f88, flatShading: true }), spr, true);
+      /* painted retaining wall (orange mural with boats, reeds and lilies) */
+      (function () {
+        var W = 1536, H = 90, c = cv(W, H), g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#e8a23a'); gr.addColorStop(0.55, '#e08a2c'); gr.addColorStop(1, '#6e5a3d'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+        g.fillStyle = '#7d8a96'; g.fillRect(0, 0, 150, H); g.fillRect(W - 150, 0, 150, H);
+        g.fillStyle = 'rgba(30,50,70,.55)'; g.fillRect(150, H * 0.7, W - 300, H * 0.3);
+        function boat(x, w, hull, name) { g.fillStyle = hull; g.beginPath(); g.moveTo(x, H * 0.62); g.lineTo(x + w, H * 0.62); g.lineTo(x + w * 0.9, H * 0.82); g.lineTo(x + w * 0.1, H * 0.82); g.closePath(); g.fill(); g.fillStyle = '#e9ecee'; g.fillRect(x + w * 0.55, H * 0.45, w * 0.3, H * 0.17); g.fillStyle = '#222'; g.fillRect(x + w * 0.2, H * 0.3, 2, H * 0.32); g.fillStyle = '#fff'; g.font = '7px sans-serif'; g.fillText(name, x + w * 0.15, H * 0.7); }
+        boat(500, 60, '#b83a2c', 'ЗОРА'); boat(570, 70, '#2f4f7a', 'НАДЕЖДА'); boat(650, 130, '#3f8f4c', 'ЛЮБОВ'); boat(1250, 120, '#34485c', '');
+        g.fillStyle = '#c8a070'; for (var i = 0; i < 18; i++) { g.fillRect(830 + i * 16, H * 0.5 - (i % 3) * 5, 12, H * 0.2 + (i % 3) * 5); } g.fillStyle = '#8a3a2c'; g.fillRect(830, H * 0.46, 290, 5);
+        function reed(x, hgt) { g.strokeStyle = '#2e6b34'; g.lineWidth = 4; for (var j = 0; j < 9; j++) { g.beginPath(); g.moveTo(x + j * 6, H); g.quadraticCurveTo(x + j * 6 + (j - 4) * 3, H - hgt * 0.5, x + j * 7 - 12, H - hgt * (0.7 + (j % 3) * 0.1)); g.stroke(); } g.fillStyle = '#6a4a2c'; g.fillRect(x + 20, H - hgt, 5, 14); }
+        reed(330, 70); reed(1160, 66); reed(240, 40);
+        g.fillStyle = '#f2efe6'; [[390, 70], [430, 76], [1210, 74], [1260, 78]].forEach(function (p) { g.beginPath(); g.ellipse(p[0], p[1], 14, 7, 0, 0, 6.3); g.fill(); });
+        var t = new THREE.CanvasTexture(c); t.anisotropy = 4;
+        var mats = [concr, concr, concr, concr, new THREE.MeshLambertMaterial({ map: t }), concr];
+        var mid = Math.floor(shore.length / 2), s0 = shore[mid - 1], s1 = shore[mid + 1], tx = s1[0] - s0[0], ty = s1[1] - s0[1], l = Math.hypot(tx, ty); tx /= l; ty /= l;
+        var n = nrm(shore, mid), cx = shore[mid][0] - n[0] * 7, cy = shore[mid][1] - n[1] * 7, th = Math.atan2(ty, tx);
+        if (n[0] * ty - n[1] * tx < 0) th += Math.PI;
+        var wm = new THREE.Mesh(new THREE.BoxGeometry(60, 3.4, 0.5), mats); wm.position.set(cx, hAt(cx, cy) + 1.7, -cy); wm.rotation.y = th; wm.castShadow = true; cityG.add(wm);
+      })();
     })();
     window.__infraStat.lamps = lamps.length; window.__infraStat.ptrees = ptrees.length;
 
