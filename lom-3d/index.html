@@ -1686,7 +1686,7 @@ body.walking .menubtn { left: auto; right: 16px; }
       var bAcc = new Acc(6, 0.07), BR = mulberry(77), sandC = [0xd6c7a2, 0xcbbb95, 0xbfae8a, 0xb4a584, 0xd9ccaa];
       walk(shore, 4, function (x, y, tx, ty) {
         var n = nrm([[x - tx, y - ty], [x, y], [x + tx, y + ty]], 1);
-        for (var t = 6; t < 46; t += 3.6) {
+        for (var t = 12; t < 50; t += 3.6) {
           var cx = x + n[0] * t, cy = y + n[1] * t, hh = hAt(cx, cy); if (hh < 0.9 || hh > 7) continue;
           var c = col(0xcbbd99).multiplyScalar(0.93 + BR() * 0.09 - Math.min(0.12, hh * 0.02)), hx = tx * 2.1, hy = ty * 2.1, nx = n[0] * 1.9, ny = n[1] * 1.9;
           var A = [cx - hx - nx, cy - hy - ny], B = [cx + hx - nx, cy + hy - ny], C = [cx + hx + nx, cy + hy + ny], Dd = [cx - hx + nx, cy - hy + ny];
@@ -1696,7 +1696,7 @@ body.walking .menubtn { left: auto; right: 16px; }
       var bm = bAcc.mesh(2.75); cityG.add(bm);
       /* brick path winding through the park */
       var pathL = []; walk(offLine(shore, -16), 8, function (x, y, tx, ty, k) { var w = Math.sin(k * 0.55) * 4; pathL.push([x - ty * w, y + tx * w]); });
-      var pAcc = new Acc(12, 0.14); addRibbon(pAcc, pathL, 1.3, 1.3, col(0xa9795f), false); cityG.add(pAcc.mesh(2.97));
+      var pAcc = new Acc(12, 0.14); addRibbon(pAcc, pathL, 1.5, 1.5, col(0xc2685a), false); cityG.add(pAcc.mesh(2.97));
       /* gazebos with benches (wooden, six posts, hipped roof) */
       var gz = [], gl = offLine(shore, -26);
       walk(gl, 90, function (x, y, tx, ty, k) { if (k > 0 || true) gz.push([x, y]); });
@@ -1733,6 +1733,48 @@ body.walking .menubtn { left: auto; right: 16px; }
         var n = nrm(shore, mid), cx = shore[mid][0] - n[0] * 7, cy = shore[mid][1] - n[1] * 7, th = Math.atan2(ty, tx);
         if (n[0] * ty - n[1] * tx < 0) th += Math.PI;
         var wm = new THREE.Mesh(new THREE.BoxGeometry(60, 3.4, 0.5), mats); wm.position.set(cx, hAt(cx, cy) + 1.7, -cy); wm.rotation.y = th; wm.castShadow = true; cityG.add(wm);
+      })();
+    })();
+    /* ---- Lom port: portal cranes, pontoon with ramp and passenger ship, stone-faced embankment (from the drone cover image; layout is approximate) ---- */
+    (function () {
+      var yel = new THREE.MeshLambertMaterial({ color: 0xe0b52a }), gry = new THREE.MeshLambertMaterial({ color: 0x6b6f73 }), hull = new THREE.MeshLambertMaterial({ color: 0x23406e }), whiteM = new THREE.MeshLambertMaterial({ color: 0xeceeef }), orange = new THREE.MeshLambertMaterial({ color: 0xd9692a }), rustM = new THREE.MeshLambertMaterial({ color: 0x7a4a36 });
+      function shoreY(x, y0) { for (var y = y0; y < y0 + 1100; y += 2) if (hAt(x, y) < 1.0) return y; return null; }
+      function crane(x, y, ang) {
+        var g = new THREE.Group();
+        function a(geo, mat, px, py, pz) { var m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; }
+        [[-3, -3], [3, -3], [-3, 3], [3, 3]].forEach(function (l) { a(new THREE.BoxGeometry(0.5, 8, 0.5), yel, l[0], 4, l[1]); });
+        a(new THREE.BoxGeometry(6.8, 0.6, 0.5), yel, 0, 8, -3); a(new THREE.BoxGeometry(6.8, 0.6, 0.5), yel, 0, 8, 3); a(new THREE.BoxGeometry(0.5, 0.6, 6.8), yel, -3, 8, 0); a(new THREE.BoxGeometry(0.5, 0.6, 6.8), yel, 3, 8, 0);
+        a(new THREE.CylinderGeometry(2.2, 2.4, 1.2, 10), gry, 0, 8.9, 0); a(new THREE.BoxGeometry(3.4, 3.4, 3.4), yel, 0, 11, 0); a(new THREE.BoxGeometry(1.4, 1.2, 0.1), new THREE.MeshLambertMaterial({ color: 0x35506b }), 0, 11.4, 1.75);
+        var boom = a(new THREE.BoxGeometry(0.5, 22, 0.5), yel, 0, 0, 0); boom.position.set(0, 18, -8); boom.rotation.x = -0.75; var boom2 = a(new THREE.BoxGeometry(0.5, 22, 0.5), yel, 0, 0, 0); boom2.position.set(1.0, 18, -8); boom2.rotation.x = -0.75;
+        a(new THREE.BoxGeometry(2.6, 2.4, 3), gry, 0, 11, 3.5); a(new THREE.CylinderGeometry(0.04, 0.04, 9, 4), gry, 0, 9, -14.6);
+        g.position.set(x, hAt(x, y), -y); g.rotation.y = ang; cityG.add(g);
+      }
+      var P = 580, sy = shoreY(P, 1300);
+      if (sy !== null) {
+        var cr = 0; for (var x = 480; x < 700 && cr < 9; x += 26) { var s = shoreY(x, 1300); if (s === null) continue; crane(x, s - 48, Math.PI * (0.5 + (cr % 3) * 0.04)); cr++; }
+        /* warehouse behind the cranes */
+        var wy = shoreY(560, 1300); if (wy !== null) { var wh = new THREE.Mesh(new THREE.BoxGeometry(60, 9, 18), new THREE.MeshLambertMaterial({ color: 0x9eb0bd })); wh.position.set(560, hAt(560, wy - 110) + 4.5, -(wy - 110)); wh.castShadow = true; cityG.add(wh); }
+      }
+      window.__portDbg = { sy: sy, cr: typeof cr === 'undefined' ? -1 : cr };
+      /* pontoon, ramp and ship near the east end of the Danube park */
+      var px = -120, py = 1812;
+      if (py !== null) {
+        var g = new THREE.Group();
+        function a2(geo, mat, X, Y, Z) { var m = new THREE.Mesh(geo, mat); m.position.set(X, Y, Z); m.castShadow = true; g.add(m); return m; }
+        a2(new THREE.BoxGeometry(16, 0.9, 6), rustM, 0, 0.45, 50); a2(new THREE.BoxGeometry(2.4, 0.3, 46), orange, 0, 1.3, 26);
+        a2(new THREE.BoxGeometry(44, 2.2, 8), hull, 0, 1.2, 64); a2(new THREE.BoxGeometry(34, 2.4, 7), whiteM, -2, 3.4, 64); a2(new THREE.BoxGeometry(24, 2.2, 6), whiteM, -2, 5.6, 64); a2(new THREE.BoxGeometry(8, 1.6, 5), whiteM, -6, 7.4, 64);
+        g.position.set(px, 0, -py); g.rotation.y = Math.PI; g.position.y = 0.2; cityG.add(g);
+      }
+      /* stone-faced embankment between the quay and the beach */
+      (function () {
+        var pk0 = parks[0]; if (!pk0 || !/Дунав/.test(pk0.n || '')) return;
+        var shore = pk0.q.slice(0, 9), c = cv(128, 64), q = c.getContext('2d'); q.fillStyle = '#9b988c'; q.fillRect(0, 0, 128, 64);
+        for (var r = 0; r < 4; r++) for (var i = 0; i < 4; i++) { var ox = (r % 2) * 16, v = 0.9 + ((r * 5 + i * 3) % 7) * 0.025; q.fillStyle = 'rgb(' + Math.round(150 * v) + ',' + Math.round(147 * v) + ',' + Math.round(136 * v) + ')'; q.fillRect(i * 32 + ox + 1, r * 16 + 1, 30, 14); }
+        var tx = new THREE.CanvasTexture(c); tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.repeat.set(1, 1);
+        function nrm(line, i) { var a = line[Math.max(0, i - 1)], b = line[Math.min(line.length - 1, i + 1)], X = b[0] - a[0], Y = b[1] - a[1], l = Math.hypot(X, Y) || 1; X /= l; Y /= l; var nx = -Y, ny = X; if (inPoly(line[i][0] + nx * 4, line[i][1] + ny * 4, pk0.q)) { nx = -nx; ny = -ny; } return [nx, ny]; }
+        var line = shore.map(function (p, i) { var n = nrm(shore, i); return [p[0] + n[0] * 8.5, p[1] + n[1] * 8.5]; });
+        var sAcc = new Acc(10, 0.09); sAcc.uv = []; addRibbon(sAcc, line, 3.2, 3.2, col(0xffffff), true);
+        var sm = sAcc.mesh(2.97); sm.material.map = tx; sm.material.needsUpdate = true; cityG.add(sm);
       })();
     })();
     window.__infraStat.lamps = lamps.length; window.__infraStat.ptrees = ptrees.length;
