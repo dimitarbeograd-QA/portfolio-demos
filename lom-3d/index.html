@@ -124,6 +124,7 @@ body.walking .menubtn { left: auto; right: 16px; }
       <button class="tog" data-layer="power" aria-pressed="true" title="110 kV от OSM; ниското напрежение е примерно">Ел. мрежа</button>
       <button class="tog" data-layer="ant" aria-pressed="true" title="Условно разположение — няма отворени данни за мачтите">Антени (примерно)</button>
       <button class="tog" data-layer="lamp" aria-pressed="true" title="Уличните лампи са по улици със сгради; 6 са реални от OSM">Улично осветление</button>
+      <button class="tog" data-layer="street" aria-pressed="true" title="Тротоари, пешеходни пътеки, светофари, знаци, кофи">Улични детайли</button>
       <button class="tog" data-layer="park" aria-pressed="true">Парк, алея, паметници</button>
       <button class="tog" data-layer="water2" aria-pressed="false" title="Водопровод (синьо) и канал (кафяво) — примерни трасета по улиците">ВиК (примерно)</button>
       <button class="tog" data-layer="poi" aria-pressed="true">Места</button>
@@ -262,12 +263,14 @@ body.walking .menubtn { left: auto; right: 16px; }
   var roadTexC = null;
   function roadTex() {
     if (roadTexC) return roadTexC;
-    var W = 256, Hh = 128, c = cv(W, Hh), g = c.getContext('2d'), Rn = mulberry(77);
+    var W = 512, Hh = 256, c = cv(W, Hh), g = c.getContext('2d'), Rn = mulberry(77);
     g.fillStyle = '#b4b4b4'; g.fillRect(0, 0, W, Hh);
-    for (var i = 0; i < 2600; i++) { var v = 140 + Math.floor(Rn() * 70); g.fillStyle = 'rgba(' + v + ',' + v + ',' + v + ',0.5)'; g.fillRect(Rn() * W, Rn() * Hh, 1 + Rn() * 3, 1 + Rn() * 2); }
+    for (var i = 0; i < 14000; i++) { var v = 125 + Math.floor(Rn() * 95); g.fillStyle = 'rgba(' + v + ',' + v + ',' + (v + 2) + ',0.55)'; g.fillRect(Rn() * W, Rn() * Hh, 1 + Rn() * 1.6, 1 + Rn() * 1.2); }
+    for (var q = 0; q < 7; q++) { g.fillStyle = 'rgba(' + (q % 2 ? '60,60,62' : '150,150,150') + ',0.13)'; g.fillRect(Rn() * W, Rn() * Hh * 0.8, 30 + Rn() * 90, 10 + Rn() * 40); }
+    g.strokeStyle = 'rgba(40,40,42,0.45)'; g.lineWidth = 1; for (var cr = 0; cr < 9; cr++) { var cx0 = Rn() * W, cy0 = Hh * (0.15 + Rn() * 0.7); g.beginPath(); g.moveTo(cx0, cy0); for (var st = 0; st < 7; st++) { cx0 += 5 + Rn() * 14; cy0 += (Rn() - 0.5) * 9; g.lineTo(cx0, cy0); } g.stroke(); }
     g.fillStyle = 'rgba(70,70,70,0.22)'; g.fillRect(0, Hh * 0.33, W, Hh * 0.06); g.fillRect(0, Hh * 0.6, W, Hh * 0.06);
-    g.fillStyle = '#ffffff'; g.fillRect(0, Hh * 0.05, W, 3); g.fillRect(0, Hh * 0.95 - 3, W, 3);
-    g.fillRect(0, Hh * 0.5 - 2, W * 0.3, 4);
+    g.fillStyle = '#ffffff'; g.fillRect(0, Hh * 0.05, W, 5); g.fillRect(0, Hh * 0.95 - 5, W, 5);
+    g.fillRect(0, Hh * 0.5 - 3, W * 0.3, 6);
     roadTexC = new THREE.CanvasTexture(c); roadTexC.wrapS = roadTexC.wrapT = THREE.RepeatWrapping; roadTexC.anisotropy = (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) ? Math.min(4, renderer.capabilities.getMaxAnisotropy()) : 1;
     return roadTexC;
   }
@@ -1560,7 +1563,7 @@ body.walking .menubtn { left: auto; right: 16px; }
     var benchM = new THREE.MeshLambertMaterial({ color: 0x6b4f35 });
     var bl = benches.map(function (b) { return [b[0], b[1], -b[2]]; });
     cityG.add(inst(benchG, benchM, bl, false), inst(benchB, benchM, bl, false));
-    var trunkG = new THREE.CylinderGeometry(0.25, 0.4, 5, 5); trunkG.translate(0, 2.5, 0);
+    var trunkG = new THREE.CylinderGeometry(0.15, 0.26, 5, 6); trunkG.translate(0, 2.5, 0);
     var crownG = new THREE.IcosahedronGeometry(2.7, 1); crownG.scale(1, 1.15, 1); crownG.translate(0, 6.2, 0);
     var tI = new THREE.InstancedMesh(trunkG, new THREE.MeshLambertMaterial({ color: 0x5b4636 }), Math.max(1, ptrees.length)), cI = new THREE.InstancedMesh(crownG, new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.max(1, ptrees.length)), cc = new THREE.Color();
     ptrees.forEach(function (q, i) { o3.position.set(q[0], hAt(q[0], q[1]), -q[1]); o3.rotation.set(0, R2() * 6.28, 0); o3.scale.set(q[2], q[2], q[2]); o3.updateMatrix(); tI.setMatrixAt(i, o3.matrix); cI.setMatrixAt(i, o3.matrix); cc.setHSL(0.25 + R2() * 0.06, 0.38, 0.16 + R2() * 0.1); cI.setColorAt(i, cc); });
@@ -1578,6 +1581,71 @@ body.walking .menubtn { left: auto; right: 16px; }
       var pk = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 8, 8), new THREE.MeshBasicMaterial({ visible: false })); pk.position.set(x, h + 4, -y); pk.userData = ud; cityG.add(pk); window.__monPick.push(pk);
     });
     window.__infraStat.lamps = lamps.length; window.__infraStat.ptrees = ptrees.length;
+
+    /* --- street-level details: pavements, zebra crossings, traffic lights, signs, waste bins --- */
+    var streetG = new THREE.Group(); scene.add(streetG); window.__streetG = streetG;
+    var swAcc = new Acc(30, 0.07);
+    ROADS.forEach(function (r) {
+      if (/^(service|unclassified)$/.test(r.c)) return;
+      var p = pts(r.p), run = [];
+      function flush() { if (run.length > 1) addRibbon(swAcc, run, r.w / 2 + 1.7, r.w / 2 + 1.7, col(0xb9b5ac), false); run = []; }
+      for (var i = 0; i < p.length - 1; i++) { var mx = (p[i][0] + p[i + 1][0]) / 2, my = (p[i][1] + p[i + 1][1]) / 2; if (bNear(mx, my) >= 3) { if (!run.length) run.push(p[i]); run.push(p[i + 1]); } else flush(); }
+      flush();
+    });
+    streetG.add(swAcc.mesh(2.9));
+    /* junctions */
+    var jn = {};
+    ROADS.forEach(function (r) {
+      var p = pts(r.p);
+      for (var i = 0; i < p.length; i++) {
+        var key = Math.round(p[i][0]) + ',' + Math.round(p[i][1]), J = jn[key] || (jn[key] = { x: p[i][0], y: p[i][1], arms: [] });
+        [-1, 1].forEach(function (d) { var q = p[i + d]; if (!q) return; var L = Math.hypot(q[0] - p[i][0], q[1] - p[i][1]); if (L < 8) return; J.arms.push({ ux: (q[0] - p[i][0]) / L, uy: (q[1] - p[i][1]) / L, w: r.w, c: r.c }); });
+      }
+    });
+    var zeb = [], lights = [], R3 = mulberry(5);
+    Object.keys(jn).forEach(function (k) {
+      var J = jn[k]; if (J.arms.length < 3 || zeb.length > 4500) return;
+      var main = J.arms.filter(function (a) { return a.c === 'secondary' || a.c === 'tertiary'; }).length;
+      if (!main || bNear(J.x, J.y) < 3) return;
+      J.arms.forEach(function (a, ai) {
+        if (a.c === 'service') return;
+        var th = Math.atan2(a.ux, -a.uy), px = -a.uy, py = a.ux, n = Math.max(1, Math.floor(a.w / 2 / 0.95));
+        for (var s = -n; s <= n; s++) zeb.push([J.x + a.ux * (a.w / 2 + 3.4) + px * s * 0.95, J.y + a.uy * (a.w / 2 + 3.4) + py * s * 0.95, th, 0.1]);
+        if (main >= 2 && (a.c === 'secondary' || a.c === 'tertiary') && lights.length < 160) lights.push([J.x + a.ux * (a.w / 2 + 5.4) + px * (a.w / 2 + 1.3), J.y + a.uy * (a.w / 2 + 5.4) + py * (a.w / 2 + 1.3), th + Math.PI]);
+      });
+    });
+    var zG = new THREE.BoxGeometry(0.45, 0.03, 3), zM = new THREE.MeshBasicMaterial({ color: 0xf2f2ee, transparent: true, opacity: 0.88, depthWrite: false });
+    var zI = inst(zG, zM, zeb, false); zI.renderOrder = 3.6; streetG.add(zI);
+    var tp = new THREE.CylinderGeometry(0.06, 0.07, 3.4, 6); tp.translate(0, 1.7, 0);
+    var th = new THREE.BoxGeometry(0.32, 0.95, 0.3); th.translate(0, 3.05, 0.1);
+    var dots = [[0xff3b30, 3.35], [0xffb800, 3.05], [0x34c759, 2.75]];
+    streetG.add(inst(tp, postMat, lights, false), inst(th, new THREE.MeshLambertMaterial({ color: 0x2a2c30 }), lights, false));
+    dots.forEach(function (d) { var g = new THREE.SphereGeometry(0.09, 6, 5); g.translate(0, d[1], 0.27); streetG.add(inst(g, new THREE.MeshBasicMaterial({ color: d[0] }), lights, false)); });
+    /* signs and waste bins along streets */
+    var signs = [], bins = [];
+    ROADS.forEach(function (r, ri) {
+      if (r.c === 'service') return; var p = pts(r.p);
+      walk(p, r.c === 'residential' ? 95 : 140, function (x, y, tx, ty, k) {
+        if (bNear(x, y) < 3 || signs.length > 700) return;
+        var s = (k % 2) ? 1 : -1, off = r.w / 2 + 1.1, th2 = Math.atan2(tx, -ty);
+        signs.push([x - ty * s * off, y + tx * s * off, th2, 0, R3()]);
+      });
+      if (r.c === 'residential') walk(p, 85, function (x, y, tx, ty, k) {
+        if (bNear(x, y) < 4 || bins.length > 1500 || R3() < 0.35) return;
+        var off = r.w / 2 + 1.6, bx = x + ty * off, by = y - tx * off, th3 = Math.atan2(tx, -ty);
+        for (var b = -1; b <= 1; b++) bins.push([bx + tx * b * 0.75, by + ty * b * 0.75, th3, 0, b + 1]);
+      });
+    });
+    var spG = new THREE.CylinderGeometry(0.04, 0.04, 2.5, 5); spG.translate(0, 1.25, 0);
+    var sdG = new THREE.CylinderGeometry(0.32, 0.32, 0.03, 14); sdG.rotateX(Math.PI / 2); sdG.translate(0, 2.35, 0.05);
+    var sdI = inst(sdG, new THREE.MeshLambertMaterial({ color: 0xffffff }), signs, false), sc = new THREE.Color(), sCol = [0xc8202a, 0x1f5fa8, 0xf2c200, 0x1f5fa8];
+    signs.forEach(function (q, i) { sc.setHex(sCol[Math.floor(q[4] * 4) % 4]); sdI.setColorAt(i, sc); });
+    streetG.add(inst(spG, postMat, signs, false), sdI);
+    var bnG = new THREE.BoxGeometry(0.6, 1.1, 0.7); bnG.translate(0, 0.55, 0);
+    var bnI = inst(bnG, new THREE.MeshLambertMaterial({ color: 0xffffff }), bins, true), bCol = [0x2f7d4b, 0xd9b52e, 0x2f62a8];
+    bins.forEach(function (q, i) { sc.setHex(bCol[q[4]]); bnI.setColorAt(i, sc); });
+    streetG.add(bnI);
+    window.__infraStat.zebra = zeb.length; window.__infraStat.lights = lights.length; window.__infraStat.signs = signs.length; window.__infraStat.bins = bins.length;
     /* --- mobile-phone masts: no open data exists for this area, so these are illustrative: one mast on the highest ground of each built-up 800 m cell --- */
     var antG = new THREE.Group(); antG.name = 'ant'; scene.add(antG); window.__antG = antG;
     var ac = {}; BP.forEach(function (b) { var k = Math.floor(b[0] / 800) + ',' + Math.floor(b[1] / 800); (ac[k] || (ac[k] = [])).push(b); });
@@ -1703,7 +1771,7 @@ body.walking .menubtn { left: auto; right: 16px; }
   var dirty = true;
   var hourEl = document.getElementById('hour');
   hourEl.addEventListener('input', function () { setHour(parseFloat(hourEl.value)); });
-  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup, houseDetailGroup, outerGroup], roads: [roadMesh, railMesh], trees: [crowns, trunks, shoreVegGroup, vegGroup], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup, infraGroup, elecLocal], water2: [waterNetGroup], lamp: [window.__lampG], park: [window.__cityG], ant: [window.__antG], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
+  var layerObjs = { buildings: [bGroup, msGroup, roofDetailGroup, houseDetailGroup, outerGroup], roads: [roadMesh, railMesh], trees: [crowns, trunks, shoreVegGroup, vegGroup], water: [waterMesh, waterSurf], sat: [satMesh, satMesh.userData.detail], power: [powerGroup, infraGroup, elecLocal], water2: [waterNetGroup], lamp: [window.__lampG], street: [window.__streetG], park: [window.__cityG], ant: [window.__antG], parcels: [parcelGroup], poi: [poiGroup], ai: [aiMesh] };
   Array.prototype.forEach.call(document.querySelectorAll('.tog'), function (b) {
     b.addEventListener('click', function () {
       var on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on);
