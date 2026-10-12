@@ -1546,12 +1546,12 @@ body.walking .menubtn { left: auto; right: 16px; }
       var p = pts(z.p);
       walk(p, 22, function (x, y, tx, ty, k) { var s = (k % 2) ? 1 : -1; lamps.push([x - ty * s * 3.6, y + tx * s * 3.6, 1]); });
       walk(p, 33, function (x, y, tx, ty, k) { var s = (k % 2) ? 1 : -1; benches.push([x + ty * s * 3.3, y - tx * s * 3.3, Math.atan2(ty, tx)]); });
-      walk(p, 14, function (x, y, tx, ty, k) { var s = (k % 2) ? 1 : -1; ptrees.push([x - ty * s * 4.6, y + tx * s * 4.6, 0.8 + (k % 3) * 0.12]); });
+      walk(p, 28, function (x, y, tx, ty, k) { var s = (k % 2) ? 1 : -1; ptrees.push([x - ty * s * 4.6, y + tx * s * 4.6, 0.8 + (k % 3) * 0.12]); });
     });
     var R2 = mulberry(99);
     parks.forEach(function (pk) {
       var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; pk.q.forEach(function (c) { x0 = Math.min(x0, c[0]); x1 = Math.max(x1, c[0]); y0 = Math.min(y0, c[1]); y1 = Math.max(y1, c[1]); });
-      var target = Math.min(500, Math.round(pk.a / 70)), got = 0, tr = 0;
+      var target = Math.min(500, Math.round(pk.a / 140)), got = 0, tr = 0;
       while (got < target && tr < target * 25) { tr++; var x = x0 + R2() * (x1 - x0), y = y0 + R2() * (y1 - y0); if (inPoly(x, y, pk.q)) { ptrees.push([x, y, 0.8 + R2() * 0.7]); got++; } }
     });
     D.roads.concat(OUT.roads).forEach(function (r) {
@@ -1588,6 +1588,7 @@ body.walking .menubtn { left: auto; right: 16px; }
     var trunkG = new THREE.CylinderGeometry(0.15, 0.26, 5, 6); trunkG.translate(0, 2.5, 0);
     var crownG = new THREE.IcosahedronGeometry(2.7, 1); crownG.scale(1, 1.15, 1); crownG.translate(0, 6.2, 0);
     ptrees = ptrees.filter(function (q) { return Math.hypot(q[0] + 110, q[1] - 1656) > 24; });
+    (function () { var z = new THREE.Matrix4().makeScale(0, 0, 0), n = 0; treeList.forEach(function (t, i) { if (parks.some(function (pk) { return inPoly(t[0], t[1], pk.q); }) && (n++ % 2)) { crowns.setMatrixAt(i, z); trunks.setMatrixAt(i, z); } }); crowns.instanceMatrix.needsUpdate = true; trunks.instanceMatrix.needsUpdate = true; })();
     var tI = new THREE.InstancedMesh(trunkG, new THREE.MeshLambertMaterial({ color: 0x5b4636 }), Math.max(1, ptrees.length)), cI = new THREE.InstancedMesh(crownG, new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.max(1, ptrees.length)), cc = new THREE.Color();
     ptrees.forEach(function (q, i) { o3.position.set(q[0], hAt(q[0], q[1]), -q[1]); o3.rotation.set(0, R2() * 6.28, 0); o3.scale.set(q[2], q[2], q[2]); o3.updateMatrix(); tI.setMatrixAt(i, o3.matrix); cI.setMatrixAt(i, o3.matrix); cc.setHSL(0.25 + R2() * 0.06, 0.38, 0.16 + R2() * 0.1); cI.setColorAt(i, cc); });
     tI.frustumCulled = cI.frustumCulled = false; tI.castShadow = cI.castShadow = true; cityG.add(tI, cI); o3.scale.set(1, 1, 1);
