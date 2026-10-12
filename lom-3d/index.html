@@ -1749,13 +1749,13 @@ body.walking .menubtn { left: auto; right: 16px; }
         a(new THREE.BoxGeometry(2.6, 2.4, 3), gry, 0, 11, 3.5); a(new THREE.CylinderGeometry(0.04, 0.04, 9, 4), gry, 0, 9, -14.6);
         g.position.set(x, hAt(x, y), -y); g.rotation.y = ang; cityG.add(g);
       }
-      var P = 580, sy = shoreY(P, 1300);
-      if (sy !== null) {
-        var cr = 0; for (var x = 480; x < 700 && cr < 9; x += 26) { var s = shoreY(x, 1300); if (s === null) continue; crane(x, s - 48, Math.PI * (0.5 + (cr % 3) * 0.04)); cr++; }
-        /* warehouse behind the cranes */
-        var wy = shoreY(560, 1300); if (wy !== null) { var wh = new THREE.Mesh(new THREE.BoxGeometry(60, 9, 18), new THREE.MeshLambertMaterial({ color: 0x9eb0bd })); wh.position.set(560, hAt(560, wy - 110) + 4.5, -(wy - 110)); wh.castShadow = true; cityG.add(wh); }
-      }
-      window.__portDbg = { sy: sy, cr: typeof cr === 'undefined' ? -1 : cr };
+      waterReady.then(function () {
+        var xs = [], cr = 0;
+        function edgeN(x) { /* northern water edge seen from the land at y = 1900 */ if (inWater(x, 1900)) return null; for (var y = 1900; y < 2400; y += 2) if (inWater(x, y)) return y; return null; }
+        for (var x = 380; x < 900 && cr < 9; x += 22) { var e = edgeN(x); if (e === null || e > 2300) continue; var back = edgeN(x + 6), y2 = e - 9; if (inWater(x, y2) || e - 1900 < 30) continue; crane(x, y2, (cr % 3 - 1) * 0.12); xs.push([x, e]); cr++; }
+        if (xs.length) { var m = xs[Math.floor(xs.length / 2)], wy = m[1] - 70; if (!inWater(m[0], wy)) { var wh = new THREE.Mesh(new THREE.BoxGeometry(60, 9, 18), new THREE.MeshLambertMaterial({ color: 0x9eb0bd })); wh.position.set(m[0], hAt(m[0], wy) + 4.5, -wy); wh.castShadow = true; cityG.add(wh); } }
+        window.__portDbg = { cr: cr, xs: xs }; dirty = true;
+      });
       /* pontoon, ramp and ship near the east end of the Danube park */
       var px = -120, py = 1812;
       if (py !== null) {
