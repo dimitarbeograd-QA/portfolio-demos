@@ -1588,7 +1588,9 @@ body.walking .menubtn { left: auto; right: 16px; }
     var trunkG = new THREE.CylinderGeometry(0.15, 0.26, 5, 6); trunkG.translate(0, 2.5, 0);
     var crownG = new THREE.IcosahedronGeometry(2.7, 1); crownG.scale(1, 1.15, 1); crownG.translate(0, 6.2, 0);
     ptrees = ptrees.filter(function (q) { return Math.hypot(q[0] + 110, q[1] - 1656) > 24; });
-    (function () { var z = new THREE.Matrix4().makeScale(0, 0, 0), n = 0; treeList.forEach(function (t, i) { if (parks.some(function (pk) { return inPoly(t[0], t[1], pk.q); }) && (n++ % 2)) { crowns.setMatrixAt(i, z); trunks.setMatrixAt(i, z); } }); crowns.instanceMatrix.needsUpdate = true; trunks.instanceMatrix.needsUpdate = true; })();
+    var inReg = function (x, y) { return Math.hypot(x + 276, y - 1714) < 520; }, rc = 0;
+    ptrees = ptrees.filter(function (q) { return !inReg(q[0], q[1]) || (rc++ % 5) < 3; });
+    (function () { var z = new THREE.Matrix4().makeScale(0, 0, 0), n = 0, m = 0; treeList.forEach(function (t, i) { if (parks.some(function (pk) { return inPoly(t[0], t[1], pk.q); })) { var kill = (n++ % 2) > 0; if (!kill && inReg(t[0], t[1])) kill = (m++ % 5) >= 3; if (kill) { crowns.setMatrixAt(i, z); trunks.setMatrixAt(i, z); } } }); crowns.instanceMatrix.needsUpdate = true; trunks.instanceMatrix.needsUpdate = true; })();
     var tI = new THREE.InstancedMesh(trunkG, new THREE.MeshLambertMaterial({ color: 0x5b4636 }), Math.max(1, ptrees.length)), cI = new THREE.InstancedMesh(crownG, new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.max(1, ptrees.length)), cc = new THREE.Color();
     ptrees.forEach(function (q, i) { o3.position.set(q[0], hAt(q[0], q[1]), -q[1]); o3.rotation.set(0, R2() * 6.28, 0); o3.scale.set(q[2], q[2], q[2]); o3.updateMatrix(); tI.setMatrixAt(i, o3.matrix); cI.setMatrixAt(i, o3.matrix); cc.setHSL(0.25 + R2() * 0.06, 0.38, 0.16 + R2() * 0.1); cI.setColorAt(i, cc); });
     tI.frustumCulled = cI.frustumCulled = false; tI.castShadow = cI.castShadow = true; cityG.add(tI, cI); o3.scale.set(1, 1, 1);
