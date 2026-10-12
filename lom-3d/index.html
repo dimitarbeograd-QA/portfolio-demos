@@ -1831,6 +1831,10 @@ body.walking .menubtn { left: auto; right: 16px; }
         cityG.add(g);
         var pk = new THREE.Mesh(new THREE.CylinderGeometry(16, 16, 16, 8), new THREE.MeshBasicMaterial({ visible: false })); pk.position.set(cx, base + 8, -cy); pk.userData = { title: 'Община Лом', text: 'ул. Дунавска 12, 4 етажа, около 13 м. Контурът е от OpenStreetMap; фасадата, надписът, знамената, пристройката с банковите ниши и площадът са по снимки, размерите са приблизителни.' }; cityG.add(pk); window.__monPick.push(pk);
       })();
+
+      /* paved round plaza east of Park-Hotel River (position read from the author's map screenshot, approximate) */
+      (function () { var px = -21, py = 1695, rt = cv(256, 256), rk = rt.getContext('2d'); rk.fillStyle = '#bdb3a6'; rk.fillRect(0, 0, 256, 256); for (var r = 124; r > 6; r -= 9) { rk.strokeStyle = (r / 9 | 0) % 2 ? '#a98c7c' : '#cdbfae'; rk.lineWidth = 4.5; rk.beginPath(); rk.arc(128, 128, r, 0, 6.3); rk.stroke(); }
+        var pl = new THREE.Mesh(new THREE.CircleGeometry(12, 48), new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(rt), polygonOffset: true, polygonOffsetFactor: -7, polygonOffsetUnits: -7 })); pl.rotation.x = -Math.PI / 2; pl.position.set(px, hAt(px, py) + 0.16, -py); cityG.add(pl); })();
       /* Historical museum Lom (ul. Eremiya Balgarov 6): footprint from the cadastre, 2 floors, hipped tile roof, green-white facade with grilles, relief fence */
       (function () {
         var mp = window.__skipB && window.__skipB.musP; if (!mp) return;
