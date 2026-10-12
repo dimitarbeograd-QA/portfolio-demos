@@ -2145,21 +2145,43 @@ body.walking .menubtn { left: auto; right: 16px; }
       for (var ci = 0; ci < 14; ci++) { var cp = M(40 + R() * 380, 700 + R() * 280), ch = hAt(cp[0], cp[1]), cn = new THREE.Mesh(new THREE.ConeGeometry(1.3, 4.5, 7), new THREE.MeshLambertMaterial({ color: 0x274d29, flatShading: true })); cn.position.set(cp[0], ch + 2.2, -cp[1]); cityG.add(cn); }
     })();
 
-    /* ---- Central square, town park and market stalls (read from the author's satellite screenshots; positions approximate) ---- */
+    /* ---- Central square, monument, beds, fountains and town park (read from the author's satellite screenshots; local frame a = toward the park (east), b = south; approximate) ---- */
     (function () {
-      var R = mulberry(8812), pj = cv(256, 256), pq = pj.getContext('2d'); pq.fillStyle = '#a6a193'; pq.fillRect(0, 0, 256, 256); pq.strokeStyle = 'rgba(80,76,68,.5)'; pq.lineWidth = 2; for (var g = 0; g <= 256; g += 32) { pq.beginPath(); pq.moveTo(g, 0); pq.lineTo(g, 256); pq.stroke(); pq.beginPath(); pq.moveTo(0, g); pq.lineTo(256, g); pq.stroke(); }
-      var pt = new THREE.CanvasTexture(pj); pt.wrapS = pt.wrapT = THREE.RepeatWrapping; pt.repeat.set(7, 6);
-      function flat(cx, cy, w, h, mat, lift, ro) { var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); m.rotation.x = -Math.PI / 2; m.position.set(cx, hAt(cx, cy) + lift, -cy); m.renderOrder = ro; cityG.add(m); return m; }
+      var R = mulberry(8812), C = [331, 995], T = 6 * Math.PI / 180, c1 = Math.cos(T), s1 = Math.sin(T);
+      function Wx(a, b) { return C[0] + a * c1 + b * s1; } function Wy(a, b) { return C[1] + a * s1 - b * c1; }
+      function patch(a0, a1, b0, b1, mat, lift, ro, seg) {
+        var na = Math.max(2, Math.round((a1 - a0) / (seg || 4))), nb = Math.max(2, Math.round((b1 - b0) / (seg || 4))), pos = [], idx = [], uv = [], i, j;
+        for (i = 0; i <= na; i++) for (j = 0; j <= nb; j++) { var a = a0 + (a1 - a0) * i / na, b = b0 + (b1 - b0) * j / nb, x = Wx(a, b), y = Wy(a, b); pos.push(x, hAt(x, y) + lift, -y); uv.push(i / na, j / nb); }
+        for (i = 0; i < na; i++) for (j = 0; j < nb; j++) { var p0 = i * (nb + 1) + j, p1 = p0 + 1, p2 = p0 + nb + 1, p3 = p2 + 1; idx.push(p0, p1, p2, p1, p3, p2); }
+        var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+        var m = new THREE.Mesh(g, mat); m.renderOrder = ro; cityG.add(m); return m;
+      }
+      function disc(a, b, r, mat, lift, ro) { var g = new THREE.CircleGeometry(r, 28); g.rotateX(-Math.PI / 2); var x = Wx(a, b), y = Wy(a, b), m = new THREE.Mesh(g, mat); m.position.set(x, hAt(x, y) + lift, -y); m.renderOrder = ro; cityG.add(m); return m; }
+      function ring(a, b, r0, r1, mat, lift, ro) { var g = new THREE.RingGeometry(r0, r1, 32); g.rotateX(-Math.PI / 2); var x = Wx(a, b), y = Wy(a, b), m = new THREE.Mesh(g, mat); m.position.set(x, hAt(x, y) + lift, -y); m.renderOrder = ro; cityG.add(m); return m; }
       var po = function (f) { return { polygonOffset: true, polygonOffsetFactor: f, polygonOffsetUnits: f }; };
-      flat(350, 985, 72, 60, new THREE.MeshLambertMaterial(Object.assign({ map: pt }, po(-6))), 0.3, 7);
-      var bed = new THREE.MeshLambertMaterial(Object.assign({ color: 0x5f8a45 }, po(-9)));
-      [[336, 972, 4, 22], [346, 970, 14, 3], [350, 982, 8, 9], [338, 996, 4, 18], [362, 994, 12, 3]].forEach(function (b) { flat(b[0], b[1], b[2], b[3], bed, 0.36, 9); });
-      var fd = new THREE.Mesh(new THREE.CircleGeometry(2.4, 20), new THREE.MeshLambertMaterial(Object.assign({ color: 0x8a867c }, po(-10)))); fd.rotation.x = -Math.PI / 2; fd.position.set(330, hAt(330, 1008) + 0.4, -1008); fd.renderOrder = 10; cityG.add(fd);
+      var pj = cv(256, 256), pq = pj.getContext('2d'); pq.fillStyle = '#aaa597'; pq.fillRect(0, 0, 256, 256);
+      for (var gy = 0; gy < 8; gy++) for (var gx = 0; gx < 8; gx++) { pq.fillStyle = (gx + gy) % 3 === 0 ? 'rgba(255,255,255,.10)' : 'rgba(0,0,0,.06)'; pq.fillRect(gx * 32, gy * 32, 32, 32); }
+      pq.strokeStyle = 'rgba(70,66,58,.55)'; pq.lineWidth = 2; for (var g0 = 0; g0 <= 256; g0 += 32) { pq.beginPath(); pq.moveTo(g0, 0); pq.lineTo(g0, 256); pq.stroke(); pq.beginPath(); pq.moveTo(0, g0); pq.lineTo(256, g0); pq.stroke(); }
+      var pt = new THREE.CanvasTexture(pj); pt.wrapS = pt.wrapT = THREE.RepeatWrapping; pt.anisotropy = 4; pt.repeat.set(5, 10);
+      patch(-22, 22, -35, 47, new THREE.MeshLambertMaterial(Object.assign({ map: pt }, po(-6))), 0.3, 7, 5);
+      var pt2 = pt.clone(); pt2.needsUpdate = true; pt2.repeat.set(3, 3);
+      patch(22, 44, -12, 12, new THREE.MeshLambertMaterial(Object.assign({ map: pt2, color: 0xe6e0d2 }, po(-7))), 0.33, 8, 5);
+      var bed = new THREE.MeshLambertMaterial(Object.assign({ color: 0x4f8a3c }, po(-9)));
+      [[-12, 8, -26, -21], [-8, 6, 17, 21], [-9, 3, 23, 27], [-8, 6, 29, 37], [-8, 3, 38, 41], [6, 12, -40, -30]].forEach(function (q) { patch(q[0], q[1], q[2], q[3], bed, 0.38, 9, 6); });
+      var sand = new THREE.MeshLambertMaterial(Object.assign({ color: 0xc3b99e }, po(-8)));
+      var st = new THREE.MeshLambertMaterial({ color: 0x8d877a });
+      [[15, 13, 0.5], [11, 9, 1.1], [7, 5, 1.9]].forEach(function (d) { var m = new THREE.Mesh(new THREE.BoxGeometry(d[0], d[2], d[1]), st), x = Wx(36, 0), y = Wy(36, 0); m.position.set(x, hAt(x, y) + d[2] / 2 + 0.2, -y); m.rotation.y = T; m.castShadow = true; cityG.add(m); });
+      var sb = new THREE.Mesh(new THREE.BoxGeometry(2.2, 5, 2.2), new THREE.MeshLambertMaterial({ color: 0x5f5a50 })), mx = Wx(36, 0), my = Wy(36, 0); sb.position.set(mx, hAt(mx, my) + 1.9 + 2.7, -my); sb.castShadow = true; cityG.add(sb);
+      disc(-20, -4, 3.1, new THREE.MeshLambertMaterial(Object.assign({ color: 0x9a958a }, po(-10))), 0.42, 10);
+      disc(-20, -4, 2.3, new THREE.MeshLambertMaterial(Object.assign({ color: 0x5f9db5 }, po(-11))), 0.5, 11);
+      patch(44, 68, -3, 3, sand, 0.34, 8, 5);
+      ring(71, 1, 4.8, 6.4, sand, 0.36, 9); ring(71, 1, 3.3, 4.8, new THREE.MeshLambertMaterial(Object.assign({ color: 0xd9d3c4 }, po(-10))), 0.4, 10); ring(71, 1, 1.8, 3.3, new THREE.MeshLambertMaterial(Object.assign({ color: 0xc9c3b4 }, po(-11))), 0.44, 11); disc(71, 1, 1.8, new THREE.MeshLambertMaterial(Object.assign({ color: 0x5f9db5 }, po(-12))), 0.48, 12);
+      disc(69, 31, 8, new THREE.MeshLambertMaterial(Object.assign({ color: 0x6a9a4a }, po(-9))), 0.38, 9); ring(69, 31, 8, 9.8, sand, 0.36, 8);
       var stall = new THREE.MeshLambertMaterial({ color: 0xf1f0ea });
-      for (var i = 0; i < 6; i++) { [[372 + i * 3.6, 960], [374 + i * 3.6, 952]].forEach(function (p) { var sb = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.3, 2.6), stall); sb.position.set(p[0], hAt(p[0], p[1]) + 1.2, -p[1]); sb.castShadow = true; cityG.add(sb); }); }
-      /* park: dense mixed grove with a small stepped arc */
-      for (var k = 0; k < 90; k++) { var x = 378 + R() * 108, y = 952 + R() * 98, rr = 3.6 + R() * 2.6, h = hAt(x, y), tg = new THREE.Group(), tk = new THREE.Mesh(new THREE.CylinderGeometry(0.3 * rr / 4, 0.45 * rr / 4, rr * 1.2, 5), new THREE.MeshLambertMaterial({ color: 0x5b4636 })); tk.position.y = rr * 0.6; tg.add(tk); var cr = new THREE.Mesh(new THREE.IcosahedronGeometry(rr, 1), new THREE.MeshLambertMaterial({ color: R() < 0.5 ? 0x2a5528 : 0x3b7433, flatShading: true })); cr.scale.set(1, 0.85, 1); cr.position.y = rr * 1.6; cr.castShadow = true; tg.add(cr); tg.position.set(x, h, -y); cityG.add(tg); }
-      var ar = new THREE.Mesh(new THREE.RingGeometry(3.2, 5.2, 20, 3, 0, Math.PI), new THREE.MeshLambertMaterial(Object.assign({ color: 0xd9d3c4, side: THREE.DoubleSide }, po(-9)))); ar.rotation.x = -Math.PI / 2; ar.position.set(466, hAt(466, 1018) + 0.4, -1018); ar.renderOrder = 10; cityG.add(ar);
+      for (var i = 0; i < 6; i++) { [40, 44].forEach(function (bb) { var sx = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.2, 2.4), stall), x = Wx(8 + i * 3, bb), y = Wy(8 + i * 3, bb); sx.position.set(x, hAt(x, y) + 1.2, -y); sx.rotation.y = T; sx.castShadow = true; cityG.add(sx); }); }
+      function tree(x, y) { var rr = 3.6 + R() * 2.6, h = hAt(x, y), tg = new THREE.Group(), tk = new THREE.Mesh(new THREE.CylinderGeometry(0.3 * rr / 4, 0.45 * rr / 4, rr * 1.2, 5), new THREE.MeshLambertMaterial({ color: 0x5b4636 })); tk.position.y = rr * 0.6; tg.add(tk); var cr = new THREE.Mesh(new THREE.IcosahedronGeometry(rr, 1), new THREE.MeshLambertMaterial({ color: R() < 0.5 ? 0x2a5528 : 0x3b7433, flatShading: true })); cr.scale.set(1, 0.85, 1); cr.position.y = rr * 1.6; cr.castShadow = true; tg.add(cr); tg.position.set(x, h, -y); cityG.add(tg); }
+      var placed = 0, tries = 0; while (placed < 95 && tries < 800) { tries++; var a = 26 + R() * 90, b = -36 + R() * 90; if (a < 46 && b > -14 && b < 14) continue; if (Math.hypot(a - 71, b - 1) < 9 || Math.hypot(a - 69, b - 31) < 11) continue; if (a > 44 && a < 69 && Math.abs(b) < 4) continue; tree(Wx(a, b), Wy(a, b)); placed++; }
+      for (var k = 0; k < 7; k++) { var la = -15 + R() * 27, lb = -46 + R() * 8; tree(Wx(la, lb), Wy(la, lb)); }
     })();
     /* ---- closed oval running track with football pitch (south) and hard court (north), read from the author's satellite screenshot; approximate ---- */
     (function () {
