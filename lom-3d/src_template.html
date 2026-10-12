@@ -133,7 +133,7 @@ body.walking .menubtn { left: auto; right: 16px; }
       <button class="tog" data-layer="ai" aria-pressed="true" title="Централната част: снимка, изострена с ИИ (SEN2SR). Детайлът е генериран, не е реален.">Остра снимка (ИИ)</button>
     </div>
     <div class="legend" id="legend" aria-label="Цветове на местата"></div>
-    <p class="attr">Данни © сътрудниците на OpenStreetMap. Контури и етажност на сградите и границите на имотите: АГКК (КАИС, отворени данни, 14.09.2026), за лична употреба. Допълнително: Microsoft ML Building Footprints (ODbL) чрез Overture Maps. Сателитна снимка: Contains modified Copernicus Sentinel data 2025 (26.07.2025, 10 м). Централните ≈2,4 × 2,4 км са покрити със снимка, изострена с модела SEN2SR на ESA OpenSR (около 2,5 м на пиксел): финият детайл е генериран от ИИ, не е реален, и слоят може да се изключи от „Остра снимка (ИИ)“. Фирми с търговски обекти и общински дружества: отворени данни на Община Лом (регистри от 2015–2021 г., само юридически лица, може да са остарели; координатите са по адреса). Места (заведения, магазини, институции): Overture Maps Places (Meta, AllThePlaces; CDLA-Permissive-2.0 и CC0), точността им е различна и част от обектите може вече да не работят. Релеф: Copernicus DEM GLO-30 (30 м), © DLR e.V. и Airbus Defence and Space GmbH, предоставен от ЕС и ESA в рамките на Copernicus; релефът е груб и сградите стоят върху него по най-ниския си ъгъл. Етажите и видът на фасадите са оценка по типа на сградата. Линиите 110 kV, подстанциите, соларните паркове и водните кули са от OpenStreetMap; ниското напрежение, осветлението, антените, ВиК мрежата и уличните детайли са примерни, не са реалната мрежа.</p>
+    <p class="attr">Данни © сътрудниците на OpenStreetMap. Контури и етажност на сградите и границите на имотите: АГКК (КАИС, отворени данни, 14.09.2026), за лична употреба. Допълнително: Microsoft ML Building Footprints (ODbL) чрез Overture Maps. Сателитна снимка: Contains modified Copernicus Sentinel data 2025 (26.07.2025, 10 м). Централните ≈2,4 × 2,4 км са покрити със снимка, изострена с модела SEN2SR на ESA OpenSR (около 2,5 м на пиксел): финият детайл е генериран от ИИ, не е реален, и слоят може да се изключи от „Остра снимка (ИИ)“. Фирми с търговски обекти и общински дружества: отворени данни на Община Лом (регистри от 2015–2021 г., само юридически лица, може да са остарели; координатите са по адреса). Места (заведения, магазини, институции): Overture Maps Places (Meta, AllThePlaces; CDLA-Permissive-2.0 и CC0), точността им е различна и част от обектите може вече да не работят. Релеф: Copernicus DEM GLO-30 (30 м), © DLR e.V. и Airbus Defence and Space GmbH, предоставен от ЕС и ESA в рамките на Copernicus; релефът е груб и сградите стоят върху него по най-ниския си ъгъл. Етажите и видът на фасадите са оценка по типа на сградата. Фото материали (покриви, мазилка, бетон, асфалт, чакъл, плочи): ambientCG, CC0. Линиите 110 kV, подстанциите, соларните паркове и водните кули са от OpenStreetMap; ниското напрежение, осветлението, антените, ВиК мрежата и уличните детайли са примерни, не са реалната мрежа.</p>
   </div>
   <div id="loading">Построявам града…</div>
 </div>
@@ -262,6 +262,14 @@ body.walking .menubtn { left: auto; right: 16px; }
     m.renderOrder = order; m.receiveShadow = receive !== false; m.frustumCulled = false;
     return m;
   };
+
+  /* ---------- real photo materials (CC0, ambientCG): decoded after start, then painted into the procedural textures ---------- */
+  var MAT = __MAT__, MATI = {}, MATCB = [], MATREADY = false;
+  (function () { var names = Object.keys(MAT), left = names.length; names.forEach(function (k) { var im = new Image(); im.onload = im.onerror = function () { MATI[k] = im; if (--left === 0) { MATREADY = true; MATCB.forEach(function (f) { try { f(); } catch (e) { if (window.console) console.error(e); } }); dirty = true; } }; im.src = MAT[k]; }); })();
+  function onMat(f) { if (MATREADY) setTimeout(function () { try { f(); } catch (e) { if (window.console) console.error(e); } dirty = true; }, 0); else MATCB.push(f); }
+  function matTile(name, w) { var im = MATI[name]; if (!im || !im.width) return null; var t = cv(w, Math.max(1, Math.round(w * im.height / im.width))); t.getContext('2d').drawImage(im, 0, 0, t.width, t.height); return t; }
+  function matOverlay(g, W, H, name, tileW, alpha, mode) { var t = matTile(name, tileW); if (!t) return; g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = mode || 'soft-light'; g.globalAlpha = alpha; g.fillStyle = g.createPattern(t, 'repeat'); g.fillRect(0, 0, W, H); g.restore(); }
+  function matFill(c, name, w) { var t = matTile(name, w); if (!t) return false; c.width = t.width; c.height = t.height; c.getContext('2d').drawImage(t, 0, 0); return true; }
   var roadTexC = null;
   function roadTex() {
     if (roadTexC) return roadTexC;
@@ -273,6 +281,7 @@ body.walking .menubtn { left: auto; right: 16px; }
     g.fillStyle = 'rgba(70,70,70,0.22)'; g.fillRect(0, Hh * 0.33, W, Hh * 0.06); g.fillRect(0, Hh * 0.6, W, Hh * 0.06);
     g.fillStyle = '#ffffff'; g.fillRect(0, Hh * 0.05, W, 5); g.fillRect(0, Hh * 0.95 - 5, W, 5);
     g.fillRect(0, Hh * 0.5 - 3, W * 0.3, 6);
+    onMat(function () { matOverlay(g, W, Hh, 'asphaltD', 256, 0.75, 'soft-light'); matOverlay(g, W, Hh, 'asphaltD', 96, 0.3, 'overlay'); roadTexC.needsUpdate = true; });
     roadTexC = new THREE.CanvasTexture(c); roadTexC.wrapS = roadTexC.wrapT = THREE.RepeatWrapping; roadTexC.anisotropy = (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) ? Math.min(4, renderer.capabilities.getMaxAnisotropy()) : 1;
     return roadTexC;
   }
@@ -340,7 +349,9 @@ body.walking .menubtn { left: auto; right: 16px; }
     for (var k = 0; k < 16; k++) { var x = k * W / 16; g.fillStyle = 'rgba(72,58,48,0.95)'; g.fillRect(x, Hh * 0.19, W / 16 * 0.36, Hh * 0.62); }
     g.fillStyle = 'rgb(126,86,64)'; g.fillRect(0, Hh * 0.5 - 0.72 * Hh / 4.8 - 1.5, W, 3); g.fillRect(0, Hh * 0.5 + 0.72 * Hh / 4.8 - 1.5, W, 3);
     g.fillStyle = 'rgba(190,150,120,0.55)'; g.fillRect(0, Hh * 0.5 - 0.72 * Hh / 4.8 - 1.5, W, 1); g.fillRect(0, Hh * 0.5 + 0.72 * Hh / 4.8 - 1.5, W, 1);
-    var t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; return t;
+    var t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4;
+    onMat(function () { var T = cv(W, Hh), tg = T.getContext('2d'); matOverlay(tg, W, Hh, 'gravelD', 128, 1, 'source-over'); tg.globalCompositeOperation = 'destination-in'; tg.drawImage(c, 0, 0); g.save(); g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.9; g.drawImage(T, 0, 0); g.restore(); t.needsUpdate = true; });
+    return t;
   })();
   var railMesh = railAcc.mesh(3.1); railMesh.material.map = railTexC; railMesh.material.transparent = true; railMesh.material.opacity = 1; railMesh.material.alphaTest = 0.04; railMesh.material.needsUpdate = true; scene.add(railMesh);
   var roadMesh = roadAcc.mesh(3); scene.add(roadMesh);
@@ -708,18 +719,21 @@ body.walking .menubtn { left: auto; right: 16px; }
       var t = new THREE.CanvasTexture(c);
       t.wrapS = t.wrapT = THREE.RepeatWrapping; t.flipY = false; t.anisotropy = maxAniso;
       t.repeat.set(1 / sp.tw, 1 / sp.th); t.offset.set(0, -1 / sp.th);
+      if (hi) onMat(function () { var conc = style === 'panel' || style === 'ind'; matOverlay(g, W, W / 2, conc ? 'concreteD' : 'plasterD', conc ? 200 : 170, conc ? 0.7 : 0.6, 'soft-light'); matOverlay(g, W, W / 2, conc ? 'concreteD' : 'plasterD', 64, 0.25, 'overlay'); t.needsUpdate = true; });
       out[kind] = t;
     });
     facade[key] = out; return out;
   }
-  var roofTexFlat = null, roofTexTile = null;
+  var roofTexFlat = null, roofTexTile = null, roofNormalT = null;
+  function roofNormal() { if (!roofNormalT) { var fc = cv(2, 2), fg = fc.getContext('2d'); fg.fillStyle = 'rgb(128,128,255)'; fg.fillRect(0, 0, 2, 2); roofNormalT = new THREE.CanvasTexture(fc); roofNormalT.wrapS = roofNormalT.wrapT = THREE.RepeatWrapping; roofNormalT.repeat.set(1 / 1.8, 1 / 1.8); roofNormalT.anisotropy = maxAniso; } return roofNormalT; }
   function flatTex() {
     if (roofTexFlat) return roofTexFlat;
     var c = cv(256, 256), g = c.getContext('2d'), R = mulberry(5);
     g.fillStyle = '#a3a5a9'; g.fillRect(0, 0, 256, 256);
     for (var i = 0; i < 900; i++) { var v = 120 + Math.floor(R() * 90); g.fillStyle = 'rgba(' + v + ',' + v + ',' + v + ',0.35)'; g.fillRect(R() * 256, R() * 256, 2 + R() * 6, 2 + R() * 6); }
     g.fillStyle = 'rgba(70,70,74,0.28)'; for (var k = 0; k < 4; k++) g.fillRect(0, k * 64, 256, 2);
-    roofTexFlat = new THREE.CanvasTexture(c); roofTexFlat.wrapS = roofTexFlat.wrapT = THREE.RepeatWrapping; roofTexFlat.repeat.set(1 / 4, 1 / 4); roofTexFlat.anisotropy = maxAniso;
+    roofTexFlat = new THREE.CanvasTexture(c); roofTexFlat.wrapS = roofTexFlat.wrapT = THREE.RepeatWrapping; roofTexFlat.repeat.set(1 / 4, 1 / 2); roofTexFlat.anisotropy = maxAniso;
+    onMat(function () { if (matFill(c, 'flatB', 512)) { var g2 = c.getContext('2d'); roofTexFlat.needsUpdate = true; } });
     return roofTexFlat;
   }
   function tileTex() {
@@ -739,11 +753,12 @@ body.walking .menubtn { left: auto; right: 16px; }
     }
     for (var m = 0; m < 160; m++) { g.fillStyle = 'rgba(' + (R() < 0.5 ? '70,95,50' : '60,60,60') + ',0.16)'; g.fillRect(R() * N, R() * N, 3 + R() * 10, 2 + R() * 5); }
     roofTexTile = new THREE.CanvasTexture(c); roofTexTile.wrapS = roofTexTile.wrapT = THREE.RepeatWrapping; roofTexTile.repeat.set(1 / 1.8, 1 / 1.8); roofTexTile.anisotropy = maxAniso;
+    onMat(function () { if (matFill(c, 'roofB', 512)) { roofTexTile.needsUpdate = true; var nm = roofNormal(); nm.image = MATI.roofN; nm.needsUpdate = true; } });
     return roofTexTile;
   }
 
   var WALL_T = { block: [0xffffff, 0xf0e2c6, 0xe2dbcd, 0xf4ecb8, 0xdcd7d0], panel: [0xffffff, 0xf1ede4, 0xe6e2d8, 0xf4efe6], house: [0xffffff, 0xf3e2b0, 0xe8d1a0, 0xdfe7d4, 0xeed9d2, 0xd8e1ea], shop: [0xffffff, 0xeee9de, 0xd9dde0], ind: [0xffffff, 0xe3e6e8, 0xd6cfc4], plain: [0xffffff, 0xece4d6] };
-  var ROOF_T = [0xa65a3f, 0x94503a, 0x7d7f84, 0x8e5a45, 0x6b625c], FLAT_T = [0xffffff, 0xd8d8d8, 0xc4c7cb];
+  var ROOF_T = [0xa65a3f, 0x94503a, 0x7d7f84, 0x8e5a45, 0x6b625c], FLAT_T = [0xe9e7e2, 0xcfcfcf, 0xb9bcc0, 0x9a9c9f];
   var wallCache = {}, roofCache = {}, flatCache = {}, gableCache = {}, wallMats = [];
   function wallMat(style, id) {
     var pal = WALL_T[style], tint = pal[Math.floor(rnd(id + 3) * pal.length)], v = Math.floor(rnd(id + 29) * NVAR[style]), k = style + v + '_' + tint;
@@ -794,7 +809,7 @@ body.walking .menubtn { left: auto; right: 16px; }
     }
     return wallCache[k];
   }
-  function roofMat(id) { var tint = ROOF_T[Math.floor(rnd(id + 13) * ROOF_T.length)]; if (!roofCache[tint]) roofCache[tint] = new THREE.MeshPhongMaterial({ map: tileTex(), bumpMap: tileTex(), bumpScale: 1.1, color: tint, specular: 0x080808, shininess: 8, side: THREE.DoubleSide }); return roofCache[tint]; }
+  function roofMat(id) { var tint = ROOF_T[Math.floor(rnd(id + 13) * ROOF_T.length)]; if (!roofCache[tint]) roofCache[tint] = new THREE.MeshPhongMaterial({ map: tileTex(), normalMap: roofNormal(), normalScale: new THREE.Vector2(0.9, 0.9), color: tint, specular: 0x080808, shininess: 8, side: THREE.DoubleSide }); return roofCache[tint]; }
   function flatMat(id) { var tint = FLAT_T[Math.floor(rnd(id + 17) * FLAT_T.length)]; if (!flatCache[tint]) flatCache[tint] = new THREE.MeshLambertMaterial({ map: flatTex(), color: tint }); return flatCache[tint]; }
   function gableMat(id) { var tint = [0xf1ead9, 0xe8dcc0, 0xf5f0e6][Math.floor(rnd(id + 5) * 3)]; if (!gableCache[tint]) gableCache[tint] = new THREE.MeshLambertMaterial({ color: tint, side: THREE.DoubleSide }); return gableCache[tint]; }
   var hlWall = new THREE.MeshLambertMaterial({ color: 0xf2c764, emissive: 0x6b4a00 });
@@ -1586,15 +1601,17 @@ body.walking .menubtn { left: auto; right: 16px; }
 
     /* --- street-level details: pavements, zebra crossings, traffic lights, signs, waste bins --- */
     var streetG = new THREE.Group(); scene.add(streetG); window.__streetG = streetG;
-    var swAcc = new Acc(30, 0.07);
+    var swAcc = new Acc(30, 0.07); swAcc.uv = [];
     ROADS.forEach(function (r) {
       if (/^(service|unclassified)$/.test(r.c)) return;
       var p = pts(r.p), run = [];
-      function flush() { if (run.length > 1) addRibbon(swAcc, run, r.w / 2 + 1.7, r.w / 2 + 1.7, col(0xb9b5ac), false); run = []; }
+      function flush() { if (run.length > 1) { var u0 = swAcc.uv.length, wr = r.w + 3.4; addRibbon(swAcc, run, r.w / 2 + 1.7, r.w / 2 + 1.7, col(0xc4c0b6), true); for (var ui = u0; ui < swAcc.uv.length; ui += 2) { swAcc.uv[ui] *= 5; swAcc.uv[ui + 1] *= wr; } } run = []; }
       for (var i = 0; i < p.length - 1; i++) { var mx = (p[i][0] + p[i + 1][0]) / 2, my = (p[i][1] + p[i + 1][1]) / 2; if (bNear(mx, my) >= 3) { if (!run.length) run.push(p[i]); run.push(p[i + 1]); } else flush(); }
       flush();
     });
-    streetG.add(swAcc.mesh(2.9));
+    var swMesh = swAcc.mesh(2.9), payT = new THREE.CanvasTexture((function () { var fc = cv(2, 2); fc.getContext('2d').fillStyle = '#c8c8c8'; fc.getContext('2d').fillRect(0, 0, 2, 2); return fc; })());
+    payT.wrapS = payT.wrapT = THREE.RepeatWrapping; payT.anisotropy = 4; swMesh.material.map = payT; swMesh.material.needsUpdate = true; streetG.add(swMesh);
+    onMat(function () { var pc = payT.image; if (matFill(pc, 'payB', 512)) payT.needsUpdate = true; });
     /* junctions */
     var jn = {};
     ROADS.forEach(function (r) {
