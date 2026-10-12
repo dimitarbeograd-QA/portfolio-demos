@@ -1482,7 +1482,7 @@ body.walking .menubtn { left: auto; right: 16px; }
         for (var s = acc; s < L; s += 42) {
           var x = a[0] + tx * s, y = a[1] + ty * s;
           if (bNear(x, y) < 2) { prevPole = null; prevPipe = null; continue; }
-          var px = x - ty * side * 5.5, py = y + tx * side * 5.5, ex = nearPole(px, py, 14), pi;
+          var po = Math.max(5.5, r.w / 2 + 3.4), px = x - ty * side * po, py = y + tx * side * po, ex = nearPole(px, py, 14), pi;
           if (ex !== null) pi = ex; else { poles.push([px, py, ang + Math.PI / 2]); pi = poles.length - 1; (pg[Math.floor(px / 30) + ',' + Math.floor(py / 30)] || (pg[Math.floor(px / 30) + ',' + Math.floor(py / 30)] = [])).push(pi); }
           if (prevPole !== null && prevPole !== pi) wires.push([prevPole, pi, ang]);
           prevPole = pi;
@@ -1601,6 +1601,60 @@ body.walking .menubtn { left: auto; right: 16px; }
       g.position.set(x, h, -y); cityG.add(g);
       var pk = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 8, 8), new THREE.MeshBasicMaterial({ visible: false })); pk.position.set(x, h + 4, -y); pk.userData = ud; cityG.add(pk); window.__monPick.push(pk);
     });
+    /* ---- landmarks of Lom: real places from Wikidata/OSM, shapes are generic (not measured) ---- */
+    (function () {
+      var KXm = 111320 * Math.cos(43.8167 * Math.PI / 180), KYm = 110574;
+      function ll(la, lo) { return [(lo - 23.2333) * KXm, (la - 43.8167) * KYm]; }
+      var wall = new THREE.MeshLambertMaterial({ color: 0xece6d6 }), roofM = new THREE.MeshLambertMaterial({ color: 0x8e4a38 }), lead = new THREE.MeshPhongMaterial({ color: 0x6f7d7a, shininess: 30 }), gold = new THREE.MeshPhongMaterial({ color: 0xd8b24a, shininess: 80 }), trunkM = new THREE.MeshLambertMaterial({ color: 0x5a4a3a }), leafM = new THREE.MeshLambertMaterial({ color: 0x3f6b2e, flatShading: true }), ruin = new THREE.MeshLambertMaterial({ color: 0xb3ab98 });
+      function pick(x, y, h, title, text) { var pk = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 18, 8), new THREE.MeshBasicMaterial({ visible: false })); pk.position.set(x, h + 9, -y); pk.userData = { title: title, text: text }; cityG.add(pk); window.__monPick.push(pk); }
+      function cross(g, x, y, z) { var a = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.4, 0.12), gold), b = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.12, 0.12), gold); a.position.set(x, y + 0.7, z); b.position.set(x, y + 1.0, z); g.add(a, b); }
+      /* an orthodox church: nave along local X, dome on a drum, bell tower at the west end; full = also walls and roof */
+      function church(x, y, ang, L, W, full, title, text) {
+        var h = hAt(x, y), g = new THREE.Group(), NH = full ? 6.5 : 4.2;
+        function add(geo, mat, px, py, pz) { var m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; }
+        if (full) {
+          add(new THREE.BoxGeometry(L, NH, W), wall, 0, NH / 2, 0);
+          var rf = new THREE.CylinderGeometry(W * 0.62, W * 0.62, L, 3, 1); rf.rotateZ(Math.PI / 2); rf.rotateX(Math.PI / 2 * 0); var rr = add(rf, roofM, 0, NH + 0.1, 0); rr.scale.set(1, 1, 1); rr.rotation.x = Math.PI / 2 * 0;
+          add(new THREE.CylinderGeometry(W * 0.5, W * 0.5, 2, 8, 1, false, 0, Math.PI), wall, L / 2 + 0.2, 1, 0).rotation.y = Math.PI / 2 * 0;
+        }
+        var dx = full ? 0 : 0;
+        add(new THREE.CylinderGeometry(1.9, 2.1, 3, 12), wall, dx, NH + 1.7, 0);
+        add(new THREE.SphereGeometry(2.1, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), lead, dx, NH + 3.2, 0);
+        cross(g, dx, NH + 5.2, 0);
+        var tx = -L / 2 - 1.4;
+        add(new THREE.BoxGeometry(3.2, 12, 3.2), wall, tx, 6, 0);
+        add(new THREE.BoxGeometry(2.6, 2.6, 2.6), wall, tx, 13.3, 0);
+        add(new THREE.ConeGeometry(2.1, 4.2, 4), lead, tx, 16.7, 0).rotation.y = Math.PI / 4;
+        cross(g, tx, 18.8, 0);
+        g.position.set(x, h, -y); g.rotation.y = ang; cityG.add(g);
+        pick(x, y, h, title, text);
+      }
+      var CT = 'Местоположение по Wikidata/OSM. Видът е условен (куполът и камбанарията са общ образ, не заснет).';
+      D.buildings.forEach(function (b) {
+        if (b.t !== 'church') return; var q = pts(b.p), cx = 0, cy = 0, i; q.forEach(function (v) { cx += v[0]; cy += v[1]; }); cx /= q.length; cy /= q.length;
+        var best = 0, ang = 0; for (i = 0; i < q.length; i++) { var j = (i + 1) % q.length, l = Math.hypot(q[j][0] - q[i][0], q[j][1] - q[i][1]); if (l > best) { best = l; ang = Math.atan2(q[j][1] - q[i][1], q[j][0] - q[i][0]); } }
+        church(cx, cy, ang, Math.max(8, best), 7, false, b.n || 'Храм', CT);
+      });
+      var us = ll(43.826444, 23.234889); church(us[0], us[1], 0, 20, 9, true, 'Храм „Успение Богородично“', 'Местоположение по Wikidata. Сградата и видът са условни.');
+      /* monument to the 138th infantry regiment */
+      var m1 = ll(43.832194, 23.233361), h1 = hAt(m1[0], m1[1]), gm = new THREE.Group();
+      function addm(geo, mat, px, py, pz) { var m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); m.castShadow = true; gm.add(m); }
+      addm(new THREE.CylinderGeometry(5, 5, 0.25, 20), plaza, 0, 0.12, 0); addm(new THREE.BoxGeometry(4, 0.6, 4), stone, 0, 0.5, 0); addm(new THREE.BoxGeometry(3, 0.6, 3), stone, 0, 1.1, 0); addm(new THREE.BoxGeometry(2, 3.4, 2), stone, 0, 3.1, 0); addm(new THREE.CylinderGeometry(0.3, 0.5, 2.6, 8), bronze, 0, 6.1, 0); addm(new THREE.SphereGeometry(0.34, 8, 6), bronze, 0, 7.6, 0);
+      gm.position.set(m1[0], h1, -m1[1]); cityG.add(gm); pick(m1[0], m1[1], h1, 'Паметник на 138-ми пехотен полк', 'Място по Wikidata. Видът е условен.');
+      /* ancient plane trees */
+      [[43.825879, 23.238549], [43.825659, 23.238489], [43.829028, 23.234903]].forEach(function (c) {
+        var p = ll(c[0], c[1]), h = hAt(p[0], p[1]), t = new THREE.Group();
+        var tr = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.1, 8, 8), trunkM); tr.position.y = 4; t.add(tr);
+        [[0, 10, 0, 6.5], [3.5, 8.5, 1.5, 4.5], [-3.2, 8.8, -1.2, 4.6], [0.5, 8.2, -3.5, 4.2]].forEach(function (s) { var cr = new THREE.Mesh(new THREE.IcosahedronGeometry(s[3], 1), leafM); cr.position.set(s[0], s[1], s[2]); cr.castShadow = true; t.add(cr); });
+        t.position.set(p[0], h, -p[1]); cityG.add(t);
+      });
+      var pl = ll(43.829028, 23.234903); pick(pl[0], pl[1], hAt(pl[0], pl[1]), 'Вековен платан (Западен платан)', 'Място по Wikidata. Дървото е условно.');
+      /* Roman fortress Almus: low wall remnants (illustrative) */
+      var al = ll(43.83139, 23.23778), ha = hAt(al[0], al[1]), ga = new THREE.Group();
+      [[0, -15, 50, 1.4], [0, 15, 50, 1.4], [-25, 0, 1.4, 30], [25, 0, 1.4, 30]].forEach(function (s) { var m = new THREE.Mesh(new THREE.BoxGeometry(s[2], 1.6, s[3]), ruin); m.position.set(s[0], 0.8, s[1]); m.castShadow = true; ga.add(m); });
+      [[-25, -15], [25, -15], [-25, 15], [25, 15]].forEach(function (s) { var m = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.3, 3, 10), ruin); m.position.set(s[0], 1.5, s[1]); m.castShadow = true; ga.add(m); });
+      ga.position.set(al[0], ha, -al[1]); ga.rotation.y = 0.3; cityG.add(ga); pick(al[0], al[1], ha, 'Римска крепост Алмус', 'Място по Wikidata. Стените са условни и не следват разкопаното.');
+    })();
     window.__infraStat.lamps = lamps.length; window.__infraStat.ptrees = ptrees.length;
 
     /* --- street-level details: pavements, zebra crossings, traffic lights, signs, waste bins --- */
