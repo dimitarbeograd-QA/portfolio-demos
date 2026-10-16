@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Абитуриентски албум</title>
+<meta name="description" content="Общ дигитален абитуриентски албум от 1 до 12 клас. Снимки, подписи и спомени, които остават само във вашия браузър.">
+<meta name="theme-color" content="#0e1a35">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%230e1a35'/%3E%3Crect x='6' y='6' width='52' height='52' fill='none' stroke='%23e6c96f' stroke-width='2'/%3E%3Ctext x='32' y='41' text-anchor='middle' font-family='Georgia,serif' font-style='italic' font-size='26' fill='%23e6c96f'%3EXII%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="fonts.css">
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+</style>
+</head>
+<body>
+<style id="app-style">
+/* Layout: a hardbound keepsake album. Midnight-navy cover with gold foil, ivory pages with gilt double frames,
+   Roman numerals for the grades, photos mounted in mats. Dark theme = the same book by lamplight. */
+:root{
+  color-scheme:light;
+  --bg:#f1eee6; --surface:#fbf9f4; --ink:#14213d; --ink-soft:#586178;
+  --gold:#a98332; --gold-lo:#7d5f1f; --line:rgba(169,131,50,.6); --hair:rgba(20,33,61,.14);
+  --shadow:rgba(20,33,61,.34); --glow:rgba(169,131,50,.12); --ghost:rgba(169,131,50,.07);
+  --cover:#0e1a35; --cover-2:#182a52; --cover-ink:#efe6cf;
+  --foil-1:#8f6c22; --foil-2:#e6c96f; --foil-3:#fff3c4;
+  --scrim:rgba(6,10,22,.95); --scrim-ink:#f4ecd8;
+  --display:'Playfair Display','Bodoni 72',Georgia,serif;
+  --body:'EB Garamond',Garamond,Georgia,serif;
+  --label:'Jost','Segoe UI',system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#090f20; --surface:#101a33; --ink:#ece4cf; --ink-soft:#a6aec2;
+    --gold:#d6b45e; --gold-lo:#a98332; --line:rgba(214,180,94,.5); --hair:rgba(236,228,207,.17);
+    --shadow:rgba(0,0,0,.65); --glow:rgba(214,180,94,.08); --ghost:rgba(214,180,94,.07);
+    --cover:#0b1530; --cover-2:#15264a; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#090f20; --surface:#101a33; --ink:#ece4cf; --ink-soft:#a6aec2;
+  --gold:#d6b45e; --gold-lo:#a98332; --line:rgba(214,180,94,.5); --hair:rgba(236,228,207,.17);
+  --shadow:rgba(0,0,0,.65); --glow:rgba(214,180,94,.08); --ghost:rgba(214,180,94,.07);
+  --cover:#0b1530; --cover-2:#15264a; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; padding-inline:16px; color:var(--ink);
+  background-color:var(--bg);
+  background-image:radial-gradient(1100px 520px at 50% -8%,var(--glow),transparent 70%);
+  background-repeat:no-repeat;
+  font:400 1.12rem/1.65 var(--body);
+}
+img{max-width:100%}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+button{font:inherit;color:inherit}
+#app{max-width:1080px;margin-inline:auto;padding-block:6px 64px}
+#app.editing{padding-bottom:150px}
+.meta{font:500 .68rem/1.5 var(--label);letter-spacing:.24em;text-transform:uppercase;color:var(--ink-soft);margin:0}
+
+/* top row + rail */
+.top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 14px;padding-block:6px;min-height:52px}
+.tools-top{display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px}
+.lnk{min-height:44px;padding:0 10px;cursor:pointer;background:none;border:0;font:500 .68rem var(--label);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-soft)}
+.lnk:hover{color:var(--ink)}
+.rail{
+  position:sticky;top:env(safe-area-inset-top,0px);z-index:5;
+  display:flex;gap:2px;overflow-x:auto;scrollbar-width:thin;
+  margin-inline:-16px;padding:2px 16px;
+  background:var(--bg);border-block:1px solid var(--line);
+}
+.rb{
+  flex:none;min-width:46px;min-height:46px;padding:0 12px;cursor:pointer;
+  font:500 .78rem var(--label);letter-spacing:.14em;
+  background:none;border:0;border-bottom:2px solid transparent;color:var(--ink-soft);
+}
+.rb:hover{color:var(--ink)}
+.rb.on{color:var(--ink);border-bottom-color:var(--gold)}
+.rb.first{letter-spacing:.2em;text-transform:uppercase;font-size:.68rem}
+
+/* buttons */
+.btn{
+  min-height:46px;padding:10px 24px;cursor:pointer;
+  font:500 .7rem var(--label);letter-spacing:.22em;text-transform:uppercase;
+  background:transparent;border:1px solid var(--gold);color:var(--ink);
+}
+.btn:hover:not(:disabled){background:var(--ghost);border-color:var(--gold-lo)}
+.btn.primary{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.btn.primary:hover:not(:disabled){opacity:.92;background:var(--ink)}
+.btn:disabled{opacity:.4;cursor:default}
+.mini{min-height:40px;min-width:40px;padding:4px 12px;cursor:pointer;font:500 .64rem var(--label);letter-spacing:.14em;text-transform:uppercase;background:transparent;border:1px solid var(--hair);color:var(--ink)}
+.mini:hover:not(:disabled){border-color:var(--gold)}
+.mini:disabled{opacity:.35;cursor:default}
+.mini.warn{border-color:#b3402f;color:#b3402f}
+
+.sheet{margin-top:22px;animation:rise .5s ease-out both}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* ornament */
+.orn{display:flex;align-items:center;gap:14px;margin:22px 0;color:var(--gold)}
+.orn::before,.orn::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--line))}
+.orn::after{transform:scaleX(-1)}
+.orn i{width:7px;height:7px;background:currentColor;transform:rotate(45deg)}
+
+/* cover */
+.cover{
+  position:relative;text-align:center;color:var(--cover-ink);
+  padding:clamp(44px,9vw,92px) clamp(26px,7vw,84px);
+  background:radial-gradient(120% 90% at 50% 0%,var(--cover-2),var(--cover));
+  box-shadow:0 44px 70px -44px var(--shadow);
+}
+.cover::before,.cover::after{content:'';position:absolute;pointer-events:none}
+.cover::before{inset:12px;border:1px solid var(--foil-2);opacity:.85}
+.cover::after{inset:19px;border:1px solid var(--foil-2);opacity:.3}
+.cover>*{position:relative}
+.seal{display:inline-block;color:var(--foil-2);margin-bottom:6px}
+.kick{font:500 .68rem/1.5 var(--label);letter-spacing:.34em;text-transform:uppercase;color:var(--foil-2);margin:14px 0 0}
+.foil{
+  font:400 clamp(2rem,9vw,4.5rem)/1.08 var(--display);letter-spacing:.01em;margin:14px 0 0;text-wrap:balance;
+  background:linear-gradient(105deg,var(--foil-1) 0%,var(--foil-2) 30%,var(--foil-3) 42%,var(--foil-2) 54%,var(--foil-1) 100%);
+  background-size:240% 100%;background-position:40% 0;
+  -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;
+  animation:sweep 2.6s ease-out 1;
+}
+@keyframes sweep{from{background-position:100% 0}to{background-position:40% 0}}
+.sub{font:italic 400 1.35rem/1.4 var(--body);color:var(--cover-ink);margin:10px 0 0}
+.cover .orn{color:var(--foil-2);max-width:340px;margin:26px auto}
+.cover .form{display:grid;gap:14px;max-width:440px;margin:0 auto}
+.cover .f{display:grid;justify-items:center;gap:2px}
+.cover .f label,.cover .lbl{font:500 .62rem/1.4 var(--label);letter-spacing:.28em;text-transform:uppercase;color:var(--foil-2);padding:0}
+.cover .fv{width:100%;border-bottom:1px solid rgba(230,201,111,.45);color:var(--cover-ink);font:italic 400 1.45rem/1.5 var(--body);min-height:2.2rem;overflow-wrap:anywhere}
+.cover .f input{width:100%;text-align:center;font:italic 400 1.45rem/1.5 var(--body);color:var(--cover-ink);background:transparent;border:0;border-bottom:1px dashed var(--foil-2);padding:2px;caret-color:var(--foil-2)}
+.cover .f input::placeholder{color:rgba(239,230,207,.45)}
+.cover :focus-visible{outline-color:var(--foil-2)}
+
+.banner{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;margin-top:18px;padding:12px 16px;border:1px solid var(--line);background:var(--ghost);font:400 1.02rem/1.5 var(--body)}
+.hint{margin:22px 0 0;text-align:center;color:var(--ink-soft);font-style:italic}
+
+/* stages + grade cards */
+.stage-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:8px;margin:44px 0 20px}
+.stage-h h2{font:italic 400 1.7rem/1.15 var(--display);margin:0}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:26px 18px}
+.gc{display:flex;flex-direction:column;gap:8px;text-align:left;background:none;border:0;padding:0;cursor:pointer;min-width:0}
+.gc-img{position:relative;display:grid;place-items:center;aspect-ratio:4/3;max-width:100%;background:var(--surface);padding:7px;box-shadow:0 0 0 1px var(--hair),0 18px 26px -20px var(--shadow);transition:transform .25s,box-shadow .25s}
+.gc:hover .gc-img{transform:translateY(-3px);box-shadow:0 0 0 1px var(--gold),0 22px 30px -20px var(--shadow)}
+.gc-img img{width:100%;height:100%;object-fit:cover;display:block}
+.gc-n{width:100%;height:100%;display:grid;place-items:center;border:1px solid var(--line);font:italic 400 2.6rem/1 var(--display);color:var(--gold)}
+.gc-r{position:absolute;left:7px;top:7px;padding:2px 9px;background:var(--cover);color:var(--foil-2);font:500 .66rem var(--label);letter-spacing:.18em}
+.gc-t{font:400 1.2rem/1.2 var(--display)}
+
+/* chapter page */
+.page{position:relative;background:var(--surface);padding:clamp(26px,5.5vw,60px);box-shadow:0 0 0 1px var(--hair),0 40px 60px -44px var(--shadow)}
+.page::before,.page::after{content:'';position:absolute;pointer-events:none}
+.page::before{inset:10px;border:1px solid var(--line)}
+.page::after{inset:15px;border:1px solid var(--hair)}
+.page>*{position:relative}
+.wm{position:absolute;right:clamp(18px,4vw,52px);top:14px;font:italic 400 clamp(5.5rem,22vw,12rem)/1 var(--display);color:var(--gold);opacity:.12;pointer-events:none;user-select:none}
+h1{font:400 clamp(2.3rem,8vw,4.1rem)/1.08 var(--display);letter-spacing:.005em;margin:6px 0 0;text-wrap:balance}
+h1 em{color:var(--gold)}
+.teacher{margin:10px 0 0;font:italic 400 1.35rem/1.4 var(--body)}
+.memory{max-width:60ch}
+.memory p{margin:0 0 .85em}
+.memory>p:nth-of-type(2)::first-letter{font:400 3.2rem/.85 var(--display);float:left;padding:6px 6px 0 0;color:var(--gold)}
+.mem{width:100%;min-height:8rem;resize:vertical;font:400 1.08rem/1.6 var(--body);color:var(--ink);background:transparent;border:1px solid var(--line);padding:12px}
+.tools{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;margin:26px 0 6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,235px),1fr));gap:34px 26px;padding-top:12px;align-items:start}
+@media (min-width:760px){
+  .grid:not(.ed) .ph:first-child:not(:last-child){grid-column:span 2}
+  .grid:not(.ed) .ph:first-child:nth-last-child(n+3){grid-row:span 2}
+}
+.ph{margin:0;min-width:0;padding:12px 12px 14px;background:var(--surface);box-shadow:0 0 0 1px var(--hair),0 22px 30px -24px var(--shadow)}
+.ph-b{display:block;width:100%;padding:0;border:0;background:none;cursor:zoom-in}
+.ph img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;outline:1px solid var(--line);outline-offset:-7px}
+.grid:not(.ed) .ph:first-child:not(:last-child) img{aspect-ratio:16/10}
+.ph figcaption{font:italic 400 1.18rem/1.35 var(--body);text-align:center;padding-top:11px;min-height:2.7em;overflow-wrap:anywhere}
+.cap{width:100%;margin-top:10px;text-align:center;font:italic 400 1.15rem/1.35 var(--body);color:var(--ink);background:transparent;border:0;border-bottom:1px dashed var(--gold);padding:3px}
+.acts{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:10px}
+.ghost{
+  display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;text-align:center;
+  aspect-ratio:4/3;min-width:0;padding:14px;background:var(--ghost);border:1px dashed var(--line);color:var(--ink-soft);
+  font:italic 400 1.2rem/1.3 var(--body);
+}
+button.ghost{cursor:pointer}
+button.ghost:hover{border-color:var(--gold);color:var(--ink)}
+.pager{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:46px;padding-top:20px;border-top:1px solid var(--line)}
+.foot{margin:34px 0 0;text-align:center}
+
+/* save bar + toast */
+.savebar{
+  position:fixed;left:0;right:0;bottom:0;z-index:10;
+  display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));
+  background:var(--surface);border-top:1px solid var(--gold);box-shadow:0 -20px 30px -24px var(--shadow);
+}
+.savebar .st{flex:1 1 220px;min-width:0;font:500 .78rem/1.4 var(--label);letter-spacing:.04em}
+.savebar .meta{flex:none}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:12;max-width:min(92vw,520px);padding:12px 20px;background:var(--ink);color:var(--surface);font:500 .78rem/1.4 var(--label);letter-spacing:.06em;text-align:center}
+
+/* lightbox */
+.lb{position:fixed;inset:0;z-index:30;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:8px;padding:calc(10px + env(safe-area-inset-top,0px)) 12px calc(14px + env(safe-area-inset-bottom,0px));background:var(--scrim);color:var(--scrim-ink)}
+.lb-top{display:flex;justify-content:flex-end}
+.lb-stage{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;min-height:0}
+.lb img{display:block;max-width:100%;max-height:calc(100vh - 190px);margin:auto;object-fit:contain;outline:1px solid #e6c96f;outline-offset:6px}
+.lb-n,.lb-x{min-width:46px;min-height:46px;padding:0 14px;cursor:pointer;background:transparent;border:1px solid #e6c96f;color:var(--scrim-ink);font:500 .7rem var(--label);letter-spacing:.2em;text-transform:uppercase}
+.lb-cap{margin:0;text-align:center;font:italic 400 1.3rem/1.35 var(--body)}
+
+.print-book{display:none}
+@media (max-width:520px){
+  .lb-stage{grid-template-columns:minmax(0,1fr)}
+  .lb-n{display:none}
+  .page{padding-inline:24px}
+}
+@media (prefers-reduced-motion:reduce){
+  .sheet,.foil{animation:none}
+  *{transition:none!important}
+}
+@media print{
+  :root{--bg:#fff;--surface:#fff;--ink:#14213d;--ink-soft:#4a5368;--gold:#a98332;--line:rgba(169,131,50,.7);--hair:rgba(20,33,61,.22);--shadow:rgba(0,0,0,.18);--glow:transparent;--ghost:transparent;color-scheme:light}
+  @page{size:A4;margin:12mm}
+  body{background:#fff!important;padding-inline:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:11pt}
+  #view,.savebar,.toast,.lb{display:none!important}
+  .print-book{display:block}
+  .print-book>.sheet{margin:0;animation:none;break-after:page}
+  .print-book>.sheet:last-child{break-after:auto}
+  .banner,.hint{display:none}
+  .foil{animation:none}
+  .ph{break-inside:avoid}
+  .page{box-shadow:none}
+}
+</style>
+<div id="app"></div>
+<script type="application/json" id="album-data">{"v":1,"school":"","year":"","ch":{}}</script>
+<script id="app-js">
+(function(){
+'use strict';
+
+var TITLE='Абитуриентски албум';
+var LINK='<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Jost:wght@400;500&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">';
+var RESET_FALLBACK=':root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}';
+var STAGES=[
+  {n:'Начален етап',g:[1,2,3,4]},
+  {n:'Прогимназия',g:[5,6,7]},
+  {n:'Гимназия',g:[8,9,10,11,12]}
+];
+var ORD=['','Първи','Втори','Трети','Четвърти','Пети','Шести','Седми','Осми','Девети','Десети','Единадесети','Дванадесети'];
+var ROMAN=['','I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+var IDEAS={
+  1:['Първият учебен ден с цветя','Първата учителка','Класната стая'],
+  2:['Тържество в училище','Игра в двора','Групова снимка на класа'],
+  3:['Екскурзия с класа','Любим съученик','Празник на класа'],
+  4:['Края на началното училище','Със класната учителка','Състезание или конкурс'],
+  5:['Новите учители','Първата екскурзия','Нови съученици'],
+  6:['Зелено училище','Спортен ден','Празник на класа'],
+  7:['Последна година в прогимназията','Екскурзия','Групова снимка'],
+  8:['Първият ден в гимназията','Новите съученици','Класната стая'],
+  9:['Екскурзия','Училищен празник','Приятелите от класа'],
+  10:['Спортен турнир','Тържество','Групова снимка с класния'],
+  11:['Екскурзия','Подготовка за изпитите','Със съучениците'],
+  12:['Последният звънец','Абитуриентският бал','Групова снимка с класния']
+};
+var DEMO_MEMORY={
+  1:'Пример: тук се пише споменът от годината. Първата учителка, тежката чанта, първите букви и новите приятели.',
+  8:'Пример: нова сграда, нови лица и първото усещане, че вече сме големи.',
+  12:'Пример: последният звънец, бални рокли и обещанията да се събираме всяка година.'
+};
+
+/* ---- mode: inside Claude's artifact viewer the page saves by republishing itself; anywhere else it saves in the browser ---- */
+var LOCAL=!(window.claude&&window.claude.use);
+var LIMIT=LOCAL?150000000:12000000;
+
+var raw=document.getElementById('album-data').textContent;
+var state=normalize(JSON.parse(raw));
+var app=document.getElementById('app');
+var route='cover',editing=false,canEdit=LOCAL,dirty=false,saving=false,forPrint=false,pickG=0,lbG=0,lbI=0;
+
+(function(){
+  var r='';
+  try{r=sessionStorage.getItem('album-route')||'';sessionStorage.removeItem('album-route');}catch(e){}
+  if(!r)r=(location.hash||'').replace('#','');
+  var m=/^k(\d{1,2})$/.exec(r);
+  if(m&&+m[1]>=1&&+m[1]<=12)route=+m[1];
+  if(LOCAL){try{var t=localStorage.getItem('album-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}}
+})();
+
+function normalize(d){d=d||{};d.v=1;d.school=d.school||'';d.year=d.year||'';d.ch=d.ch||{};return d}
+function peek(g){return state.ch[g]||{teacher:'',memory:'',photos:[]}}
+function chOf(g){var c=state.ch[g];if(!c){c=state.ch[g]={teacher:'',memory:'',photos:[]};}return c}
+function bytes(){var n=0;for(var k in state.ch){var p=state.ch[k].photos||[];for(var i=0;i<p.length;i++)n+=p[i].src.length}return n}
+function years(g){var Y=parseInt(state.year,10);if(!(Y>1900&&Y<2200))return '';var a=Y-13+g;return a+' – '+(a+1)}
+function stageName(g){for(var i=0;i<STAGES.length;i++)if(STAGES[i].g.indexOf(g)>-1)return STAGES[i].n;return ''}
+function plural(n){return n===1?'снимка':'снимки'}
+
+function el(tag,props){
+  var e=document.createElement(tag);
+  if(props)for(var k in props){
+    var v=props[k];
+    if(v==null||v===false)continue;
+    if(k==='class')e.className=v;
+    else if(k==='text')e.textContent=v;
+    else if(k==='value')e.value=v;
+    else if(k==='style')e.style.cssText=v;
+    else if(k.indexOf('on')===0)e.addEventListener(k.slice(2),v);
+    else e.setAttribute(k,v===true?'':v);
+  }
+  for(var i=2;i<arguments.length;i++){
+    var kids=[].concat(arguments[i]);
+    for(var j=0;j<kids.length;j++){
+      var kid=kids[j];
+      if(kid==null||kid===false)continue;
+      e.append(kid.nodeType?kid:document.createTextNode(String(kid)));
+    }
+  }
+  return e;
+}
+function orn(){return el('div',{class:'orn','aria-hidden':'true'},el('i'))}
+
+var SEAL=(function(){
+  var t='';
+  for(var i=0;i<48;i++){
+    var a=i*7.5*Math.PI/180,r2=i%4===0?43:45;
+    t+='<line x1="'+(60+47*Math.cos(a)).toFixed(1)+'" y1="'+(60+47*Math.sin(a)).toFixed(1)+'" x2="'+(60+r2*Math.cos(a)).toFixed(1)+'" y2="'+(60+r2*Math.sin(a)).toFixed(1)+'"/>';
+  }
+  return '<svg viewBox="0 0 120 120" width="92" height="92" fill="none" stroke="currentColor" stroke-width=".8"><circle cx="60" cy="60" r="57"/><circle cx="60" cy="60" r="52" stroke-width=".5"/>'+t+'<text x="60" y="68" text-anchor="middle" font-family="Playfair Display,Georgia,serif" font-style="italic" font-size="25" fill="currentColor" stroke="none">I–XII</text></svg>';
+})();
+
+/* ---- demo pictures: tiny generated SVG scenes, clearly marked ---- */
+var PALS=[['#1d2b53','#8793b5'],['#4a2c3b','#d3a98f'],['#26453f','#a9c4aa'],['#38364f','#cdb67e'],['#5a3a2a','#e6cfa4'],['#22344c','#a5bbcf']];
+function sampleImg(i){
+  var p=PALS[i%PALS.length],s=(i+3)*977,svg='';
+  function rnd(){s=(s*9301+49297)%233280;return s/233280}
+  svg+='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="'+p[0]+'"/><stop offset="1" stop-color="'+p[1]+'"/></linearGradient></defs><rect width="800" height="600" fill="url(#g)"/>';
+  for(var k=0;k<6;k++)svg+='<circle cx="'+Math.round(rnd()*800)+'" cy="'+Math.round(rnd()*360)+'" r="'+Math.round(40+rnd()*90)+'" fill="#fff" opacity="'+(0.05+rnd()*0.1).toFixed(2)+'"/>';
+  svg+='<rect y="430" width="800" height="170" fill="#0b1226" opacity=".38"/>';
+  var n=4+Math.floor(rnd()*3),x=110;
+  for(var q=0;q<n;q++){
+    var h=70+Math.round(rnd()*40);
+    svg+='<g fill="#0b1226" opacity=".62"><circle cx="'+x+'" cy="'+(400-h)+'" r="27"/><rect x="'+(x-38)+'" y="'+(432-h)+'" width="76" height="'+(h+170)+'" rx="30"/></g>';
+    x+=Math.round(560/n)+Math.round(rnd()*14);
+  }
+  svg+='<text x="780" y="580" text-anchor="end" font-family="Georgia,serif" font-size="22" letter-spacing="6" fill="#fff" opacity=".6">ДЕМО</text></svg>';
+  return 'data:image/svg+xml;utf8,'+encodeURIComponent(svg);
+}
+function seedDemo(){
+  var d={v:1,demo:true,school:'12 „А“ клас · демо',year:'2010',ch:{}},n=0;
+  for(var g=1;g<=12;g++){
+    var ps=[];
+    for(var k=0;k<3;k++)ps.push({src:sampleImg(n++),cap:IDEAS[g][k]});
+    d.ch[g]={teacher:'',memory:DEMO_MEMORY[g]||'',photos:ps};
+  }
+  return d;
+}
+
+/* ---- persistent nodes ---- */
+var view=el('div',{id:'view'});
+var printBook=el('div',{class:'print-book'});
+var st=el('span',{class:'st',role:'status'});
+var meter=el('span',{class:'meta'});
+var cancelBtn=el('button',{type:'button',class:'btn',onclick:cancelEdits},'Откажи');
+var saveBtn=el('button',{type:'button',class:'btn primary',onclick:save},'Запази албума');
+var bar=el('div',{class:'savebar',hidden:true},st,meter,cancelBtn,saveBtn);
+var toast=el('div',{class:'toast',role:'status',hidden:true});
+var toastT=0;
+var fin=el('input',{type:'file',accept:'image/*',multiple:true,hidden:true,'aria-label':'Добави снимки'});
+var imp=el('input',{type:'file',accept:'application/json,.json',hidden:true,'aria-label':'Зареди албум от файл'});
+fin.addEventListener('change',function(){
+  var g=pickG,fs=[].slice.call(fin.files||[]);
+  fin.value='';
+  if(g&&fs.length)addFiles(g,fs);
+});
+imp.addEventListener('change',function(){
+  var f=imp.files&&imp.files[0];imp.value='';
+  if(!f)return;
+  var r=new FileReader();
+  r.onload=function(){
+    try{
+      var d=JSON.parse(r.result);
+      if(!d||typeof d!=='object'||!d.ch)throw new Error('bad');
+      state=normalize(d);persist();render();setStatus('Албумът е зареден.');
+    }catch(e){setStatus('Файлът не е валиден албум.')}
+  };
+  r.readAsText(f);
+});
+
+var lbImg=el('img',{alt:''});
+var lbCap=el('p',{class:'lb-cap'});
+var lb=el('div',{class:'lb',hidden:true,role:'dialog','aria-modal':'true','aria-label':'Преглед на снимка'},
+  el('div',{class:'lb-top'},el('button',{type:'button',class:'lb-x',onclick:closeLb},'Затвори')),
+  el('div',{class:'lb-stage'},
+    el('button',{type:'button',class:'lb-n','aria-label':'Предишна снимка',onclick:function(){stepLb(-1)}},'←'),
+    lbImg,
+    el('button',{type:'button',class:'lb-n','aria-label':'Следваща снимка',onclick:function(){stepLb(1)}},'→')),
+  lbCap);
+lb.addEventListener('click',function(e){if(e.target===lb||(e.target.classList&&e.target.classList.contains('lb-stage')))closeLb()});
+document.addEventListener('keydown',function(e){
+  if(lb.hidden)return;
+  if(e.key==='Escape')closeLb();
+  else if(e.key==='ArrowLeft')stepLb(-1);
+  else if(e.key==='ArrowRight')stepLb(1);
+});
+app.append(view,printBook,bar,toast,fin,imp,lb);
+
+/* ---- navigation + render ---- */
+function go(r){route=r;render();window.scrollTo(0,0)}
+
+function render(){
+  app.classList.toggle('editing',editing);
+  view.replaceChildren(topbar(),rail(),route==='cover'?cover():chapter(route),LOCAL?footer():null);
+  updateBar();
+  var on=view.querySelector('.rb.on');
+  if(on&&on.scrollIntoView)on.scrollIntoView({inline:'center',block:'nearest'});
+}
+
+function topbar(){
+  var y=state.year?('Випуск '+state.year):'Класове I – XII';
+  var items=[];
+  if(LOCAL){
+    items.push(el('button',{type:'button',class:'lnk',onclick:toggleTheme},'Тема'));
+    items.push(el('button',{type:'button',class:'lnk',onclick:exportJson},'Експорт'));
+    items.push(el('button',{type:'button',class:'lnk',onclick:function(){imp.click()}},'Импорт'));
+    items.push(el('button',{type:'button',class:'lnk',onclick:printAlbum},'PDF'));
+  }
+  if(canEdit)items.push(el('button',{type:'button',class:'btn',onclick:function(){editing=!editing;render()}},editing?'Готово':'Редактирай'));
+  return el('div',{class:'top'},el('p',{class:'meta',text:y}),el('div',{class:'tools-top'},items));
+}
+
+function rail(){
+  var n=el('nav',{class:'rail','aria-label':'Класове'});
+  n.append(railBtn('Съдържание','cover',null,'first'));
+  for(var g=1;g<=12;g++)n.append(railBtn(ROMAN[g],g,g+' клас',''));
+  return n;
+}
+function railBtn(t,r,label,extra){
+  return el('button',{type:'button',class:'rb'+(extra?' '+extra:'')+(route===r?' on':''),'aria-current':route===r?'page':null,'aria-label':label,onclick:function(){go(r)}},t);
+}
+
+function footer(){
+  return el('p',{class:'foot meta',text:'Албум в една HTML страница · снимките остават само в твоя браузър'});
+}
+
+/* ---- cover ---- */
+function field(label,id,obj,key,ph,after){
+  return el('div',{class:'f'},
+    el('label',{for:id,text:label}),
+    editing
+      ?el('input',{id:id,type:'text',value:obj[key],placeholder:ph,maxlength:key==='year'?4:90,inputmode:key==='year'?'numeric':null,
+          oninput:function(e){obj[key]=e.target.value;touch()},
+          onchange:function(){if(after)after()}})
+      :el('span',{class:'fv',text:obj[key]||' '}));
+}
+
+function cover(){
+  var total=0,filled=0;
+  for(var g=1;g<=12;g++){var n=peek(g).photos.length;total+=n;if(n)filled++}
+  var count=total?(total+' '+plural(total)+' · '+filled+' от 12 класа'):'още няма снимки';
+  var seal=el('span',{class:'seal','aria-hidden':'true'});seal.innerHTML=SEAL;
+  var note=null;
+  if(LOCAL&&state.demo&&!forPrint){
+    note=el('div',{class:'banner'},
+      el('span',{text:'Това са примерни данни. Добави свои снимки през „Редактирай“, а когато си готов, започни празен албум.'}),
+      el('button',{type:'button',class:'btn',onclick:clearDemo},'Празен албум'));
+  }else if(total===0&&!forPrint){
+    note=el('p',{class:'hint',text:editing?'Избери клас, добави снимки и запази албума.':'Албумът още се попълва.'});
+  }
+  return el('section',{class:'sheet'},
+    el('div',{class:'cover'},
+      seal,
+      el('p',{class:'kick',text:'Общ албум на випуска'}),
+      el('h1',{class:'foil',text:TITLE}),
+      el('p',{class:'sub',text:'от първи до дванадесети клас'}),
+      orn(),
+      el('div',{class:'form'},
+        field('Училище и клас','f-school',state,'school','напр. 12 „А“ клас и името на училището'),
+        field('Випуск','f-year',state,'year','година, напр. 2010',render),
+        el('div',{class:'f'},el('span',{class:'lbl',text:'В албума'}),el('span',{class:'fv',text:count})))),
+    note,
+    STAGES.map(stageBlock));
+}
+
+function stageBlock(s){
+  return el('section',{'aria-label':s.n},
+    el('div',{class:'stage-h'},
+      el('h2',{text:s.n}),
+      el('span',{class:'meta',text:ROMAN[s.g[0]]+' – '+ROMAN[s.g[s.g.length-1]]+' клас'})),
+    el('div',{class:'cards'},s.g.map(card)));
+}
+
+function card(g){
+  var c=peek(g),p=c.photos[0],y=years(g),n=c.photos.length;
+  var line=(y||'')+(y&&n?' · ':'')+(n?n+' сн.':'');
+  return el('button',{type:'button',class:'gc','aria-label':g+' клас',onclick:function(){go(g)}},
+    el('span',{class:'gc-img'},
+      p?el('img',{src:p.src,alt:'',loading:forPrint?null:'lazy'}):el('span',{class:'gc-n',text:ROMAN[g]}),
+      p?el('span',{class:'gc-r',text:ROMAN[g]}):null),
+    el('span',{class:'gc-t',text:ROMAN[g]+' клас'}),
+    el('span',{class:'meta',text:line||' '}));
+}
+
+/* ---- chapter ---- */
+function chapter(g){
+  var c=editing?chOf(g):peek(g);
+  var y=years(g);
+  var teacher=editing
+    ?el('div',{class:'form',style:'max-width:520px;margin-top:18px;display:grid;gap:12px'},field('Класен ръководител','f-teacher',c,'teacher','име на учителя'))
+    :(c.teacher?el('p',{class:'teacher'},'Класен ръководител: ',c.teacher):null);
+
+  var memory=null;
+  if(editing){
+    memory=el('div',{class:'memory'},
+      el('label',{class:'meta',for:'f-memory',text:'Спомен от годината'}),
+      el('textarea',{id:'f-memory',class:'mem',value:c.memory,placeholder:'Любима учителка, смешен случай, екскурзия, кой с кого седеше…',
+        oninput:function(e){c.memory=e.target.value;touch()}}));
+  }else if(c.memory){
+    memory=el('div',{class:'memory'},
+      el('p',{class:'meta',text:'Спомен от годината'}),
+      c.memory.split(/\n+/).filter(Boolean).map(function(t){return el('p',{text:t})}));
+  }
+
+  var grid=el('div',{class:'grid'+(editing?' ed':'')});
+  c.photos.forEach(function(p,i){grid.append(editing?photoEdit(g,c,p,i):photoView(g,p,i))});
+  if(!forPrint){
+    var need=Math.max(0,3-c.photos.length),ideas=IDEAS[g];
+    for(var k=0;k<need;k++)grid.append(ghost(g,ideas[(c.photos.length+k)%ideas.length]));
+  }
+
+  var tools=editing
+    ?el('div',{class:'tools'},
+        el('button',{type:'button',class:'btn primary',onclick:function(){pick(g)}},'Добави снимки'),
+        el('span',{class:'meta',text:c.photos.length+' '+plural(c.photos.length)+' в този клас'}))
+    :null;
+
+  var head=el('header',{class:'chap-head'},
+    el('p',{class:'meta',text:stageName(g)+(y?' · '+y:'')}),
+    el('h1',null,ORD[g]+' ',el('em',{text:'клас'})),
+    teacher);
+
+  return el('section',{class:'sheet'},
+    el('div',{class:'page'},
+      el('span',{class:'wm','aria-hidden':'true',text:ROMAN[g]}),
+      head,
+      orn(),
+      memory,
+      tools,
+      grid,
+      forPrint?null:pager(g)));
+}
+
+function photoView(g,p,i){
+  return el('figure',{class:'ph'},
+    el('button',{type:'button',class:'ph-b','aria-label':'Увеличи снимката'+(p.cap?': '+p.cap:''),onclick:function(){openLb(g,i)}},
+      el('img',{src:p.src,alt:p.cap||('Снимка от '+g+' клас'),loading:forPrint?null:'lazy'})),
+    el('figcaption',{text:p.cap||''}));
+}
+
+function photoEdit(g,c,p,i){
+  var last=c.photos.length-1;
+  return el('figure',{class:'ph'},
+    el('img',{src:p.src,alt:p.cap||('Снимка от '+g+' клас')}),
+    el('input',{type:'text',class:'cap',value:p.cap||'',maxlength:140,placeholder:'Подпис: кой, къде, кога',
+      'aria-label':'Подпис на снимка '+(i+1),oninput:function(e){p.cap=e.target.value;touch()}}),
+    el('div',{class:'acts'},
+      el('button',{type:'button',class:'mini','aria-label':'Премести по-напред',disabled:i===0,onclick:function(){move(c,i,-1)}},'←'),
+      el('button',{type:'button',class:'mini','aria-label':'Премести по-назад',disabled:i===last,onclick:function(){move(c,i,1)}},'→'),
+      el('button',{type:'button',class:'mini',onclick:function(e){
+        var b=e.currentTarget;
+        if(b.dataset.armed){c.photos.splice(i,1);touch();render();return}
+        b.dataset.armed='1';b.textContent='Потвърди';b.classList.add('warn');
+        setTimeout(function(){if(b.isConnected){delete b.dataset.armed;b.textContent='Премахни';b.classList.remove('warn')}},3000);
+      }},'Премахни')));
+}
+
+function ghost(g,idea){
+  var inner=[el('span',{class:'meta',text:'идея за снимка'}),el('span',{text:idea})];
+  return editing
+    ?el('button',{type:'button',class:'ghost',onclick:function(){pick(g)}},inner,el('span',{class:'meta',text:'+ добави'}))
+    :el('div',{class:'ghost'},inner);
+}
+
+function pager(g){
+  var prev=g===1?{t:'Съдържание',r:'cover'}:{t:ROMAN[g-1]+' клас',r:g-1};
+  var next=g===12?{t:'Съдържание',r:'cover'}:{t:ROMAN[g+1]+' клас',r:g+1};
+  return el('div',{class:'pager'},
+    el('button',{type:'button',class:'btn',onclick:function(){go(prev.r)}},'← '+prev.t),
+    el('button',{type:'button',class:'btn',onclick:function(){go(next.r)}},next.t+' →'));
+}
+
+function move(c,i,d){var j=i+d;if(j<0||j>=c.photos.length)return;var t=c.photos[i];c.photos[i]=c.photos[j];c.photos[j]=t;touch();render()}
+
+/* ---- lightbox ---- */
+function openLb(g,i){lbG=g;lbI=i;showLb();lb.hidden=false;document.body.style.overflow='hidden';lb.querySelector('.lb-x').focus()}
+function closeLb(){lb.hidden=true;document.body.style.overflow=''}
+function stepLb(d){var n=peek(lbG).photos.length;if(!n)return;lbI=(lbI+d+n)%n;showLb()}
+function showLb(){
+  var ps=peek(lbG).photos,p=ps[lbI];
+  if(!p)return;
+  lbImg.src=p.src;lbImg.alt=p.cap||'';
+  lbCap.textContent=(lbI+1)+' / '+ps.length+(p.cap?' · '+p.cap:'');
+}
+
+/* ---- adding photos ---- */
+function pick(g){pickG=g;fin.click()}
+
+function shrink(file){
+  return new Promise(function(res,rej){
+    var url=URL.createObjectURL(file),img=new Image();
+    img.onload=function(){
+      try{
+        var s=Math.min(1,1000/Math.max(img.naturalWidth,img.naturalHeight));
+        var c=document.createElement('canvas');
+        c.width=Math.max(1,Math.round(img.naturalWidth*s));c.height=Math.max(1,Math.round(img.naturalHeight*s));
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        res(c.toDataURL('image/jpeg',0.78));
+      }catch(e){rej(e)}finally{URL.revokeObjectURL(url)}
+    };
+    img.onerror=function(){URL.revokeObjectURL(url);rej(new Error('decode'))};
+    img.src=url;
+  });
+}
+
+async function addFiles(g,files){
+  var c=chOf(g),ok=0,bad=0,full=false;
+  for(var k=0;k<files.length;k++){
+    setStatus('Обработвам снимка '+(k+1)+' от '+files.length+'…');
+    try{
+      var src=await shrink(files[k]);
+      if(bytes()+src.length>LIMIT){full=true;break}
+      c.photos.push({src:src,cap:''});ok++;
+    }catch(e){bad++}
+  }
+  if(ok){if(LOCAL)persist();else dirty=true}
+  render();
+  var msg=ok?(ok+' '+(ok===1?'добавена':'добавени')+(LOCAL?'.':'. Не забравяй да запазиш.')):'';
+  if(bad)msg+=(msg?' ':'')+bad+' не можаха да се прочетат (снимки HEIC от телефон запази като JPEG).';
+  if(full)msg+=(msg?' ':'')+'Достигнат е лимитът на албума, останалите не са добавени.';
+  setStatus(msg||'Нищо не е добавено.');
+}
+
+/* ---- status, saving ---- */
+function setStatus(t){
+  st.textContent=t;
+  if(LOCAL){
+    toast.textContent=t;toast.hidden=!t;
+    clearTimeout(toastT);toastT=setTimeout(function(){toast.hidden=true},3200);
+  }
+}
+function touch(){
+  if(LOCAL){persist();return}
+  dirty=true;setStatus('Има незапазени промени.');updateBar();
+}
+function updateBar(){
+  bar.hidden=LOCAL||!(editing||dirty);
+  saveBtn.disabled=!dirty||saving;
+  cancelBtn.disabled=!dirty||saving;
+  meter.textContent='Снимки: '+(bytes()/1e6).toFixed(1)+' от '+(LIMIT/1e6).toFixed(0)+' MB';
+}
+function cancelEdits(){state=normalize(JSON.parse(raw));dirty=false;setStatus('Промените са отменени.');render()}
+
+/* local mode: IndexedDB */
+function idb(){
+  return new Promise(function(res,rej){
+    if(!window.indexedDB){rej(new Error('no idb'));return}
+    var r=indexedDB.open('graduation-album',1);
+    r.onupgradeneeded=function(){r.result.createObjectStore('kv')};
+    r.onsuccess=function(){res(r.result)};
+    r.onerror=function(){rej(r.error)};
+  });
+}
+function idbGet(k){
+  return idb().then(function(db){return new Promise(function(res,rej){
+    var q=db.transaction('kv').objectStore('kv').get(k);
+    q.onsuccess=function(){res(q.result)};q.onerror=function(){rej(q.error)};
+  })});
+}
+function idbSet(k,v){
+  return idb().then(function(db){return new Promise(function(res,rej){
+    var t=db.transaction('kv','readwrite');t.objectStore('kv').put(v,k);
+    t.oncomplete=function(){res()};t.onerror=function(){rej(t.error)};t.onabort=function(){rej(t.error)};
+  })});
+}
+var persistT=0;
+function persist(){
+  clearTimeout(persistT);
+  persistT=setTimeout(function(){
+    idbSet('album',state).then(function(){setStatus('Запазено в този браузър.')})
+      .catch(function(){setStatus('Не може да се запази в браузъра. Направи експорт, за да не загубиш албума.')});
+  },500);
+}
+function clearDemo(){state=normalize({v:1,ch:{}});persist();render();setStatus('Празен албум. Избери клас и добави снимки.')}
+function toggleTheme(){
+  var r=document.documentElement;
+  var cur=r.getAttribute('data-theme')||((window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light');
+  var nx=cur==='dark'?'light':'dark';
+  r.setAttribute('data-theme',nx);
+  try{localStorage.setItem('album-theme',nx)}catch(e){}
+}
+function exportJson(){
+  var b=new Blob([JSON.stringify(state)],{type:'application/json'});
+  var u=URL.createObjectURL(b);
+  var a=el('a',{href:u,download:'abiturientski-album.json'});
+  document.body.append(a);a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(u)},4000);
+  setStatus('Албумът е изтеглен като файл.');
+}
+
+/* print / save as PDF (local mode only: the artifact viewer cannot open the print dialog) */
+function preparePrint(){
+  var was=editing;editing=false;forPrint=true;
+  var kids=[cover()];
+  for(var g=1;g<=12;g++)kids.push(chapter(g));
+  printBook.replaceChildren.apply(printBook,kids);
+  forPrint=false;editing=was;
+}
+function printAlbum(){preparePrint();setTimeout(function(){window.print()},60)}
+window.addEventListener('beforeprint',function(){if(LOCAL)preparePrint()});
+window.addEventListener('afterprint',function(){printBook.replaceChildren()});
+
+/* artifact mode: the page republishes itself */
+function buildDoc(){
+  var rs=document.head&&document.head.querySelector('style');
+  var reset=(rs&&rs.textContent)||RESET_FALLBACK;
+  var css=document.getElementById('app-style').textContent;
+  var js=document.getElementById('app-js').textContent;
+  var json=JSON.stringify(state).replace(/</g,'\\u003c');
+  var S='<'+'script';
+  var E='<'+'/script>';
+  return '<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>'+reset+'</style></head><body>'
+    +'<title>'+TITLE+'</title>\n'+LINK+'\n<style id="app-style">'+css+'</style>\n<div id="app"></div>\n'
+    +S+' type="application/json" id="album-data">'+json+E+'\n'
+    +S+' id="app-js">'+js+E+'</body></html>';
+}
+
+async function save(){
+  if(saving)return;
+  saving=true;updateBar();setStatus('Запазвам…');
+  try{
+    var a=await claude.use('artifact');
+    if(!a)throw {code:'not_granted'};
+    try{sessionStorage.setItem('album-route','k'+route)}catch(e){}
+    await a.publish(buildDoc());
+    dirty=false;setStatus('Запазено.');
+  }catch(e){
+    var code=e&&e.code;
+    if(code==='conflict')setStatus('Някой друг е запазил по-нова версия. Страницата се обновява.');
+    else if(code==='too_large')setStatus('Албумът е твърде голям за запазване. Премахни няколко снимки.');
+    else if(code==='rate_limited')setStatus('Запазваш твърде често. Изчакай малко.');
+    else if(code==='not_writer'||code==='not_granted'||code==='not_declared'||code==='capability_disabled'||code==='consent_required'){
+      canEdit=false;editing=false;setStatus('Този изглед е само за четене, не можеш да запазваш.');render();
+    }else setStatus('Не се запази. Опитай пак след малко.');
+  }
+  saving=false;updateBar();
+}
+
+/* ---- start ---- */
+if(LOCAL){
+  idbGet('album').then(function(d){state=normalize(d||seedDemo())})
+    .catch(function(){state=normalize(seedDemo())})
+    .then(function(){render()});
+}else{
+  Promise.all([claude.use('user'),claude.use('artifact')]).then(function(r){
+    if(!r[0]||!r[1])return;
+    return Promise.resolve(r[0].canEdit()).then(function(ok){if(ok){canEdit=true;render()}});
+  }).catch(function(){});
+  render();
+}
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+The fonts in this folder are licensed under the SIL Open Font License, Version 1.1 (https://openfontlicense.org).
+- Playfair Display: Copyright 2017 The Playfair Display Project Authors (https://github.com/clauseggers/Playfair-Display)
+- EB Garamond: Copyright 2017 The EB Garamond Project Authors (https://github.com/octaviopardo/EBGaramond12)
+- Jost: Copyright 2020 The Jost Project Authors (https://github.com/indestructible-type/Jost)
+The files come from the @fontsource/* npm packages (Latin and Cyrillic subsets).
