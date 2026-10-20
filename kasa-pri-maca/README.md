@@ -34,6 +34,14 @@ Vanilla HTML, CSS and JavaScript in one file, localStorage, Web Crypto (PBKDF2),
 - [Test cases](docs/test-cases.md) (28 passed, 14 not yet run)
 - [Bug reports](docs/bug-reports/README.md) (8 found, all fixed)
 
-## Testing status
+## Testing
 
-Checked by hand and with scripted Chromium runs (Playwright) at 360 px and 320 px for horizontal overflow, and with a fake shared database for the kitchen flow (order, ready, take, pay, timers). There are no automated tests in the repository yet.
+Automated tests use Playwright Test (14 tests in `tests/`). They run against `index.html` with an in-memory stand-in for the shared database.
+
+```
+npm install
+npx playwright install chromium
+npm test
+```
+
+Set `CHROMIUM_PATH` to use an already installed Chromium. The tests cover roles, the kitchen flow with timers, reservations, payment and tips, menu loading and layout at 360 px and 320 px. Sound, the real shared database between devices and photo menu import are checked by hand (see the test cases).

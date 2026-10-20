@@ -1,0 +1,13 @@
+{
+  "name": "kasa-pri-maca",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Waiter POS demo with Playwright tests",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0"
+  }
+}
