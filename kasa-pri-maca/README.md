@@ -28,6 +28,12 @@ Use one of the "Тестов вход" buttons (manager, waiter, cook) on the lo
 
 Vanilla HTML, CSS and JavaScript in one file, localStorage, Web Crypto (PBKDF2), WebAudio for the alert sound.
 
+## QA documentation
+
+- [Test plan](docs/test-plan.md)
+- [Test cases](docs/test-cases.md) (28 passed, 14 not yet run)
+- [Bug reports](docs/bug-reports/README.md) (8 found, all fixed)
+
 ## Testing status
 
 Checked by hand and with scripted Chromium runs (Playwright) at 360 px and 320 px for horizontal overflow, and with a fake shared database for the kitchen flow (order, ready, take, pay, timers). There are no automated tests in the repository yet.
