@@ -1148,19 +1148,54 @@ input{font:inherit;font-size:20px;color:var(--ink);background:var(--bg);border:1
     if(kunsubC){try{kunsubC()}catch(e){}kunsubC=null}
     kcol=null;kncol=null;kcfg=null;clearInterval(ttick);ttick=null;nfirst=true;kdocs={};kfirst=true;knoted={};kpend={};clearInterval(ktick);ktick=null;$('#kalert').innerHTML='';$('#kstat').hidden=true;
   }
+
+  /* Локална база: когато няма споделена база (файл .html, отворен директно), ролите на това устройство пак си говорят – през localStorage и BroadcastChannel (раздели и прозорци на същия браузър). */
+  var klocal=false,ldb=null;
+  function localDb(){
+    if(ldb)return ldb;
+    var subs=[],bc=null,K=function(c){return 'pm_db_'+c};
+    try{bc=new BroadcastChannel('pm_db')}catch(e){}
+    function load(c){try{return JSON.parse(localStorage.getItem(K(c))||'{}')||{}}catch(e){return {}}}
+    function store(c,o){try{localStorage.setItem(K(c),JSON.stringify(o))}catch(e){}}
+    function fire(c){subs.slice().forEach(function(s){if(s.col===c)setTimeout(s.run,0)})}
+    function shout(c){fire(c);try{bc&&bc.postMessage(c)}catch(e){}}
+    if(bc)bc.onmessage=function(e){fire(e.data)};
+    window.addEventListener('storage',function(e){if(e.key&&e.key.indexOf('pm_db_')===0)fire(e.key.slice(6))});
+    function sub(col,mk,cb){
+      var s={col:col,run:function(){cb(mk())}};subs.push(s);setTimeout(s.run,0);
+      return function(){var i=subs.indexOf(s);if(i>=0)subs.splice(i,1)};
+    }
+    ldb={collection:function(c){return {
+      onSnapshot:function(cb){return sub(c,function(){
+        var o=load(c);var docs=Object.keys(o).sort().map(function(id){return {id:id,exists:true,data:function(){return JSON.parse(JSON.stringify(o[id]))}}});
+        return {docs:docs,size:docs.length,empty:!docs.length};
+      },cb)},
+      doc:function(id){return {
+        set:function(d){var o=load(c);o[id]=JSON.parse(JSON.stringify(d));store(c,o);shout(c);return Promise.resolve()},
+        delete:function(){var o=load(c);delete o[id];store(c,o);shout(c);return Promise.resolve()},
+        onSnapshot:function(cb){return sub(c,function(){var o=load(c),has=Object.prototype.hasOwnProperty.call(o,id);return {id:id,exists:has,data:function(){return has?JSON.parse(JSON.stringify(o[id])):undefined}}},cb)}
+      }}
+    }}};
+    return ldb;
+  }
+  function getDb(){
+    if(window.claude&&typeof window.claude.use==='function'){
+      return window.claude.use('db').then(function(d){if(d){klocal=false;return d}klocal=true;return localDb()}).catch(function(){klocal=true;return localDb()});
+    }
+    klocal=true;return Promise.resolve(localDb());
+  }
   function kStart(){
     kStop();
-    if(!window.claude||typeof window.claude.use!=='function'){kSet(false,'Кухня: няма връзка');kRenderAll();return}
     kSet(false,'Кухня: свързване…');
     ttick=setInterval(tickTm,1000);
     var name=kName(),who=me&&me.u;
-    (kdbP=kdbP||window.claude.use('db')).then(function(db){
+    (kdbP=kdbP||getDb()).then(function(db){
       if(!me||me.u!==who||kName()!==name)return;
       if(!db){kSet(false,'Кухня: няма връзка');kRenderAll();return}
       kcol=db.collection(name);
       kunsub=kcol.onSnapshot(function(snap){
         var nd={};snap.docs.forEach(function(d){nd[d.id]=d.data()});
-        kdocs=nd;kSet(true,'Кухня: свързана');kHandle();kfirst=false;
+        kdocs=nd;kSet(true,klocal?'Кухня: само това устройство':'Кухня: свързана');kHandle();kfirst=false;
       },function(){kSet(false,'Кухня: няма връзка');kcol=null});
       kncol=db.collection(name+'_notes');
       kunsubN=kncol.onSnapshot(function(snap){

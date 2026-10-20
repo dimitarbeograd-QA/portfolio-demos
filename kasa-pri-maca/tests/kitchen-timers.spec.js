@@ -61,9 +61,34 @@ test.describe('Кухня и таймери (TC-030..035)', () => {
     await expect(page.locator('[data-kdone]')).toBeVisible();
   });
 
-  test('TC-039 без връзка с базата кухненският екран го казва ясно', async ({ page }) => {
+  test('TC-039 без споделена база кухнята работи на това устройство', async ({ page }) => {
     await openApp(page, { fakeDb: false });
-    await testLogin(page, 'cook');
-    await expect(page.locator('#kitchenView')).toContainText('Няма връзка със сървъра');
+    await testLogin(page, 'manager');
+    await switchRole(page, 'waiter');
+    await expect(page.locator('#kstat')).toContainText('само това устройство');
+    await orderOneItem(page, 5);
+    await page.click('#toTables');
+    await switchRole(page, 'cook');
+    await expect(page.locator('#kitchenView')).toContainText('Маса 5');
+    await page.click('[data-kdone]');
+    await switchRole(page, 'waiter');
+    await expect(page.locator('#kalert')).toContainText('Маса 5 е готова');
+  });
+
+  test('TC-040a сервитьор и готвач в два раздела на един браузър се виждат', async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport: { width: 412, height: 900 }, hasTouch: true });
+    const waiter = await ctx.newPage();
+    const cook = await ctx.newPage();
+    await waiter.goto(process.env.APP_URL || require('path').resolve(__dirname, '../index.html').replace(/^/, 'file://'));
+    await cook.goto(waiter.url());
+    await waiter.click('[data-trole="waiter"]');
+    await cook.click('[data-trole="cook"]');
+    await waiter.click('#tgrid [data-t="7"]');
+    await waiter.click('#menu [data-key="0.0"]');
+    await waiter.click('#toTables');
+    await expect(cook.locator('#kitchenView')).toContainText('Маса 7');
+    await cook.click('[data-kdone]');
+    await expect(waiter.locator('#kalert')).toContainText('Маса 7 е готова');
+    await ctx.close();
   });
 });

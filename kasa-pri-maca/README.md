@@ -20,7 +20,7 @@ Use one of the "Тестов вход" buttons (manager, waiter, cook) on the lo
 
 ## Demo limits
 
-- Shared kitchen sync between devices and the photo menu import rely on the Claude artifact runtime (shared database and an AI call). On GitHub Pages those are not available, so the kitchen view works only with data on the same device, and photo import is off. The rest works as in the real app.
+- Sync between different devices and the photo menu import rely on the Claude artifact runtime (shared database and an AI call). On GitHub Pages or as a plain `.html` file, waiter, cook and manager still talk to each other on the same device (tabs of one browser, or the role switcher in test mode) through localStorage and BroadcastChannel. Two separate phones need a server, which this demo does not have. Photo import is off.
 - The receipt is a non-fiscal slip. A real deployment needs a fiscal device and a check with an accountant.
 - Fonts (Fira Sans, Lora) load from Google Fonts; without them the page falls back to system fonts.
 
@@ -31,12 +31,12 @@ Vanilla HTML, CSS and JavaScript in one file, localStorage, Web Crypto (PBKDF2),
 ## QA documentation
 
 - [Test plan](docs/test-plan.md)
-- [Test cases](docs/test-cases.md) (28 passed, 14 not yet run)
-- [Bug reports](docs/bug-reports/README.md) (8 found, all fixed)
+- [Test cases](docs/test-cases.md) (29 passed, 15 not yet run)
+- [Bug reports](docs/bug-reports/README.md) (9 found, all fixed)
 
 ## Testing
 
-Automated tests use Playwright Test (14 tests in `tests/`). They run against `index.html` with an in-memory stand-in for the shared database.
+Automated tests use Playwright Test (15 tests in `tests/`). They run against `index.html` with an in-memory stand-in for the shared database.
 
 ```
 npm install
