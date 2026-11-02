@@ -3871,6 +3871,11 @@ html.hc .card .ico.cover{background-color:#fff!important;border-radius:10px}
 /* the director's call button is exactly as wide as the photo above it, with the name on the left */
 .intro .dir-side{width:200px;max-width:100%}
 .intro .dir-side .btn{justify-content:flex-start;text-align:left;padding:12px 14px;font-size:1rem;line-height:1.35;align-items:flex-start}
+/* newspaper heading: the title is centred on the whole width (the crest sits at the left edge), quote and tagline wrap evenly */
+.np-mast .np-head{position:relative;justify-content:center;gap:0}
+.np-mast .np-logo{position:absolute;left:0;top:50%;transform:translateY(-50%)}
+.np-mast .np-title{flex:0 1 auto;padding:0 15cqw;max-width:100%;box-sizing:border-box}
+.np-mast .np-q,.np-mast .np-tag{text-wrap:balance;padding:0 1cqw}
 </style>
 <script id="proekti-redirect">
 (function(){function f(){if(location.hash==='#/proekti')location.replace('#/evropeyski-proekti')}f();window.addEventListener('hashchange',f)})();
