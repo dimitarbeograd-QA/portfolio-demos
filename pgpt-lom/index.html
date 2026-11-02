@@ -3860,10 +3860,12 @@ html.hc .comp-cat .pl{background:#ff0!important;color:#000!important}
 #programs .card{position:relative;z-index:6}
 html.hc .card .ico.cover{background-color:#fff!important;border-radius:10px}
 .la{position:relative}
-.la-ball{position:absolute;right:clamp(24px,7%,90px);bottom:20px;width:132px;height:132px;pointer-events:none;z-index:6}
+.la-ball{position:absolute;right:clamp(16px,6vw,90px);bottom:20px;width:clamp(84px,27vw,132px);height:clamp(84px,27vw,132px);pointer-events:none;z-index:6}
 .la-ball::before{content:"";position:absolute;left:12%;right:12%;bottom:-8px;height:14px;border-radius:50%;background:radial-gradient(ellipse at center,rgba(15,42,74,.35),rgba(15,42,74,0) 70%)}
-@media(min-width:561px){.la:has(.la-ball) .lt{padding-right:190px}}
-@media(max-width:560px){.la:has(.la-ball) .lt{padding-bottom:112px}.la-ball{width:92px;height:92px;right:22px;bottom:14px}}
+@media(min-width:561px){.la:has(.la-ball) .lt{padding-right:calc(clamp(84px,27vw,132px) + 58px)}}
+@media(max-width:560px){.la-ball{right:18px;bottom:8px}}
+/* very narrow phones: no room beside the button, so the ball gets its own band under it */
+@media(max-width:344px){.la:has(.la-ball) .lt{padding-bottom:104px}.la-ball{bottom:12px}}
 .btn.ghost-dark{border-color:var(--line);color:var(--line)}
 .btn.ghost-dark:hover{background:#eaf1fa}
 /* the director's call button is exactly as wide as the photo above it, with the name on the left */
@@ -3980,7 +3982,7 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
    Every section has one white, one red and one green strip (see the photo of the Molten 2500). Nothing is stitched from photos. */
 (function(){
   var D=document;
-  var N=(window.innerWidth<600)?184:264;
+  var N=264;
   var COLS=[[247,246,243],[192,30,52],[18,128,88]];              /* white, red, green */
   /* strip colours (white=0, red=1, green=2) for strip 0,1,2 of every section: +x -x +y -y +z -z */
   var STRIPS=[[2,0,1],[1,0,2],[0,1,2],[2,1,0],[1,2,0],[0,2,1]];
@@ -4006,6 +4008,8 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
     });
   }
   function start(b){
+    var cssW=b.getBoundingClientRect().width||132;
+    N=Math.max(168,Math.min(288,Math.round(cssW*((window.devicePixelRatio||1)>1.5?2:1.6))));
     var cv=D.createElement('canvas');cv.width=cv.height=N;
     var ctx=cv.getContext('2d');if(!ctx)return;
     var img=ctx.createImageData(N,N),out=img.data;
