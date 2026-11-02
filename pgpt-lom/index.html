@@ -4091,6 +4091,33 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
     function go(){if(!running){running=true;requestAnimationFrame(frame)}}
     if('IntersectionObserver' in window){new IntersectionObserver(function(es){vis=es[0].isIntersecting;if(vis){t0=null;go()}}).observe(b)}
     go();
+    /* auto-size: the ball takes the biggest size that does not touch the text or the button, whatever the text size or screen */
+    var fitting=false,fitT=0;
+    function fit(){
+      if(fitting)return;
+      var art=b.closest('.la');if(!art||!D.body.contains(b))return;
+      var lt=art.querySelector('.lt');if(!lt)return;
+      fitting=true;
+      b.style.width=b.style.height='';lt.style.paddingBottom='';           /* back to the size from the stylesheet */
+      var cs=getComputedStyle(b),maxS=Math.round(b.getBoundingClientRect().width)||132,g=parseFloat(cs.right)||16,bot=parseFloat(cs.bottom)||10;
+      var ra=art.getBoundingClientRect(),obs=[],rng=D.createRange(),els=lt.querySelectorAll('time,h4,p');
+      for(var e=0;e<els.length;e++){rng.selectNodeContents(els[e]);var rs=rng.getClientRects();for(var i=0;i<rs.length;i++)if(rs[i].width>1)obs.push(rs[i])}
+      var btn=lt.querySelector('.btn');if(btn)obs.push(btn.getBoundingClientRect());
+      function ok(sz){var l=ra.right-g-sz,r=ra.right-g,t=ra.bottom-bot-sz,bt=ra.bottom-bot;
+        for(var i=0;i<obs.length;i++){var o=obs[i];if(o.left<r+6&&o.right>l-6&&o.top<bt+6&&o.bottom>t-6)return false}return true}
+      var sz=maxS;
+      while(sz>=64&&!ok(sz))sz-=4;
+      if(sz<64){sz=Math.min(maxS,88);lt.style.paddingBottom=(sz+bot+10)+'px'}   /* no room beside the text: its own band under it */
+      b.style.width=b.style.height=sz+'px';
+      fitting=false;
+    }
+    function fitSoon(){clearTimeout(fitT);fitT=setTimeout(fit,60)}
+    b.__fit=fit;
+    fit();setTimeout(fit,200);setTimeout(fit,800);setTimeout(fit,2000);
+    if(D.fonts&&D.fonts.ready)D.fonts.ready.then(fitSoon);
+    window.addEventListener('resize',fitSoon);
+    new MutationObserver(fitSoon).observe(D.documentElement,{attributes:true,attributeFilter:['style','class','lang']});   /* text size, high contrast, language */
+    var art0=b.closest('.la');if(art0&&window.ResizeObserver)new ResizeObserver(fitSoon).observe(art0);
   }
   function init(b){if(b.__3d)return;b.__3d=1;start(b)}
   function scan(root){var l=(root.querySelectorAll?root.querySelectorAll('.la-ball'):[]);for(var i=0;i<l.length;i++)init(l[i]);if(root.classList&&root.classList.contains('la-ball'))init(root)}
