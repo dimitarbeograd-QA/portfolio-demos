@@ -3419,7 +3419,7 @@ const FORM_ENDPOINT = '';
     'Ученическо самоуправление':function(){var r=P('samoupravlenie'),pp=find(r,'p','Националната инициатива'),a=[];
       a.push({imgs:anyPhotos('samoupravlenie',2),title:'Модели на ученическо самоуправление',text:pp?clean(pp.textContent.replace(/Повече за инициативата[^]*$/,''),360):'ПГПТ – Лом представлява област Монтана в национална инициатива на МОН.',href:'#/samoupravlenie',cta:'Прочетете статията'});
       a.push({imgs:[U('2025/10/Sn-1-2-1024x771.jpg'),U('2025/10/Sn-4-1-1024x771.jpg'),U('2025/10/Sn-2-1-1024x771.jpg')],date:'16 октомври',title:'Избори за Училищен ученически омбудсман',text:'В ПГПТ – Лом се проведоха избори за Училищен ученически омбудсман и Заместник омбудсман. Учениците гласуваха, а след преброяването на бюлетините бяха избрани двама ученици от IX А клас.',href:'#/samoupravlenie',cta:'Прочетете повече'});
-      a.push({imgs:[U('2025/10/%D0%A1%D0%BD-2-1024x685.jpg'),U('2025/10/%D0%A1%D0%BD-1-1024x768.jpg')],date:'18 октомври',title:'„Свободата не е за продан“',text:'На Европейския ден за борба с трафика на хора учениците от десетите класове изразиха своята съпричастност с инициатива под надслов „Свободата не е за продан“ и изработиха рекламни материали и презентация.',href:'#/samoupravlenie',cta:'Прочетете повече'});
+      a.push({imgs:[U('2025/10/%D0%A1%D0%BD-2-1024x685.jpg'),U('2025/10/%D0%A1%D0%BD-1-1024x768.jpg')],date:'18 октомври',title:'„Свободата не е за продан“',text:'На Европейския ден за борба с трафика на хора учениците от десетите класове изразиха своята съпричастност с инициатива под надслов „Свободата не е за продан“ и изработиха рекламни материали и презентация.',href:'#/samoupravlenie',cta:'Прочетете повече',debate:1});
       return a},
     'Иновативно училище':function(){var r=P('stem'),a=[];
       var h1=find(r,'h4','Тържествено откриване'),p1=find(r,'p','С интердисциплинарен урок');
@@ -3443,7 +3443,7 @@ const FORM_ENDPOINT = '';
       var im=a.imgs||[],ph='';
       if(im.length){ph='<div class="ph n'+Math.min(im.length,3)+'">'+im.slice(0,3).map(function(u,k){return '<button type="button" class="phb" data-a="'+ai+'" data-i="'+k+'" aria-label="Увеличи снимката"><img alt="" decoding="async" src="'+esc(u)+'"></button>'}).join('')+'</div>'}
       var cta=a.nocta?'':'<a class="btn primary" href="'+esc(a.href)+'">'+esc(a.cta||'Прочетете повече')+' →</a>',side=im.length===1&&!a.deco&&cta;   /* one photo beside the text: the button goes under the photo */
-      html+='<article class="la'+(im.length?'':' noimg')+(im.length>1?' multi':'')+'">'+(side?'<div class="phc">'+ph+cta+'</div>':ph)+'<div class="lt">'+(a.date?'<time>'+esc(a.date)+'</time>':'')+'<h4>'+esc(a.title)+'</h4>'+(a.text?'<p>'+esc(a.text)+'</p>':'')+(side?'':(a.engine||a.trophy||a.dancer?'<div class="ar">'+cta+(a.engine?'<div class="eng" role="button" tabindex="0"></div>':a.trophy?'<canvas class="trophy" role="img"></canvas>':'<canvas class="dancer" role="img"></canvas>')+'</div>':cta))+(a.laptop?'<div class="lap" role="button" tabindex="0"></div>':'')+'</div>'+(a.deco?'<span class="la-ball" aria-hidden="true"></span>':'')+'</article>';
+      html+='<article class="la'+(im.length?'':' noimg')+(im.length>1?' multi':'')+'">'+(side?'<div class="phc">'+ph+cta+'</div>':ph)+'<div class="lt">'+(a.date?'<time>'+esc(a.date)+'</time>':'')+'<h4>'+esc(a.title)+'</h4>'+(a.text?'<p>'+esc(a.text)+'</p>':'')+(side?'':(a.engine||a.trophy||a.dancer||a.debate?'<div class="ar">'+cta+(a.engine?'<div class="eng" role="button" tabindex="0"></div>':a.trophy?'<canvas class="trophy" role="img"></canvas>':a.dancer?'<canvas class="dancer" role="img"></canvas>':'<canvas class="debate" role="img"></canvas>')+'</div>':cta))+(a.laptop?'<div class="lap" role="button" tabindex="0"></div>':'')+'</div>'+(a.deco?'<span class="la-ball" aria-hidden="true"></span>':'')+'</article>';
     });
     if(!items.length)html+='<p>Скоро ще добавим статии по тази тема.</p>';
     panel.innerHTML=html;
@@ -3988,6 +3988,108 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
 .stats .grid>*,.info>*,.info .row>*:not(.ic){min-width:0}
 .stat,.stat b,.stat span,.info .row,.info strong,.info small{overflow-wrap:anywhere;word-wrap:break-word}
 </style>
+<style id="debate-css">
+/* the debate scene from the picture: two speakers at their podiums answer each other, the audience raises a hand with a question */
+.debate{flex:none;display:block;width:min(260px,100%);height:auto;aspect-ratio:450/300;margin:0 clamp(24px,6vw,90px) 0 auto;border-radius:14px;box-shadow:0 6px 18px rgba(15,42,74,.18)}
+@media(max-width:700px){.debate{margin:6px auto 0}}
+</style>
+<script id="debate-js">
+(function(){
+  var D=document,PI=Math.PI,SIN=Math.sin,COS=Math.cos,W=260,H=173,SW=450,SH=300,UP=2,T=16.5;
+  /* parts cut from the picture: [x, y, w, h] in the atlas (2x) and [ox, oy] where they sit in the 450x300 scene */
+  var P={man_lower:[0,0,146,278,44,76],woman_lower:[148,0,136,278,339,77],aud_arm:[286,0,80,172,209,149],head1:[368,0,164,164,296,218],aud_body:[534,0,200,154,167,223],head2:[736,0,148,148,371,226],head3:[0,280,164,144,0,228],woman_upper:[166,280,94,134,360,16],man_upper:[262,280,130,124,43,20],woman_arm:[394,280,84,94,339,22],head4:[480,280,170,70,77,265],man_forearm:[652,280,56,56,96,55]};
+  function sm(t){t=t<0?0:t>1?1:t;return t*t*(3-2*t)}
+  function win(t,a,b,f){f=f||.25;return sm((t-a)/f)*(1-sm((t-b)/f))}
+  var MAN=[[.8,4.4],[11,13.8]],WOM=[[4.6,8],[14,16.2]],ASK=[8.3,10.8],CLAP=[4.4,8,13.8,16.2];
+  function act(t,list){var i,s=0;for(i=0;i<list.length;i++)s=Math.max(s,win(t,list[i][0],list[i][1]));return s}
+  function build(cv){
+    if(cv.__s)return;cv.__s=1;if(!cv.getContext)return;
+    var dpr=Math.min(2,window.devicePixelRatio||1);cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
+    var ctx=cv.getContext('2d');if(!ctx)return;label(cv);ctx.imageSmoothingQuality='high';
+    var at=new Image(),ready=false,vis=true,run=false,t0=null,cur=0,K=W/SW*dpr;
+    at.decoding='async';at.onload=function(){ready=true;draw(cur)};at.src='img/debate-atlas.webp';
+    function part(n){var p=P[n];ctx.drawImage(at,p[0],p[1],p[2],p[3],p[4],p[5],p[2]/UP,p[3]/UP)}
+    function rot(px,py,a){ctx.translate(px,py);ctx.rotate(a*PI/180);ctx.translate(-px,-py)}
+    function platform(cx,cy){
+      ctx.save();
+      var g=ctx.createLinearGradient(0,cy,0,cy+12);g.addColorStop(0,'#9a9a9a');g.addColorStop(1,'#4a4a4a');
+      ctx.fillStyle=g;ctx.beginPath();ctx.ellipse(cx,cy+6,58,9.5,0,0,PI);ctx.lineTo(cx-58,cy-1);ctx.lineTo(cx+58,cy-1);ctx.closePath();ctx.fill();
+      var tg=ctx.createRadialGradient(cx,cy-2,4,cx,cy,60);tg.addColorStop(0,'#ffffff');tg.addColorStop(1,'#d2d2d2');
+      ctx.fillStyle=tg;ctx.beginPath();ctx.ellipse(cx,cy,58,9.5,0,0,2*PI);ctx.fill();
+      ctx.fillStyle='rgba(0,0,0,.16)';ctx.beginPath();ctx.ellipse(cx,cy-.5,30,4.2,0,0,2*PI);ctx.fill();
+      ctx.restore();
+    }
+    function bubble(x,y,s,kind,t){                    /* speech bubble: "..." while thinking, "!" or "?" for the point */
+      if(s<=.01)return;
+      ctx.save();ctx.translate(x,y);ctx.scale(s,s);
+      var w=50,h=34;ctx.fillStyle='#fff';ctx.strokeStyle='#222a38';ctx.lineWidth=2.2;ctx.lineJoin='round';
+      ctx.beginPath();ctx.moveTo(-w/2+9,-h/2);ctx.lineTo(w/2-9,-h/2);ctx.quadraticCurveTo(w/2,-h/2,w/2,-h/2+9);ctx.lineTo(w/2,h/2-9);ctx.quadraticCurveTo(w/2,h/2,w/2-9,h/2);
+      ctx.lineTo(-w/2+9,h/2);ctx.quadraticCurveTo(-w/2,h/2,-w/2,h/2-9);ctx.lineTo(-w/2,-h/2+9);ctx.quadraticCurveTo(-w/2,-h/2,-w/2+9,-h/2);ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.fillStyle='#14161c';
+      if(kind==='dots'){for(var i=0;i<3;i++){var r=3.1+1.5*Math.max(0,SIN(t*7-i*1.1));ctx.beginPath();ctx.arc((i-1)*11,0,r,0,2*PI);ctx.fill()}}
+      else{ctx.font='800 25px system-ui,Arial,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(kind,0,1.5)}
+      ctx.restore();
+    }
+    function tail(x1,y1,x2,y2){ctx.save();ctx.fillStyle='#fff';ctx.strokeStyle='#222a38';ctx.lineWidth=2.2;ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(x1-5,y1);ctx.lineTo(x2,y2);ctx.lineTo(x1+5,y1+.5);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore()}
+    function pop(u){return u<=0?0:Math.min(1.25,1-Math.exp(-7*u)*COS(11*u))}
+    function say(t,list,x,y,tx,ty,seq){
+      var i,a,b,k,sc;
+      for(i=0;i<list.length;i++){a=list[i][0];b=list[i][1];if(t<a||t>b+.3)continue;
+        sc=pop(t-a)*(1-sm((t-(b-.15))/.3));k=Math.floor((t-a)/1.15);
+        var kind=(k%2===0)?'dots':seq[(i+(k>>1))%seq.length];
+        if(sc>.02){tail(x-8*sc,y+16*sc,tx,ty);bubble(x,y,sc,kind,t)}return}
+    }
+    function draw(t){
+      cur=t;t=t%T;
+      ctx.setTransform(K,0,0,K,0,0);ctx.clearRect(0,0,SW,SH);
+      var g=ctx.createLinearGradient(0,0,0,SH);g.addColorStop(0,'#dedede');g.addColorStop(.30,'#afafaf');g.addColorStop(.45,'#cecece');g.addColorStop(.65,'#ffffff');g.addColorStop(.78,'#ffffff');g.addColorStop(.9,'#d2d2d2');g.addColorStop(1,'#bdbdbd');
+      ctx.fillStyle=g;ctx.fillRect(0,0,SW,SH);
+      platform(80,213);platform(368,215);
+      if(!ready)return;
+      var sm_=act(t,MAN),sw_=act(t,WOM),q=win(t,ASK[0]-.3,ASK[1],.5),clap=0,i;
+      for(i=0;i<CLAP.length;i++)clap=Math.max(clap,win(t,CLAP[i],CLAP[i]+.9,.1));
+      /* the man: leans in and beats the air with his open hand while he speaks, listens while she speaks */
+      part('man_lower');
+      ctx.save();rot(80,79,sm_*(1.6+1.1*SIN(t*2.9))+(1-sm_)*(.5*SIN(t*1.7))*Math.max(sw_,q*.6));
+      part('man_upper');
+      ctx.save();rot(103,77,sm_*(-8+17*SIN(t*5.6)+7*SIN(t*9.1))+(1-sm_)*7);part('man_forearm');ctx.restore();
+      ctx.restore();
+      /* the woman: her raised arm drops to a relaxed pose and gestures when she answers */
+      part('woman_lower');
+      ctx.save();rot(385,80,-sw_*(1.4+1.0*SIN(t*3.1))+(1-sw_)*(.5*SIN(t*1.9))*Math.max(sm_,q*.6));
+      part('woman_upper');
+      ctx.save();rot(373,58,-24*(1-sw_)+sw_*(-4+15*SIN(t*5.1+1)+6*SIN(t*8.3))+ (1-sw_)*(1-Math.min(1,t/.9))*24);part('woman_arm');ctx.restore();
+      ctx.restore();
+      /* the audience: heads bob, a hand goes up with a question, everyone nods after each answer */
+      var ay=(1-sm(q))*96;
+      ctx.save();ctx.translate(0,ay);rot(236,232,q>.9?5*SIN(t*9):0);part('aud_arm');ctx.restore();
+      ctx.save();rot(215,300,1.2*q*SIN(t*1.5)+(q>.5?-2.2*q:0));ctx.translate(0,1.3*SIN(t*2.2)*(1-.5*q)+clap*2.2*SIN(t*11));part('aud_body');ctx.restore();
+      var hd=['head1','head2','head3','head4'],ph=[.7,2.1,3.4,4.9],h;
+      for(h=0;h<4;h++){ctx.save();ctx.translate(0,1.1*SIN(t*2+ph[h])+clap*(1.8+.4*h)*SIN(t*10+ph[h]));rot(P[hd[h]][4]+P[hd[h]][2]/4,300,.9*SIN(t*1.3+ph[h])+(sm_+sw_>.5?1.2*SIN(t*.9+ph[h]):0));part(hd[h]);ctx.restore()}
+      /* speech bubbles */
+      say(t,MAN,138,34,100,42,['!','!']);
+      say(t,WOM,318,40,362,46,['?','!']);
+      var qs=win(t,ASK[0],ASK[1],.3);
+      if(qs>.02){var sc=pop(t-ASK[0])*(1-sm((t-(ASK[1]-.2))/.3));if(sc>.02){tail(236-3*sc,130+14*sc,236,152);bubble(236,122,sc,t-ASK[0]<1?'dots':'?',t)}}
+    }
+    function frame(ts){
+      if(!D.body.contains(cv)||!vis||D.hidden){run=false;t0=null;return}
+      if(t0===null)t0=ts;draw((ts-t0)/1000);requestAnimationFrame(frame);
+    }
+    function go(){if(!run&&vis){run=true;requestAnimationFrame(frame)}}
+    cv.__draw=draw;draw(0);
+    if('IntersectionObserver' in window)new IntersectionObserver(function(es){vis=es[0].isIntersecting;if(vis){t0=null;go()}}).observe(cv);
+    D.addEventListener('visibilitychange',function(){t0=null;go()});
+    go();
+  }
+  function en(){return (D.documentElement.lang||'bg').indexOf('en')===0}
+  function label(c){c.setAttribute('aria-label',en()?'Animated debate: two speakers answer each other and the audience raises a hand with a question':'Анимиран дебат: двама оратори си отговарят, а публиката вдига ръка с въпрос')}
+  function scan(r){var a=r.querySelectorAll?r.querySelectorAll('.debate'):[],i;for(i=0;i<a.length;i++)build(a[i]);if(r.classList&&r.classList.contains('debate'))build(r)}
+  new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1)scan(n)})})}).observe(D.body,{childList:true,subtree:true});
+  new MutationObserver(function(){[].forEach.call(D.querySelectorAll('.debate'),label)}).observe(D.documentElement,{attributes:true,attributeFilter:['lang']});
+  scan(D);
+})();
+</script>
 <style id="dancer-css">
 /* the majorette from the sticker: its seven silhouettes are the key poses of one routine, and 80+ in-between frames make every move flow */
 .dancer{flex:none;display:block;width:170px;height:210px;margin:0 clamp(24px,6vw,90px) 0 auto}
