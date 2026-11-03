@@ -3426,7 +3426,7 @@ const FORM_ENDPOINT = '';
       var im=a.imgs||[],ph='';
       if(im.length){ph='<div class="ph n'+Math.min(im.length,3)+'">'+im.slice(0,3).map(function(u,k){return '<button type="button" class="phb" data-a="'+ai+'" data-i="'+k+'" aria-label="Увеличи снимката"><img alt="" decoding="async" src="'+esc(u)+'"></button>'}).join('')+'</div>'}
       var cta=a.nocta?'':'<a class="btn primary" href="'+esc(a.href)+'">'+esc(a.cta||'Прочетете повече')+' →</a>',side=im.length===1&&!a.deco&&cta;   /* one photo beside the text: the button goes under the photo */
-      html+='<article class="la'+(im.length?'':' noimg')+(im.length>1?' multi':'')+'">'+(side?'<div class="phc">'+ph+cta+'</div>':ph)+'<div class="lt">'+(a.date?'<time>'+esc(a.date)+'</time>':'')+'<h4>'+esc(a.title)+'</h4>'+(a.text?'<p>'+esc(a.text)+'</p>':'')+(side?'':(a.engine||a.trophy||a.dancer||a.debate?'<div class="ar">'+cta+(a.engine?'<div class="eng" role="button" tabindex="0"></div>':a.trophy?'<canvas class="trophy" role="img"></canvas>':a.dancer?'<canvas class="dancer" role="img"></canvas>':'<canvas class="debate" role="img"></canvas>')+'</div>':cta))+(a.laptop?'<div class="lap" role="button" tabindex="0"></div>':'')+'</div>'+(a.deco?'<span class="la-ball" aria-hidden="true"></span>':'')+'</article>';
+      html+='<article class="la'+(im.length?'':' noimg')+(im.length>1?' multi':'')+'">'+(side?'<div class="phc">'+ph+cta+'</div>':ph)+'<div class="lt">'+(a.date?'<time>'+esc(a.date)+'</time>':'')+'<h4>'+esc(a.title)+'</h4>'+(a.text?'<p>'+esc(a.text)+'</p>':'')+(side?'':(a.engine||a.trophy||a.dancer||a.debate?'<div class="ar">'+cta+(a.engine?'<div class="eng" role="button" tabindex="0"></div>':a.trophy?'<canvas class="trophy" role="img"></canvas>':a.dancer?'<canvas class="dancer" role="img"></canvas>':'<canvas class="debate" role="img"></canvas>')+'</div>':cta))+(a.laptop?'<div class="lap" role="button" tabindex="0"></div>':'')+'</div>'+(a.deco?'<span class="la-ball2 b-soc"></span><span class="la-ball2 b-bas"></span><span class="la-ball" aria-hidden="true"></span>':'')+'</article>';
     });
     if(!items.length)html+='<p>Скоро ще добавим статии по тази тема.</p>';
     panel.innerHTML=html;
@@ -4697,6 +4697,253 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
   function init(b){if(b.__3d)return;b.__3d=1;start(b)}
   function scan(root){var l=(root.querySelectorAll?root.querySelectorAll('.la-ball'):[]);for(var i=0;i<l.length;i++)init(l[i]);if(root.classList&&root.classList.contains('la-ball'))init(root)}
   new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1)scan(n)})})}).observe(D.body,{childList:true,subtree:true});
+  scan(D);
+})();
+</script>
+<style id="balls-css">
+/* a football and a basketball beside the volleyball: all three turn on their own; a click on the football strikes the other two, a click on the basketball scores a basket */
+.la-ball2{position:absolute;z-index:6;width:var(--bs,110px);height:var(--bs,110px);bottom:20px;right:0;pointer-events:none}
+.la-ball2::before{content:"";position:absolute;left:12%;right:12%;bottom:-8px;height:14px;border-radius:50%;background:radial-gradient(ellipse at center,rgba(15,42,74,.35),rgba(15,42,74,0) 70%)}
+.la-ball2 canvas{position:absolute;left:0;top:0;width:100%;height:100%;display:block;border-radius:50%;pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.la-ball2 canvas:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+@media(min-width:701px){.la:has(.la-ball2) .lt{padding-right:calc(var(--rowW,340px) + 24px)}}
+@media(max-width:700px){.la:has(.la-ball2) .lt{padding-bottom:calc(var(--bs,100px) + 34px)}}
+@media(max-width:560px){.la-ball2{bottom:8px}}
+@media(max-width:344px){.la-ball2{bottom:12px}}
+</style>
+<script id="balls-js">
+(function(){
+  var D=document,PI=Math.PI,SIN=Math.sin,COS=Math.cos,SQ=Math.sqrt,PHI=(1+SQ(5))/2;
+  /* ---- the football is a truncated icosahedron: 12 black pentagons and 20 white hexagons ---- */
+  var NX=[],NY=[],NZ=[],ID=[],NP=12;
+  (function(){
+    var V=[],seen={},N5=[],N6=[],s,s1,s2;
+    function addv(x,y,z){var k=[x,y,z].map(function(v){return Math.round(v*1e4)}).join(',');if(!seen[k]){seen[k]=1;var l=Math.hypot(x,y,z);V.push([x/l,y/l,z/l])}}
+    [[0,1,3*PHI],[1,2+PHI,2*PHI],[PHI,2,2*PHI+1]].forEach(function(b){for(s=0;s<8;s++){var a=[(s&1?-1:1)*b[0],(s&2?-1:1)*b[1],(s&4?-1:1)*b[2]];addv(a[0],a[1],a[2]);addv(a[1],a[2],a[0]);addv(a[2],a[0],a[1])}});
+    function addn(L,x,y,z){var l=Math.hypot(x,y,z);L.push([x/l,y/l,z/l])}
+    for(s1=-1;s1<=1;s1+=2)for(s2=-1;s2<=1;s2+=2){addn(N5,0,s1,s2*PHI);addn(N5,s1,s2*PHI,0);addn(N5,s2*PHI,0,s1)}
+    for(s=0;s<8;s++)addn(N6,s&1?-1:1,s&2?-1:1,s&4?-1:1);
+    for(s1=-1;s1<=1;s1+=2)for(s2=-1;s2<=1;s2+=2){addn(N6,s1/PHI,0,s2*PHI);addn(N6,0,s1*PHI,s2/PHI);addn(N6,s1*PHI,s2/PHI,0)}
+    N5.concat(N6).forEach(function(n){var d=-9;V.forEach(function(v){d=Math.max(d,n[0]*v[0]+n[1]*v[1]+n[2]*v[2])});NX.push(n[0]);NY.push(n[1]);NZ.push(n[2]);ID.push(1/d)});
+  })();
+  function sm(a,b,x){var t=(x-a)/(b-a);t=t<0?0:t>1?1:t;return t*t*(3-2*t)}
+  /* ---- a lit sphere that turns about a tilted axis, painted pixel by pixel like the volleyball ---- */
+  function Sphere(kind){
+    var N=168,cv=D.createElement('canvas');cv.width=cv.height=N;var ctx=cv.getContext('2d'),img=ctx.createImageData(N,N),out=img.data;
+    var X=new Float32Array(N*N),Y=new Float32Array(N*N),Z=new Float32Array(N*N),A=new Uint8ClampedArray(N*N),SH=new Float32Array(N*N),SP=new Float32Array(N*N);
+    var L=[-.45,.55,.70],ln=Math.hypot(L[0],L[1],L[2]);L=[L[0]/ln,L[1]/ln,L[2]/ln];
+    for(var py=0;py<N;py++)for(var px=0;px<N;px++){
+      var i=py*N+px,x=(px+.5)/N*2-1,y=1-(py+.5)/N*2,r2=x*x+y*y;if(r2>=1){A[i]=0;continue}
+      var z=SQ(1-r2),rho=SQ(r2);X[i]=x;Y[i]=y;Z[i]=z;A[i]=Math.max(0,Math.min(255,(1-rho)*(N/2)*255));
+      var lam=Math.max(0,x*L[0]+y*L[1]+z*L[2]),rz=2*lam*z-L[2];
+      SH[i]=.80+.30*lam+.06*z;SP[i]=Math.pow(Math.max(0,rz),16)*.30+Math.pow(Math.max(0,rz),70)*.35;
+    }
+    var soc=kind==='soccer',ax=soc?.25:-.3,ay=soc?.94:.9,az=soc?.1:.2,an=Math.hypot(ax,ay,az);ax/=an;ay/=an;az/=an;
+    var yaw=soc?.5:-.4,pit=soc?-.3:-.2,cy_=COS(yaw),sy_=SIN(yaw),cp=COS(pit),sp=SIN(pit);
+    var B=[cy_,0,sy_,sp*sy_,cp,-sp*cy_,-cp*sy_,sp,cp*cy_];
+    var ex=new Float32Array(32),ey=new Float32Array(32),ez=new Float32Array(32);
+    function draw(phi){
+      var c=COS(phi),s=SIN(phi),t=1-c;
+      var m=[t*ax*ax+c,t*ax*ay-s*az,t*ax*az+s*ay,t*ax*ay+s*az,t*ay*ay+c,t*ay*az-s*ax,t*ax*az-s*ay,t*ay*az+s*ax,t*az*az+c],M=new Array(9),a,b,k;
+      for(a=0;a<3;a++)for(b=0;b<3;b++){var v=0;for(k=0;k<3;k++)v+=B[a*3+k]*m[k*3+b];M[a*3+b]=v}
+      var m00=M[0],m01=M[1],m02=M[2],m10=M[3],m11=M[4],m12=M[5],m20=M[6],m21=M[7],m22=M[8],f;
+      if(soc)for(f=0;f<32;f++){var nx=NX[f],ny=NY[f],nz=NZ[f],iv=ID[f];ex[f]=(m00*nx+m10*ny+m20*nz)*iv;ey[f]=(m01*nx+m11*ny+m21*nz)*iv;ez[f]=(m02*nx+m12*ny+m22*nz)*iv}
+      for(var i=0;i<N*N;i++){
+        var o=i*4;if(!A[i]){out[o+3]=0;continue}
+        var x=X[i],y=Y[i],z=Z[i],r,g,bl,spc,sh=SH[i];
+        if(soc){
+          var b1=-9,b2=-9,bi=0;
+          for(f=0;f<32;f++){var d=x*ex[f]+y*ey[f]+z*ez[f];if(d>b1){b2=b1;b1=d;bi=f}else if(d>b2)b2=d}
+          var seam=1-sm(.004,.03,b1-b2),pent=bi<NP;
+          r=pent?24:244;g=pent?26:244;bl=pent?30:242;
+          r+=(66-r)*seam;g+=(68-g)*seam;bl+=(74-bl)*seam;
+          spc=SP[i]*(pent?.9:.5)*(1-.5*seam);
+        }else{
+          var qx=m00*x+m01*y+m02*z,qy=m10*x+m11*y+m12*z,qz=m20*x+m21*y+m22*z;
+          var h=Math.sin(Math.floor(qx*34)*12.9898+Math.floor(qy*34)*78.233+Math.floor(qz*34)*37.719)*43758.5453;h-=Math.floor(h);
+          var dist=Math.min(Math.abs(qy),Math.abs(qx),Math.abs(Math.abs(qx)-.5)*.86),seam2=1-sm(.018,.05,dist);
+          var pe=.92+.16*h;
+          r=226*pe;g=108*pe;bl=28*pe;
+          r+=(26-r)*seam2;g+=(20-g)*seam2;bl+=(18-bl)*seam2;
+          spc=SP[i]*.6*(1-.7*seam2);
+        }
+        r=r*sh+255*spc;g=g*sh+255*spc;bl=bl*sh+255*spc;
+        out[o]=r>255?255:r;out[o+1]=g>255?255:g;out[o+2]=bl>255?255:bl;out[o+3]=A[i];
+      }
+      ctx.putImageData(img,0,0);
+    }
+    return {cv:cv,draw:draw};
+  }
+  /* ---- placement beside the volleyball ---- */
+  var BALLS=[],run=false,frameNo=0;
+  function en(){return (D.documentElement.lang||'bg').indexOf('en')===0}
+  function labels(el){el.__cv.setAttribute('aria-label',el.__kind==='soccer'?(en()?'Football - press to kick it into the other balls':'Футболна топка - натиснете, за да удари другите топки'):(en()?'Basketball - press to score a basket':'Баскетболна топка - натиснете, за да вкара кош'))}
+  function layout(art){
+    var vb=art.querySelector('.la-ball'),soc=art.querySelector('.b-soc'),bas=art.querySelector('.b-bas');if(!vb||!soc||!bas)return;
+    var s=vb.offsetWidth||132,cs=getComputedStyle(vb),right=parseFloat(cs.right)||16,bottom=parseFloat(cs.bottom)||10,g=Math.max(10,Math.round(s*.14));
+    art.__busy=1;Promise.resolve().then(function(){art.__busy=0});
+    var cap=Math.floor((art.clientWidth-right-14-16)/3),nat=Math.min(132,Math.max(84,.27*innerWidth));       /* three balls must fit in a row inside the card */
+    if(s>cap){s=Math.max(56,cap);g=8;vb.style.setProperty('width',s+'px','important');vb.style.setProperty('height',s+'px','important');art.__cap=1}
+    else if(art.__cap&&nat<=cap){art.__cap=0;vb.style.removeProperty('width');vb.style.removeProperty('height')}
+    else if(art.__cap){s=vb.offsetWidth||s;g=8}
+    art.style.setProperty('--bs',s+'px');art.style.setProperty('--rowW',(right+3*s+2*g)+'px');
+    bas.style.right=(right+s+g)+'px';soc.style.right=(right+2*(s+g))+'px';bas.style.bottom=soc.style.bottom=bottom+'px';
+  }
+  function setup(el){
+    if(el.__b)return;el.__b=1;var art=el.closest('.la'),kind=el.classList.contains('b-soc')?'soccer':'basket';
+    el.__kind=kind;el.__s=Sphere(kind);var cv=el.__s.cv;el.__cv=cv;el.appendChild(cv);cv.setAttribute('role','button');cv.setAttribute('tabindex','0');labels(el);
+    el.__s.draw(0);
+    var item={el:el,kind:kind,vis:true,off:kind==='soccer'?0:2.1};BALLS.push(item);
+    if('IntersectionObserver' in window)new IntersectionObserver(function(es){item.vis=es[0].isIntersecting;kick()}).observe(el);
+    if(!art.__lay){art.__lay=1;
+      var f=function(){layout(art)},vb=art.querySelector('.la-ball');
+      f();setTimeout(f,300);setTimeout(f,900);setTimeout(f,2200);
+      if(window.ResizeObserver){var ro=new ResizeObserver(f);ro.observe(art);if(vb)ro.observe(vb)}
+      if(vb)new MutationObserver(function(){if(!art.__busy)f()}).observe(vb,{attributes:true,attributeFilter:['style']});
+      addEventListener('resize',f);
+      new MutationObserver(f).observe(D.documentElement,{attributes:true,attributeFilter:['style','class','lang']});
+    }
+    kick();
+  }
+  function loop(ts){
+    var any=false,i;
+    for(i=BALLS.length-1;i>=0;i--){var b=BALLS[i];if(!D.body.contains(b.el)){BALLS.splice(i,1);continue}if(!b.vis)continue;any=true;
+      if(b.kind==='soccer'&&(frameNo&1))continue;
+      b.el.__s.draw(ts/1000*2*PI/(b.kind==='soccer'?6:5)+b.off)}
+    frameNo++;if(any&&!D.hidden)requestAnimationFrame(loop);else run=false;
+  }
+  function kick(){if(!run){run=true;requestAnimationFrame(loop)}}
+  D.addEventListener('visibilitychange',kick);
+  /* ---- the full-screen layer the flying balls are drawn on ---- */
+  var FX={mode:null,cv:null,ctx:null,dpr:1,W:0,H:0,fx:[],hoop:null};
+  function layer(){
+    if(!FX.cv){var c=D.createElement('canvas');c.style.cssText='position:fixed;left:0;top:0;pointer-events:none;z-index:2147483000';D.body.appendChild(c);FX.cv=c;FX.ctx=c.getContext('2d')}
+    FX.dpr=Math.min(2,window.devicePixelRatio||1);FX.W=innerWidth;FX.H=innerHeight;
+    FX.cv.style.width=FX.W+'px';FX.cv.style.height=FX.H+'px';FX.cv.width=Math.round(FX.W*FX.dpr);FX.cv.height=Math.round(FX.H*FX.dpr);FX.cv.style.display='block';
+  }
+  function rectOf(el){var r=el.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2,r:r.width/2}}
+  function actor(el,cv){var h=rectOf(el);cv.style.visibility='hidden';return {el:el,cv:cv,x:h.x,y:h.y,r:h.r,vx:0,vy:0,ang:0,av:0,home:function(){return rectOf(el)}}}
+  function finish(list){list.forEach(function(a){a.cv.style.visibility=''});FX.mode=null;FX.cv.style.display='none';FX.hoop=null;FX.fx=[]}
+  function drawBall(c,a,alpha,sx,sy){
+    c.save();c.globalAlpha=alpha==null?1:alpha;c.translate(a.x,a.y);c.rotate(a.ang);if(sx)c.scale(sx,sy);c.drawImage(a.cv,-a.r,-a.r,a.r*2,a.r*2);c.restore();
+  }
+  function bursts(c,dt){
+    FX.fx=FX.fx.filter(function(e){e.t+=dt;return e.t<.3});
+    FX.fx.forEach(function(e){var u=e.t/.3,r=e.r*(.5+1.4*u);c.save();c.globalAlpha=1-u;c.strokeStyle='#ffb300';c.lineWidth=4*(1-u)+1;c.beginPath();c.arc(e.x,e.y,r,0,2*PI);c.stroke();
+      c.strokeStyle='#fff3c4';c.lineWidth=3;for(var k=0;k<10;k++){var a=k*PI/5+e.t*3,r1=r*.65,r2=r*(1.05+.25*(k%2));c.beginPath();c.moveTo(e.x+COS(a)*r1,e.y+SIN(a)*r1);c.lineTo(e.x+COS(a)*r2,e.y+SIN(a)*r2);c.stroke()}c.restore()});
+  }
+  function volleyOf(art){var el=art.querySelector('.la-ball'),cv=el&&el.querySelector('canvas');return el&&cv?{el:el,cv:cv}:null}
+  /* ================= football: a strike that sends the other two balls flying ================= */
+  function soccer(art,soc){
+    var bas=art.querySelector('.b-bas'),vol=volleyOf(art);if(FX.mode||!bas||!vol||vol.cv.style.visibility==='hidden')return;
+    layer();FX.mode='soccer';
+    var A=[actor(soc,soc.__cv),actor(bas,bas.__cv),actor(vol.el,vol.cv)];FX.cv.__A=A;var T=0,launched=false,x0=A[0].x,homeT=0,last=null,SC=1,hit=[0,0],tl=99;
+    var W=FX.W,H=FX.H;
+    function step(ts){
+      if(last===null)last=ts;var dt=Math.min(.033,(ts-last)/1000);last=ts;T+=dt;
+      var c=FX.ctx,i,j;
+      if(T<.3){var u=T/.3;A[0].x=x0-40*(u*u*(3-2*u));SC=1-.12*u}
+      else{
+        if(!launched){launched=true;tl=T;SC=1;var a=A[0],b=A[1],dx=b.x-a.x,dy=b.y+.38*b.r-a.y,l=Math.hypot(dx,dy);a.vx=dx/l*1650;a.vy=dy/l*1650;a.av=7}
+        var sub=3,h=dt/sub,s;
+        for(s=0;s<sub;s++){
+          for(i=0;i<3;i++){var q=A[i];
+            if(T<2.1){q.x+=q.vx*h;q.y+=q.vy*h;var dr=1-.10*h;q.vx*=dr;q.vy*=dr;
+              if(q.x-q.r<0){q.x=q.r;q.vx=Math.abs(q.vx)*.88}if(q.x+q.r>W){q.x=W-q.r;q.vx=-Math.abs(q.vx)*.88}
+              if(q.y-q.r<0){q.y=q.r;q.vy=Math.abs(q.vy)*.88}if(q.y+q.r>H){q.y=H-q.r;q.vy=-Math.abs(q.vy)*.88}
+              q.av+=((q.vx/q.r)*.7-q.av)*Math.min(1,5*h)}
+          }
+          if(T<2.1)for(i=0;i<3;i++)for(j=i+1;j<3;j++){
+            var p=A[i],r=A[j],ddx=r.x-p.x,ddy=r.y-p.y,d=Math.hypot(ddx,ddy),mn=p.r+r.r;
+            if(d<mn&&d>.01&&!(i===1&&j===2&&T<tl+.5)){var nx=ddx/d,ny=ddy/d,vn=(p.vx-r.vx)*nx+(p.vy-r.vy)*ny;
+              var ov=(mn-d)/2;p.x-=nx*ov;p.y-=ny*ov;r.x+=nx*ov;r.y+=ny*ov;
+              if(vn>0){
+                if(i===0&&j===1&&!hit[0]){hit[0]=1;p.vx=900;p.vy=110;p.av=8;r.vx=640;r.vy=-1080;r.av=-10}              /* the football strikes the basketball: it shoots up and away */
+                else if(i===0&&j===2&&!hit[1]){hit[1]=1;p.vx=-520;p.vy=-330;p.av=-8;r.vx=1330;r.vy=300;r.av=11}     /* then the volleyball: it is sent off to the right */
+                else{var jj=(1+.96)*vn/2;p.vx-=jj*nx;p.vy-=jj*ny;r.vx+=jj*nx;r.vy+=jj*ny;p.av-=(vn*.0025);r.av+=(vn*.0025)}
+                if(vn>260)FX.fx.push({x:p.x+nx*p.r,y:p.y+ny*p.r,t:0,r:p.r*.7})}}
+          }
+        }
+        if(T>=2.1){                                                   /* the rebounding balls glide back to their places */
+          homeT+=dt;var k=70*sm(0,.25,homeT);
+          for(i=0;i<3;i++){var q=A[i],hm=q.home();
+            q.vx+=(k*(hm.x-q.x)-16.7*q.vx)*dt;q.vy+=(k*(hm.y-q.y)-16.7*q.vy)*dt;q.x+=q.vx*dt;q.y+=q.vy*dt;
+            q.av*=Math.max(0,1-4*dt);var tgt=Math.round(q.ang/(2*PI))*2*PI;q.ang+=(tgt-q.ang)*Math.min(1,5*dt)}
+        }
+        for(i=0;i<3;i++)if(T<2.1)A[i].ang+=A[i].av*dt;
+      }
+      c.setTransform(FX.dpr,0,0,FX.dpr,0,0);c.clearRect(0,0,FX.W,FX.H);
+      for(i=0;i<3;i++){var q=A[i],sp=Math.hypot(q.vx,q.vy);
+        if(sp>650&&T<2.1){for(j=1;j<=2;j++){var gh={cv:q.cv,r:q.r,x:q.x-q.vx*.012*j,y:q.y-q.vy*.012*j,ang:q.ang};drawBall(c,gh,.18/j)}}
+        drawBall(c,q,1,i===0&&T<.3?1+(1-SC)*.0:1,i===0&&T<.3?SC:1)}
+      bursts(c,dt);
+      var done=T>3.3;if(done){for(i=0;i<3;i++){var hm=A[i].home();if(Math.hypot(hm.x-A[i].x,hm.y-A[i].y)>2||Math.hypot(A[i].vx,A[i].vy)>8)done=false}}
+      if(done||T>5){finish(A);return}
+      requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  /* ================= basketball: a hoop slides in from the left, the ball arcs in, drops and rolls home ================= */
+  function basket(art,bas){
+    if(FX.mode)return;layer();FX.mode='basket';
+    var a=actor(bas,bas.__cv);FX.cv.__A=[a];var r=a.r,G=2600,floorY=a.y,W=FX.W;
+    var rx=r*1.35,ry=rx*.17,xb=14,xr=xb+12+rx,rimY=Math.max(48,floorY-Math.min(Math.max(FX.H*.38,130),240)),boardH=rx*2.1;
+    if(rimY>floorY-r*1.6)rimY=Math.max(30,floorY-r*1.6);
+    var hmax=Math.max(110,(floorY-rimY)+r*1.1+60),vy0=-SQ(2*G*hmax),tf=(-vy0+SQ(vy0*vy0-2*G*(a.y-rimY)))/G,vx0=(xr-a.x)/tf;
+    var T=0,last=null,tIn=.5,tCross=tIn+tf,state='wait',x0=a.x,y0=a.y,bounces=0,rollT=0,rollFrom=0,rollD=0,rollDur=1,tNet=-9,out=-1,hoopS=1;
+    FX.hoop={};
+    function netPts(sway,bulge){                       /* diamond net hanging from the rim */
+      var pts=[],k,n=12,depth=rx*1.05;
+      for(k=0;k<=n;k++){var th=k*2*PI/n;pts.push({tx:xr+COS(th)*rx,ty:rimY+SIN(th)*ry,bx:xr+COS(th+PI/n)*rx*(.52+bulge)+sway,by:rimY+depth+SIN(th+PI/n)*ry*.5})}
+      return pts;
+    }
+    function drawNet(c,front,alpha,sway,bulge){
+      var p=netPts(sway,bulge),k,n=12;c.save();c.globalAlpha=alpha;c.strokeStyle='rgba(255,255,255,.95)';c.lineWidth=Math.max(1.4,r*.03);c.beginPath();
+      for(k=0;k<n;k++){var isFront=SIN(k*2*PI/n)>=0;if(isFront!==front)continue;c.moveTo(p[k].tx,p[k].ty);c.lineTo(p[k].bx,p[k].by);c.moveTo(p[k+1].tx,p[k+1].ty);c.lineTo(p[k].bx,p[k].by)}
+      c.stroke();
+      c.lineWidth=Math.max(1,r*.022);c.beginPath();for(k=0;k<n;k++){if((SIN(k*2*PI/n)>=0)!==front)continue;var m1=(p[k].tx+p[k].bx)/2,m2=(p[k].ty+p[k].by)/2,m3=(p[k+1].tx+p[k].bx)/2,m4=(p[k+1].ty+p[k].by)/2;c.moveTo(m1,m2);c.lineTo(m3,m4)}c.stroke();c.restore();
+    }
+    function drawHoop(c,off){
+      c.save();c.translate(off,0);
+      var pg=c.createLinearGradient(xb,0,xb+12,0);pg.addColorStop(0,'#f3f4f6');pg.addColorStop(1,'#b9bec8');
+      c.fillStyle='#6b7280';c.fillRect(xb-2,rimY+boardH*.5,8,FX.H);                                   /* pole */
+      c.fillStyle=pg;c.strokeStyle='#4b5563';c.lineWidth=2;c.beginPath();c.rect(xb,rimY-boardH*.55,12,boardH);c.fill();c.stroke();     /* backboard (side view) */
+      c.fillStyle='#e23b2e';c.fillRect(xb,rimY-boardH*.55,12,5);
+      c.restore();
+    }
+    function frame(ts){
+      if(last===null)last=ts;var dt=Math.min(.033,(ts-last)/1000);last=ts;T+=dt;var c=FX.ctx,hm=a.home();
+      var off=-(xr+rx+40)*(1-sm(0,.4,T))+(out>=0?-(xr+rx+40)*sm(0,.45,out):0);
+      if(state==='wait'){var u=sm(0,tIn,T);a.x=x0;a.y=y0;if(T>=tIn){state='fly';T=tIn}}
+      if(state==='fly'){var t=T-tIn;a.x=x0+vx0*t;a.y=y0+vy0*t+.5*G*t*t;a.vx=vx0;a.vy=vy0+G*t;a.ang+=(a.vx>0?1:-1)*(.5*dt*PI);
+        if(t>=tf){state='drop';a.vx=vx0*.05;a.vy=(vy0+G*tf)*.7;tNet=T;a.y=rimY}}
+      else if(state==='drop'){a.vy+=G*dt;a.x+=a.vx*dt;a.y+=a.vy*dt;a.ang+=a.vx/r*dt;
+        if(a.y>=floorY){a.y=floorY;bounces++;if(bounces>=3||Math.abs(a.vy)<260){state='roll';rollT=0;rollFrom=a.x;rollD=hm.x-a.x;rollDur=Math.min(3.8,Math.max(.9,Math.abs(rollD)/300));a.vy=0}else{a.vy=-a.vy*.55;a.vx*=.5}}}
+      else if(state==='roll'){rollT+=dt;var u2=Math.min(1,rollT/rollDur),e=u2*u2*(3-2*u2),nx=rollFrom+rollD*e;a.ang+=(nx-a.x)/r;a.x=nx;a.y=floorY;
+        if(u2>=1){state='out';out=0;a.cv.style.visibility='';a.vx=a.vy=0}}
+      if(state==='out'){out+=dt}
+      c.setTransform(FX.dpr,0,0,FX.dpr,0,0);c.clearRect(0,0,FX.W,FX.H);
+      var sw=tNet>-9?rx*.2*Math.exp(-3.2*(T-tNet))*SIN(20*(T-tNet)):0,bulge=tNet>-9?.3*Math.exp(-3*(T-tNet))*Math.max(0,SIN(PI*Math.min(1,(T-tNet)/.6))):0;
+      c.save();c.translate(off,0);
+      drawHoop(c,0);
+      c.strokeStyle='#e8561e';c.lineWidth=Math.max(4,r*.09);c.lineCap='round';c.beginPath();c.ellipse(xr,rimY,rx,ry,0,PI,2*PI);c.stroke();   /* back of the rim */
+      drawNet(c,false,.55,sw,bulge);
+      c.restore();
+      if(state!=='out')drawBall(c,a,1);
+      c.save();c.translate(off,0);
+      c.strokeStyle='#ff6a2b';c.lineWidth=Math.max(4,r*.09);c.beginPath();c.ellipse(xr,rimY,rx,ry,0,0,PI);c.stroke();                         /* front of the rim */
+      drawNet(c,true,.85,sw,bulge);c.restore();
+      if(out>=.5||T>14){finish([a]);return}
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+  /* ---- input ---- */
+  D.addEventListener('click',function(e){var cv=e.target.closest&&e.target.closest('.la-ball2 canvas');if(!cv)return;var el=cv.parentNode;e.preventDefault();e.stopPropagation();var art=el.closest('.la');kick();if(el.__kind==='soccer')soccer(art,el);else basket(art,el)},true);
+  D.addEventListener('keydown',function(e){var cv=e.target&&e.target.closest&&e.target.closest('.la-ball2 canvas');if(cv&&(e.key==='Enter'||e.key===' ')){e.preventDefault();cv.click()}});
+  function scan(r){var a=r.querySelectorAll?r.querySelectorAll('.la-ball2'):[],i;for(i=0;i<a.length;i++)setup(a[i]);if(r.classList&&r.classList.contains('la-ball2'))setup(r)}
+  new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1)scan(n)})})}).observe(D.body,{childList:true,subtree:true});
+  new MutationObserver(function(){BALLS.forEach(function(b){labels(b.el)})}).observe(D.documentElement,{attributes:true,attributeFilter:['lang']});
   scan(D);
 })();
 </script>
