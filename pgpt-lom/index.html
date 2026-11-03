@@ -3402,7 +3402,7 @@ const FORM_ENDPOINT = '';
   var ACT={
     'Национални успехи':function(){var a=[];
       a.push({imgs:[U('2026/04/20260421_131400-860x1024.jpg'),U('2026/04/Bojidar.jpg'),U('2026/04/20260421_131521-855x1024.jpg')],date:'16 – 17 април 2026',title:'Сребърен медал за Божидар Светлиев',text:'В Благоевград се проведе Национален кръг на състезание за икономисти на английски език. От нашето училище до финалния кръг достигна Божидар Светлиев, който се състезава с още 23 участници. Състезателите са разделени в 6 отбора със задачата да разработят бизнес идея за конкретно населено място в България и да я защитят на английски език пред жури. Със своята бизнес идея за къмпинг в Белоградчик („Beloglamping“) отбор № 4, част от който беше и Божидар, се класира на второ място и завоюва сребърен медал.',nocta:1});
-      a.push({imgs:[U('2025/11/IMG_20251120_151530-1024x768.jpg'),U('2025/11/IMG_20251120_151734-1024x768.jpg'),U('2025/11/IMG_20251120_152758-1024x768.jpg')],date:'20 ноември 2025',title:'Междуучилищно състезание в нашата гимназия',text:'ПГПТ – Лом е домакин на междуучилищното състезание „Най-добър млад автомонтьор и водач на МПС“. Отборите ни се класират на призови места – виж класирането към „Най-добър млад автомонтьор“.',href:'#/avtomontyor',cta:'Научете повече'});return a},
+      a.push({imgs:[U('2025/11/IMG_20251120_151530-1024x768.jpg'),U('2025/11/IMG_20251120_151734-1024x768.jpg'),U('2025/11/IMG_20251120_152758-1024x768.jpg')],date:'20 ноември 2025',title:'Междуучилищно състезание в нашата гимназия',text:'ПГПТ – Лом е домакин на междуучилищното състезание „Най-добър млад автомонтьор и водач на МПС“. Отборите ни се класират на призови места – виж класирането към „Най-добър млад автомонтьор“.',href:'#/avtomontyor',cta:'Научете повече',trophy:1});return a},
     'Танцова формация':function(){var r=P('za-nas'),h=find(r,'h2','Образователни постижения'),p=find(r,'p','Нашите прекрасни мажоретки');
       return [{imgs:[U('2026/09/Kupa-768x1024.jpg'),U('2026/09/Otbor-1024x768.jpg')],title:'Първо място и златни медали за танцова формация „Фантазия“',text:p?clean(p.textContent,420):secText('Танцова формация'),href:'#/za-nas',cta:'Прочетете повече'}]},
     'Спорт':function(){var a=[];
@@ -3443,7 +3443,7 @@ const FORM_ENDPOINT = '';
       var im=a.imgs||[],ph='';
       if(im.length){ph='<div class="ph n'+Math.min(im.length,3)+'">'+im.slice(0,3).map(function(u,k){return '<button type="button" class="phb" data-a="'+ai+'" data-i="'+k+'" aria-label="Увеличи снимката"><img alt="" decoding="async" src="'+esc(u)+'"></button>'}).join('')+'</div>'}
       var cta=a.nocta?'':'<a class="btn primary" href="'+esc(a.href)+'">'+esc(a.cta||'Прочетете повече')+' →</a>',side=im.length===1&&!a.deco&&cta;   /* one photo beside the text: the button goes under the photo */
-      html+='<article class="la'+(im.length?'':' noimg')+(im.length>1?' multi':'')+'">'+(side?'<div class="phc">'+ph+cta+'</div>':ph)+'<div class="lt">'+(a.date?'<time>'+esc(a.date)+'</time>':'')+'<h4>'+esc(a.title)+'</h4>'+(a.text?'<p>'+esc(a.text)+'</p>':'')+(side?'':(a.engine?'<div class="ar">'+cta+'<div class="eng" role="button" tabindex="0"></div></div>':cta))+(a.laptop?'<div class="lap" role="button" tabindex="0"></div>':'')+'</div>'+(a.deco?'<span class="la-ball" aria-hidden="true"></span>':'')+'</article>';
+      html+='<article class="la'+(im.length?'':' noimg')+(im.length>1?' multi':'')+'">'+(side?'<div class="phc">'+ph+cta+'</div>':ph)+'<div class="lt">'+(a.date?'<time>'+esc(a.date)+'</time>':'')+'<h4>'+esc(a.title)+'</h4>'+(a.text?'<p>'+esc(a.text)+'</p>':'')+(side?'':(a.engine||a.trophy?'<div class="ar">'+cta+(a.engine?'<div class="eng" role="button" tabindex="0"></div>':'<canvas class="trophy" role="img"></canvas>')+'</div>':cta))+(a.laptop?'<div class="lap" role="button" tabindex="0"></div>':'')+'</div>'+(a.deco?'<span class="la-ball" aria-hidden="true"></span>':'')+'</article>';
     });
     if(!items.length)html+='<p>Скоро ще добавим статии по тази тема.</p>';
     panel.innerHTML=html;
@@ -3988,6 +3988,123 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
 .stats .grid>*,.info>*,.info .row>*:not(.ic){min-width:0}
 .stat,.stat b,.stat span,.info .row,.info strong,.info small{overflow-wrap:anywhere;word-wrap:break-word}
 </style>
+<style id="trophy-css">
+/* a gold "1st place" trophy, a real lathe-turned 3D model drawn on a canvas, turning a full circle left to right */
+.trophy{flex:none;display:block;width:140px;height:160px;margin:0 clamp(24px,6vw,90px) 0 auto}
+@media(max-width:700px){.trophy{margin:0 auto}}
+</style>
+<script id="trophy-js">
+(function(){
+  var D=document,PI=Math.PI,SIN=Math.sin,COS=Math.cos,W=140,H=160,SC=1.34,TILT=18*PI/180,N=40,PERIOD=10;
+  /* outline of the trophy: [radius, height, material]  0 = black base, 1 = gold, 2 = darker engraved gold band */
+  var P=[[.01,0,0],[29,0,0],[29.6,2,0],[28,4.5,0],[26.5,7,0],[23,9.5,0],[21.5,12,0],[20.5,14,0],[20.5,27,0],[22,29,0],[23,30.5,0],[23,31,0],[18.5,31.3,0],
+    [18.5,31.3,1],[17.5,33,1],[14,34,1],[9,35.5,1],[5.5,37.5,1],[4.6,40,1],[4.2,43,1],[5.4,44.5,1],[4.2,46,1],[3.8,49,1],[5,51,1],[6,53,1],[5,55,1],[9,58,1],[12.5,64,1],[15.5,74,1],[18.2,86,1],
+    [18.6,89,2],[18.9,93,2],[19.4,96,1],[20.6,99,1],[20.8,100.4,1],[20,102,1],[18.6,101.8,1],[18,100.5,1],
+    [17,96,1],[14.5,86,1],[11,74,1],[8.5,66,1],[0.01,63,1]];
+  var HANDLE=[[16,95],[23,101],[30,98],[33,90],[32.5,82],[29,74],[25,67],[19,62],[9,59.5]];
+  var VX=[],VY=[],VZ=[],VN=[],F=[];   /* vertices, vertex normals, facets {v:[a,b,c,d], n:[x,y,z], m:material} */
+  function addV(x,y,z){VX.push(x);VY.push(y);VZ.push(z);return VX.length-1}
+  (function lathe(){
+    var K=P.length,rows=[],k,j;
+    for(k=0;k<K;k++){var r=[];for(j=0;j<=N;j++){var a=j*2*PI/N;r.push(addV(P[k][0]*COS(a),P[k][1],P[k][0]*SIN(a)))}rows.push(r)}
+    for(k=0;k<K-1;k++){
+      var dr=P[k+1][0]-P[k][0],dy=P[k+1][1]-P[k][1],l=Math.hypot(dr,dy);if(l<.05)continue;
+      var nr=dy/l,ny=-dr/l;
+      for(j=0;j<N;j++){var am=(j+.5)*2*PI/N;F.push({v:[rows[k][j],rows[k][j+1],rows[k+1][j+1],rows[k+1][j]],n:[nr*COS(am),ny,nr*SIN(am)],m:P[k][2]})}
+    }
+  })();
+  (function handles(){
+    function cr(p0,p1,p2,p3,t){var t2=t*t,t3=t2*t;return [0,1].map(function(i){return .5*((2*p1[i])+(-p0[i]+p2[i])*t+(2*p0[i]-5*p1[i]+4*p2[i]-p3[i])*t2+(-p0[i]+3*p1[i]-3*p2[i]+p3[i])*t3)})}
+    var pts=[],i,s,c=HANDLE;
+    for(i=0;i<c.length-1;i++){for(s=0;s<4;s++){pts.push(cr(c[Math.max(0,i-1)],c[i],c[i+1],c[Math.min(c.length-1,i+2)],s/4))}}
+    pts.push(c[c.length-1]);
+    [0,PI].forEach(function(th){
+      var ct=COS(th),st=SIN(th),M=pts.length,S=8,rows=[],k,q;
+      for(k=0;k<M;k++){
+        var pp=pts[Math.max(0,k-1)],pn=pts[Math.min(M-1,k+1)],tx=pn[0]-pp[0],ty=pn[1]-pp[1],tl=Math.hypot(tx,ty)||1;tx/=tl;ty/=tl;
+        var nx=ty,ny=-tx,rho=2.1+.55*Math.pow(COS(k*.9),2),r=[];       /* beaded handle */
+        for(q=0;q<S;q++){var b=q*2*PI/S,ox=COS(b)*nx,oy=COS(b)*ny,oz=SIN(b);
+          var dx=ox*rho,dy=oy*rho,dz=oz*rho,px=pts[k][0]+dx,py=pts[k][1]+dy;
+          var idx=addV(px*ct-dz*st,py,px*st+dz*ct);VN[idx]=[ox*ct-oz*st,oy,ox*st+oz*ct];r.push(idx)}
+        rows.push(r);
+      }
+      for(k=0;k<M-1;k++)for(q=0;q<S;q++){var a=rows[k][q],b2=rows[k][(q+1)%S],c2=rows[k+1][(q+1)%S],d=rows[k+1][q];
+        var n=[0,1,2].map(function(i){return (VN[a][i]+VN[b2][i]+VN[c2][i]+VN[d][i])/4});F.push({v:[a,b2,c2,d],n:n,m:1})}
+    });
+  })();
+  var tex=null,PW=128,PH=84;
+  function plate(){
+    tex=D.createElement('canvas');tex.width=PW;tex.height=PH;var x=tex.getContext('2d');
+    var g=x.createLinearGradient(0,0,PW,PH);g.addColorStop(0,'#f6d77a');g.addColorStop(.45,'#e3b64a');g.addColorStop(1,'#f3cf6c');x.fillStyle=g;x.fillRect(0,0,PW,PH);
+    x.strokeStyle='#6b4a0c';x.lineWidth=2;x.strokeRect(5,5,PW-10,PH-10);x.lineWidth=1;x.strokeRect(9,9,PW-18,PH-18);
+    x.fillStyle='#14140f';x.textAlign='center';x.textBaseline='middle';
+    x.font='700 40px Georgia,"Times New Roman",serif';x.fillText('1',PW/2,32);
+    x.font='600 17px Georgia,"Times New Roman",serif';x.fillText('МЯСТО',PW/2,63);
+  }
+  var LX=-.4,LY=.6,LZ=.7,LL=Math.hypot(LX,LY,LZ);LX/=LL;LY/=LL;LZ/=LL;
+  function sm(t){t=t<0?0:t>1?1:t;return t*t*(3-2*t)}
+  function shade(nx,ny,nz,m){
+    var diff=Math.max(0,nx*LX+ny*LY+nz*LZ),d2=2*nz,rx=d2*nx,ry=d2*ny,rz=d2*nz-1,spec=Math.pow(Math.max(0,rx*LX+ry*LY+rz*LZ),24),r,g,b;
+    if(m===0){var v=16+46*diff;r=v;g=v;b=v+2;spec*=170;r+=spec;g+=spec;b+=spec}
+    else{
+      var env=ry>0?.38+.62*sm(ry/.8):.38*(1+ry*.8);                 /* sky above, dark horizon, warm ground */
+      var k=.22+.55*env+.30*diff,dim=m===2?.72:1;
+      r=255*k*dim;g=(196*k+0)*dim;b=(66*k)*dim;spec*=230;r+=spec;g+=spec*.95;b+=spec*.7;
+    }
+    return 'rgb('+(r>255?255:r|0)+','+(g>255?255:g|0)+','+(b>255?255:b|0)+')';
+  }
+  function build(cv){
+    if(cv.__t)return;cv.__t=1;if(!cv.getContext)return;
+    var dpr=Math.min(2,window.devicePixelRatio||1);cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
+    var ctx=cv.getContext('2d');if(!ctx)return;label(cv);if(!tex)plate();
+    var S=SC*dpr,OX=cv.width/2,OY=cv.height-28*dpr,ct=COS(TILT),st=SIN(TILT),nV=VX.length,PX=new Float32Array(nV),PY=new Float32Array(nV),PZ=new Float32Array(nV);
+    var order=[],keys=new Float32Array(F.length),vis=true,run=false,t0=null,STR=10,SPAN=27*PI/180,RP=21.3,YT=27,YB=14;
+    function frame(ts){
+      if(!D.body.contains(cv)||!vis||D.hidden){run=false;t0=null;return}
+      if(t0===null)t0=ts;draw((ts-t0)/1000*2*PI/PERIOD);requestAnimationFrame(frame);
+    }
+    function go(){if(!run&&vis){run=true;requestAnimationFrame(frame)}}
+    function draw(phi){
+      var cp=COS(phi),sp=SIN(phi),i,j;
+      ctx.clearRect(0,0,cv.width,cv.height);
+      var gr=ctx.createRadialGradient(OX,OY+4*dpr,2,OX,OY+4*dpr,44*dpr);gr.addColorStop(0,'rgba(20,30,50,.30)');gr.addColorStop(1,'rgba(20,30,50,0)');
+      ctx.save();ctx.translate(0,OY+4*dpr);ctx.scale(1,.28);ctx.translate(0,-(OY+4*dpr));ctx.fillStyle=gr;ctx.beginPath();ctx.arc(OX,OY+4*dpr,44*dpr,0,2*PI);ctx.fill();ctx.restore();
+      for(i=0;i<nV;i++){var x=VX[i],y=VY[i],z=VZ[i],z1=-sp*x+cp*z,x1=cp*x+sp*z;PX[i]=OX+S*x1;PY[i]=OY-S*(ct*y-st*z1);PZ[i]=st*y+ct*z1}
+      var list=[];
+      for(i=0;i<F.length;i++){var f=F[i],n=f.n,nz1=-sp*n[0]+cp*n[2],nx1=cp*n[0]+sp*n[2],ny=ct*n[1]-st*nz1,nz=st*n[1]+ct*nz1;
+        if(nz<=0)continue;var v=f.v;list.push({z:(PZ[v[0]]+PZ[v[1]]+PZ[v[2]]+PZ[v[3]])*.25,f:f,c:[nx1,ny,nz]})}
+      /* the engraved plate on the front of the base, bent round the cylinder in strips */
+      for(j=0;j<STR;j++){
+        var aL=PI/2+SPAN-j*2*SPAN/STR,aR=aL-2*SPAN/STR,am=(aL+aR)/2,ax=COS(am),az=SIN(am),nz2=-sp*ax+cp*az;
+        if(nz2>.02)list.push({z:RP*nz2*1.0+3+st*(YT+YB)/2,strip:j,aL:aL,aR:aR});
+      }
+      list.sort(function(a,b){return a.z-b.z});
+      ctx.lineWidth=.8*dpr;ctx.lineJoin='round';
+      for(i=0;i<list.length;i++){
+        var it=list[i];
+        if(it.strip!==undefined){
+          var pr=function(a,y){var x0=RP*COS(a),z0=RP*SIN(a),z1=-sp*x0+cp*z0,x1=cp*x0+sp*z0;return [OX+S*x1,OY-S*(ct*y-st*z1)]};
+          var TL=pr(it.aL,YT),TR=pr(it.aR,YT),BL=pr(it.aL,YB),sw=PW/STR;
+          ctx.save();ctx.setTransform((TR[0]-TL[0])/sw,(TR[1]-TL[1])/sw,(BL[0]-TL[0])/PH,(BL[1]-TL[1])/PH,TL[0],TL[1]);
+          ctx.drawImage(tex,it.strip*sw,0,sw+.6,PH,0,0,sw+.6,PH);ctx.restore();continue;
+        }
+        var f2=it.f,col=shade(it.c[0],it.c[1],it.c[2],f2.m),v2=f2.v;
+        ctx.fillStyle=col;ctx.strokeStyle=col;ctx.beginPath();ctx.moveTo(PX[v2[0]],PY[v2[0]]);ctx.lineTo(PX[v2[1]],PY[v2[1]]);ctx.lineTo(PX[v2[2]],PY[v2[2]]);ctx.lineTo(PX[v2[3]],PY[v2[3]]);ctx.closePath();ctx.fill();ctx.stroke();
+      }
+    }
+    cv.__draw=draw;draw(0);
+    if('IntersectionObserver' in window)new IntersectionObserver(function(es){vis=es[0].isIntersecting;if(vis){t0=null;go()}}).observe(cv);
+    D.addEventListener('visibilitychange',function(){t0=null;go()});
+    go();
+  }
+  function en(){return (D.documentElement.lang||'bg').indexOf('en')===0}
+  function label(c){c.setAttribute('aria-label',en()?'Gold trophy for first place':'Златна купа за първо място')}
+  function scan(r){var a=r.querySelectorAll?r.querySelectorAll('.trophy'):[],i;for(i=0;i<a.length;i++)build(a[i]);if(r.classList&&r.classList.contains('trophy'))build(r)}
+  new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1)scan(n)})})}).observe(D.body,{childList:true,subtree:true});
+  new MutationObserver(function(){[].forEach.call(D.querySelectorAll('.trophy'),label)}).observe(D.documentElement,{attributes:true,attributeFilter:['lang']});
+  scan(D);
+})();
+</script>
 <style id="engine-css">
 /* an animated cutaway V-engine: pistons, rods, crankshaft, valves, camshafts and the timing chain move in step like a real four-stroke; click pauses / resumes */
 .life-panel .la .ar{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px 24px}
