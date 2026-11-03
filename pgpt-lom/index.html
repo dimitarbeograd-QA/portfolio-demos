@@ -3989,66 +3989,72 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
 .stat,.stat b,.stat span,.info .row,.info strong,.info small{overflow-wrap:anywhere;word-wrap:break-word}
 </style>
 <style id="dancer-css">
-/* the majorette from the sticker: its seven silhouettes are the moves of one routine - jumps, splits, kneel, lunge and the high leg lift */
+/* the majorette from the sticker: its seven silhouettes are the key poses of one routine, and 80+ in-between frames make every move flow */
 .dancer{flex:none;display:block;width:170px;height:210px;margin:0 clamp(24px,6vw,90px) 0 auto}
 @media(max-width:700px){.dancer{margin:0 auto}}
 </style>
 <script id="dancer-js">
 (function(){
-  var D=document,PI=Math.PI,W=170,H=210,K=.2,T=9,F=.1;
-  /* sprite files (img/dance-*.webp): width, height and the x of the supporting foot (or of the centre when airborne), in file pixels */
-  var SP={tuck:{w:343,h:529,fx:206.9},reach:{w:266,h:545,fx:106.1},split:{w:595,h:457,fx:284},needle:{w:356,h:647,fx:217.7},stand:{w:239,h:557,fx:122},kneel:{w:331,h:476,fx:160.8},lunge:{w:309,h:407,fx:176.5}};
-  /* the routine: [from, to, pose] in seconds */
-  var SEQ=[[0,.95,'stand'],[.95,1.95,'needle'],[1.95,2.5,'stand'],
-           [2.5,2.92,'reach'],[2.92,3.52,'split'],[3.52,4,'reach'],           /* big jump: arms up, straddle split at the top */
-           [4,4.6,'stand'],
-           [4.6,4.8,'reach'],[4.8,5.7,'tuck'],[5.7,5.9,'reach'],              /* second jump: knee tuck */
-           [5.9,6.9,'kneel'],[6.9,7.8,'lunge'],[7.8,9,'stand']];
+  var D=document,PI=Math.PI,W=170,H=210,T=9,N=12,FW=188,FH=202;
+  /* the atlas has one row per pair of poses, N+1 frames per row, from the first pose (column 0) to the second (column N) */
+  var PAIRS=[['stand','needle'],['stand','reach'],['reach','split'],['reach','tuck'],['reach','kneel'],['kneel','lunge'],['lunge','stand']];
+  /* the routine: at time t the dancer is in this pose; between two waypoints she flows from one pose to the next */
+  var WP=[[0,'stand'],[.7,'stand'],[1.3,'needle'],[2,'needle'],[2.5,'stand'],
+          [2.85,'reach'],[3.2,'split'],[3.45,'split'],[3.75,'reach'],[4,'stand'],      /* big jump: arms up, straddle split at the top */
+          [4.6,'stand'],
+          [4.95,'reach'],[5.25,'tuck'],[5.6,'tuck'],[5.9,'reach'],                     /* second jump: knee tuck */
+          [6.5,'kneel'],[7,'kneel'],[7.6,'lunge'],[8,'lunge'],[8.7,'stand'],[9,'stand']];
+  function ease(t){t=t<0?0:t>1?1:t;return t*t*t*(t*(6*t-15)+10)}
   function sm(t){t=t<0?0:t>1?1:t;return t*t*(3-2*t)}
-  /* height above the floor and squash / stretch at time t */
+  function cell(a,b,u){                          /* -> [row, column fraction] */
+    var i;
+    for(i=0;i<PAIRS.length;i++){
+      if(a===b){if(PAIRS[i][0]===a)return [i,0];if(PAIRS[i][1]===a)return [i,N]}
+      else if(PAIRS[i][0]===a&&PAIRS[i][1]===b)return [i,u*N];
+      else if(PAIRS[i][0]===b&&PAIRS[i][1]===a)return [i,(1-u)*N];
+    }
+    return [0,0];
+  }
+  function pose(t){
+    var k=0,a,b,u;
+    while(k<WP.length-2&&WP[k+1][0]<=t)k++;
+    a=WP[k];b=WP[k+1];u=ease((t-a[0])/(b[0]-a[0]));
+    return cell(a[1],b[1],u);
+  }
+  /* height above the floor, squash / stretch and tilt */
   function motion(t){
     var y=0,sx=1,sy=1,u,s;
-    sy+=.012*Math.sin(2*PI*t/1.6);
-    if(t>=2.2&&t<2.5){s=sm((t-2.2)/.3);sy-=.12*s;sx+=.08*s}                    /* crouch */
-    else if(t>=2.5&&t<4){u=(t-2.5)/1.5;y=44*4*u*(1-u);s=Math.sin(PI*u);sy+=.06*s;sx-=.04*s}
-    else if(t>=4&&t<4.2){s=1-sm((t-4)/.2);sy-=.14*s;sx+=.09*s}                 /* landing */
-    else if(t>=4.35&&t<4.6){s=sm((t-4.35)/.25);sy-=.12*s;sx+=.08*s}
-    else if(t>=4.6&&t<5.9){u=(t-4.6)/1.3;y=36*4*u*(1-u);s=Math.sin(PI*u);sy+=.06*s;sx-=.04*s}
-    else if(t>=5.9&&t<6.1){s=1-sm((t-5.9)/.2);sy-=.14*s;sx+=.09*s}
-    return [y,sx,sy];
-  }
-  function layers(t){
-    var out=[],i,a,s,m=motion(t);
-    for(i=0;i<SEQ.length;i++){
-      s=SEQ[i];if(t<s[0]-F/2||t>=s[1]+F/2)continue;
-      a=i===0||t>=s[0]+F/2?1:sm((t-s[0]+F/2)/F);                                   /* new pose fades in over the old one */
-      out.push([s[2],a])
-    }
-    return {l:out,m:m};
+    if(t>=2.2&&t<2.5){s=sm((t-2.2)/.3);sy-=.10*s;sx+=.06*s}                         /* crouch before the jump */
+    else if(t>=2.5&&t<4){u=(t-2.5)/1.5;y=44*4*u*(1-u);s=Math.sin(PI*u);sy+=.05*s;sx-=.03*s}
+    else if(t>=4&&t<4.2){s=1-sm((t-4)/.2);sy-=.12*s;sx+=.07*s}                      /* landing */
+    else if(t>=4.35&&t<4.6){s=sm((t-4.35)/.25);sy-=.10*s;sx+=.06*s}
+    else if(t>=4.6&&t<5.9){u=(t-4.6)/1.3;y=36*4*u*(1-u);s=Math.sin(PI*u);sy+=.05*s;sx-=.03*s}
+    else if(t>=5.9&&t<6.15){s=1-sm((t-5.9)/.25);sy-=.13*s;sx+=.08*s}
+    var g=1-Math.min(1,y/8);                                                          /* breathing and a little sway while on the floor */
+    sy+=.010*Math.sin(2*PI*t/1.6)*g;
+    return [y,sx,sy,.012*Math.sin(2*PI*t/2.4)*g];
   }
   function build(cv){
     if(cv.__d)return;cv.__d=1;if(!cv.getContext)return;
     var dpr=Math.min(2,window.devicePixelRatio||1);cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
     var ctx=cv.getContext('2d');if(!ctx)return;label(cv);ctx.imageSmoothingQuality='high';
-    var IM={},name,GY=H-14,CX=W/2,vis=true,run=false,t0=null;
-    for(name in SP){(function(n){var im=new Image();im.decoding='async';im.onload=function(){draw(cur)};im.src='img/dance-'+n+'.webp';IM[n]=im})(name)}
-    var cur=0;
-    function put(ts,alpha){
-      var st=layers(ts),m=st.m,i,n,sp,im;
-      for(i=0;i<st.l.length;i++){
-        n=st.l[i][0];sp=SP[n];im=IM[n];if(!im||!im.complete||!im.naturalWidth)continue;
-        ctx.globalAlpha=alpha*st.l[i][1];
-        ctx.save();ctx.translate(CX,GY-m[0]);ctx.scale(m[1],m[2]);
-        ctx.drawImage(im,-sp.fx*K,-sp.h*K,sp.w*K,sp.h*K);ctx.restore();
-      }
-      return m[0];
+    var at=new Image(),ready=false,GY=H-14,CX=W/2,vis=true,run=false,t0=null,cur=0;
+    at.decoding='async';at.onload=function(){ready=true;draw(cur)};at.src='img/dance-atlas.webp';
+    function put(tt,alpha){
+      var c=pose(tt),m=motion(tt),i=Math.floor(c[1]+1e-6),f=c[1]-i;
+      if(i>=N){i=N;f=0}
+      ctx.save();ctx.translate(CX,GY-m[0]);ctx.rotate(m[3]);ctx.scale(m[1],m[2]);
+      ctx.globalAlpha=alpha;ctx.drawImage(at,i*FW,c[0]*FH,FW,FH,-62.5,-133.5,125,135);
+      if(f>.03){ctx.globalAlpha=alpha*f;ctx.drawImage(at,(i+1)*FW,c[0]*FH,FW,FH,-62.5,-133.5,125,135)}   /* blend neighbouring frames: smooth at any speed */
+      ctx.restore();
     }
     function draw(t){
       cur=t;t=t%T;
       ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
       var y=motion(t)[0],q=Math.min(1,y/46);
       ctx.globalAlpha=1;ctx.fillStyle='rgba(20,30,50,'+(.20-.12*q)+')';ctx.beginPath();ctx.ellipse(CX,GY+2,(30-10*q),5.5*(1-.3*q),0,0,2*PI);ctx.fill();
-      if(y>3){put(t-.09,.05);put(t-.045,.09)}                                  /* motion trail while airborne */
+      if(!ready)return;
+      if(y>3){put(Math.max(0,t-.09),.035);put(Math.max(0,t-.045),.07)}               /* faint motion trail while airborne */
       put(t,1);ctx.globalAlpha=1;
     }
     function frame(ts){
