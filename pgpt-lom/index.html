@@ -3989,73 +3989,67 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
 .stat,.stat b,.stat span,.info .row,.info strong,.info small{overflow-wrap:anywhere;word-wrap:break-word}
 </style>
 <style id="dancer-css">
-/* a pom-pom majorette silhouette that performs the poses of the sticker one after another */
-.dancer{flex:none;display:block;width:150px;height:188px;margin:0 clamp(24px,6vw,90px) 0 auto}
+/* the majorette from the sticker: its seven silhouettes are the moves of one routine - jumps, splits, kneel, lunge and the high leg lift */
+.dancer{flex:none;display:block;width:170px;height:210px;margin:0 clamp(24px,6vw,90px) 0 auto}
 @media(max-width:700px){.dancer{margin:0 auto}}
 </style>
 <script id="dancer-js">
 (function(){
-  var D=document,PI=Math.PI,SIN=Math.sin,COS=Math.cos,W=150,H=188,SC=1.2,INK='#14161c';
-  var TL=22,SL=22,TO=28,UA=14,FA=14,HW=4,SW=7;                         /* thigh, shin, torso, upper arm, forearm, half hip, half shoulder */
-  /* a pose: [lean, headTilt, Larm1, Larm2, Rarm1, Rarm2, Lleg1, Lleg2, Rleg1, Rleg2, air]; limb angles are measured from straight down, clockwise on the screen */
-  var V=[0,0,-150,-160,150,160,-6,-4,6,4,0],                          /* arms in a high V */
-      SPLIT=[0,0,-140,-150,140,150,-78,-84,78,84,26],                 /* straddle jump */
-      HIPS=[0,0,-55,5,55,-5,-6,-4,6,4,0],                           /* pom-poms at the hips */
-      KNEEL=[4,3,-100,-95,100,95,-80,-10,0,92,0],                     /* one knee down, arms low */
-      NEEDLE=[-3,0,-145,-150,145,150,-4,-3,155,165,0],                /* leg lifted high to the side */
-      TUCK=[3,0,-145,-155,145,155,-5,-3,100,10,24];                   /* knee-tuck jump */
-  var SEQ=[[V,.5],[SPLIT,.45],[HIPS,.55],[KNEEL,.7],[V,.5],[NEEDLE,.7],[TUCK,.5],[V,.45]],HOLD=.22,T=0,ST=[],i;
-  for(i=0;i<SEQ.length;i++){ST.push(T);T+=SEQ[i][1]+HOLD}
+  var D=document,PI=Math.PI,W=170,H=210,K=.2,T=9,F=.1;
+  /* sprite files (img/dance-*.webp): width, height and the x of the supporting foot (or of the centre when airborne), in file pixels */
+  var SP={tuck:{w:343,h:529,fx:206.9},reach:{w:266,h:545,fx:106.1},split:{w:595,h:457,fx:284},needle:{w:356,h:647,fx:217.7},stand:{w:239,h:557,fx:122},kneel:{w:331,h:476,fx:160.8},lunge:{w:309,h:407,fx:176.5}};
+  /* the routine: [from, to, pose] in seconds */
+  var SEQ=[[0,.95,'stand'],[.95,1.95,'needle'],[1.95,2.5,'stand'],
+           [2.5,2.92,'reach'],[2.92,3.52,'split'],[3.52,4,'reach'],           /* big jump: arms up, straddle split at the top */
+           [4,4.6,'stand'],
+           [4.6,4.8,'reach'],[4.8,5.7,'tuck'],[5.7,5.9,'reach'],              /* second jump: knee tuck */
+           [5.9,6.9,'kneel'],[6.9,7.8,'lunge'],[7.8,9,'stand']];
   function sm(t){t=t<0?0:t>1?1:t;return t*t*(3-2*t)}
-  function pose(t){
-    t=t%T;var k=SEQ.length-1;while(k>0&&ST[k]>t)k--;
-    var prev=SEQ[(k+SEQ.length-1)%SEQ.length][0],cur=SEQ[k][0],u=sm((t-ST[k])/SEQ[k][1]),o=[],j;
-    for(j=0;j<11;j++)o.push(prev[j]+(cur[j]-prev[j])*u);
-    return o;
+  /* height above the floor and squash / stretch at time t */
+  function motion(t){
+    var y=0,sx=1,sy=1,u,s;
+    sy+=.012*Math.sin(2*PI*t/1.6);
+    if(t>=2.2&&t<2.5){s=sm((t-2.2)/.3);sy-=.12*s;sx+=.08*s}                    /* crouch */
+    else if(t>=2.5&&t<4){u=(t-2.5)/1.5;y=44*4*u*(1-u);s=Math.sin(PI*u);sy+=.06*s;sx-=.04*s}
+    else if(t>=4&&t<4.2){s=1-sm((t-4)/.2);sy-=.14*s;sx+=.09*s}                 /* landing */
+    else if(t>=4.35&&t<4.6){s=sm((t-4.35)/.25);sy-=.12*s;sx+=.08*s}
+    else if(t>=4.6&&t<5.9){u=(t-4.6)/1.3;y=36*4*u*(1-u);s=Math.sin(PI*u);sy+=.06*s;sx-=.04*s}
+    else if(t>=5.9&&t<6.1){s=1-sm((t-5.9)/.2);sy-=.14*s;sx+=.09*s}
+    return [y,sx,sy];
+  }
+  function layers(t){
+    var out=[],i,a,s,m=motion(t);
+    for(i=0;i<SEQ.length;i++){
+      s=SEQ[i];if(t<s[0]-F/2||t>=s[1]+F/2)continue;
+      a=i===0||t>=s[0]+F/2?1:sm((t-s[0]+F/2)/F);                                   /* new pose fades in over the old one */
+      out.push([s[2],a])
+    }
+    return {l:out,m:m};
   }
   function build(cv){
     if(cv.__d)return;cv.__d=1;if(!cv.getContext)return;
     var dpr=Math.min(2,window.devicePixelRatio||1);cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
-    var ctx=cv.getContext('2d');if(!ctx)return;label(cv);
-    var S=SC*dpr,CX=cv.width/2,GY=cv.height-14*dpr,vis=true,run=false,t0=null;
-    function P(x,y){return [CX+S*x,GY+S*y]}
-    function seg(a,b,w){ctx.lineWidth=w*S;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke()}
-    function dir(a){return [SIN(a*PI/180),COS(a*PI/180)]}
-    function pom(h,t,seed){
-      ctx.lineWidth=2.1*S;for(var q=0;q<16;q++){var an=q*2*PI/16+t*1.3+seed,len=8.5+2*SIN(t*13+q*1.7+seed);
-        ctx.beginPath();ctx.moveTo(h[0],h[1]);ctx.lineTo(h[0]+COS(an)*len*S,h[1]+SIN(an)*len*S);ctx.stroke()}
-      ctx.beginPath();ctx.arc(h[0],h[1],4.6*S,0,2*PI);ctx.fill();
+    var ctx=cv.getContext('2d');if(!ctx)return;label(cv);ctx.imageSmoothingQuality='high';
+    var IM={},name,GY=H-14,CX=W/2,vis=true,run=false,t0=null;
+    for(name in SP){(function(n){var im=new Image();im.decoding='async';im.onload=function(){draw(cur)};im.src='img/dance-'+n+'.webp';IM[n]=im})(name)}
+    var cur=0;
+    function put(ts,alpha){
+      var st=layers(ts),m=st.m,i,n,sp,im;
+      for(i=0;i<st.l.length;i++){
+        n=st.l[i][0];sp=SP[n];im=IM[n];if(!im||!im.complete||!im.naturalWidth)continue;
+        ctx.globalAlpha=alpha*st.l[i][1];
+        ctx.save();ctx.translate(CX,GY-m[0]);ctx.scale(m[1],m[2]);
+        ctx.drawImage(im,-sp.fx*K,-sp.h*K,sp.w*K,sp.h*K);ctx.restore();
+      }
+      return m[0];
     }
     function draw(t){
-      var p=pose(t),lean=p[0]*PI/180,air=p[10],c=COS(lean),s=SIN(lean),i;
-      var ux=s,uy=-c,px=c,py=s;                                            /* torso direction and its perpendicular */
-      /* legs first (hip at the origin) to find how low the feet reach, then stand on the ground */
-      var hl=[-HW*px,-HW*py],hr=[HW*px,HW*py],legs=[[hl,p[6],p[7]],[hr,p[8],p[9]]],low=0,info=[];
-      legs.forEach(function(L){var a=dir(L[1]),b=dir(L[2]),k=[L[0][0]+TL*a[0],L[0][1]+TL*a[1]],f=[k[0]+SL*b[0],k[1]+SL*b[1]];info.push([L[0],k,f]);low=Math.max(low,f[1],k[1]-6)});
-      var hy=-low-air,H0=[0,hy];
-      ctx.clearRect(0,0,cv.width,cv.height);
-      var q=Math.min(1,air/26);ctx.fillStyle='rgba(20,30,50,'+(.20-.10*q)+')';ctx.beginPath();ctx.ellipse(CX,GY+2*dpr,(26-8*q)*S,5*S*(1-.3*q),0,0,2*PI);ctx.fill();
-      ctx.fillStyle=INK;ctx.strokeStyle=INK;ctx.lineCap='round';ctx.lineJoin='round';
-      function pt(o){return P(H0[0]+o[0],H0[1]+o[1])}
-      /* legs */
-      info.forEach(function(L){var a=pt(L[0]),k=pt(L[1]),f=pt(L[2]);seg(a,k,8.2);seg(k,f,6);ctx.beginPath();ctx.arc(f[0],f[1],3.2*S,0,2*PI);ctx.fill()});
-      /* skirt */
-      var sw=2*SIN(t*9);ctx.beginPath();var w1=pt([-HW*px*1.2,-HW*py*1.2]),w2=pt([HW*px*1.2,HW*py*1.2]),h1=pt([-14*px+sw,-14*py+11]),h2=pt([14*px+sw,14*py+11]);
-      ctx.moveTo(w1[0],w1[1]);ctx.lineTo(w2[0],w2[1]);ctx.lineTo(h2[0],h2[1]);ctx.quadraticCurveTo((h1[0]+h2[0])/2,(h1[1]+h2[1])/2+3*S,h1[0],h1[1]);ctx.closePath();ctx.fill();
-      /* torso */
-      var sh=[TO*ux,TO*uy],sl=[sh[0]-SW*px,sh[1]-SW*py],sr=[sh[0]+SW*px,sh[1]+SW*py],a1=pt([-HW*px,-HW*py]),a2=pt([HW*px,HW*py]),b1=pt(sl),b2=pt(sr);
-      ctx.beginPath();ctx.moveTo(a1[0],a1[1]);ctx.lineTo(b1[0],b1[1]);ctx.lineTo(b2[0],b2[1]);ctx.lineTo(a2[0],a2[1]);ctx.closePath();ctx.fill();seg(b1,b2,3);
-      /* head, neck and ponytail */
-      var ha=lean+p[1]*PI/180,hx=sh[0]+12*SIN(ha),hy2=sh[1]-12*COS(ha),hc=pt([hx,hy2]),nk=pt(sh);
-      seg(nk,hc,4.4);ctx.beginPath();ctx.arc(hc[0],hc[1],7.2*S,0,2*PI);ctx.fill();
-      var sway=SIN(t*7)*4+lean*18,tl0=[hc[0]+5.5*S,hc[1]-4*S],tl1=[hc[0]+(15+sway)*S,hc[1]-(5-3*SIN(t*7+1))*S],tl2=[hc[0]+(17+sway*1.4)*S,hc[1]+(7+2*SIN(t*7))*S];
-      ctx.lineWidth=4.2*S;ctx.beginPath();ctx.moveTo(tl0[0],tl0[1]);ctx.quadraticCurveTo(tl1[0],tl1[1],tl2[0],tl2[1]);ctx.stroke();
-      ctx.beginPath();ctx.arc(hc[0]+6*S,hc[1]-5*S,2.8*S,0,2*PI);ctx.fill();
-      /* arms and pom-poms */
-      [[sl,p[2],p[3],0],[sr,p[4],p[5],2.1]].forEach(function(A){
-        var a=dir(A[1]),b=dir(A[2]),e=[A[0][0]+UA*a[0],A[0][1]+UA*a[1]],h=[e[0]+FA*b[0],e[1]+FA*b[1]],sp=pt(A[0]),ep=pt(e),hp=pt(h);
-        seg(sp,ep,5.2);seg(ep,hp,4.4);pom(hp,t,A[3]);
-      });
+      cur=t;t=t%T;
+      ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+      var y=motion(t)[0],q=Math.min(1,y/46);
+      ctx.globalAlpha=1;ctx.fillStyle='rgba(20,30,50,'+(.20-.12*q)+')';ctx.beginPath();ctx.ellipse(CX,GY+2,(30-10*q),5.5*(1-.3*q),0,0,2*PI);ctx.fill();
+      if(y>3){put(t-.09,.05);put(t-.045,.09)}                                  /* motion trail while airborne */
+      put(t,1);ctx.globalAlpha=1;
     }
     function frame(ts){
       if(!D.body.contains(cv)||!vis||D.hidden){run=false;t0=null;return}
