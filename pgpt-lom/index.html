@@ -4091,6 +4091,45 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
     function go(){if(!running){running=true;requestAnimationFrame(frame)}}
     if('IntersectionObserver' in window){new IntersectionObserver(function(es){vis=es[0].isIntersecting;if(vis){t0=null;go()}}).observe(b)}
     go();
+    /* click / tap / Enter: the ball jumps straight up, hits the top edge of the screen and drops back to its place */
+    var flying=false;
+    cv.style.cursor='pointer';cv.style.pointerEvents='auto';
+    cv.setAttribute('role','button');cv.setAttribute('tabindex','0');
+    function bLabel(){cv.setAttribute('aria-label',(D.documentElement.lang||'bg').indexOf('en')===0?'Volleyball – press to bounce it':'Волейболна топка – натиснете, за да отскочи')}
+    bLabel();new MutationObserver(bLabel).observe(D.documentElement,{attributes:true,attributeFilter:['lang']});
+    function bounce(){
+      if(flying||!D.body.contains(b))return;
+      var r0=b.getBoundingClientRect();if(!r0.width)return;
+      flying=true;
+      var W=r0.width,H=r0.height,fl=D.createElement('canvas');fl.width=fl.height=N;
+      var fx=fl.getContext('2d'),st=fl.style;
+      st.cssText='position:fixed;left:0;top:0;width:'+W+'px;height:'+H+'px;margin:0;border-radius:50%;pointer-events:none;z-index:2147483000;will-change:transform';
+      D.body.appendChild(fl);cv.style.visibility='hidden';
+      var G=3200,dist=Math.max(40,r0.top);       /* px/s^2 ; how far up (to the very top edge) */
+      var tUp=Math.sqrt(2*dist/G),tDn=tUp,hitT=.09,landT=.09,t0=null,bumpH=Math.min(34,dist*.12);
+      function finish(){fl.remove();cv.style.visibility='';flying=false}
+      function step(ts){
+        if(!D.body.contains(b)){finish();return}
+        if(t0===null)t0=ts;
+        var t=(ts-t0)/1000,r=b.getBoundingClientRect(),rest=r.top,x=r.left,w=r.width,up=0,sx=1,sy=1,org='50% 50%';
+        var top=Math.max(0,rest);                                    /* page scrolled meanwhile: still hit the screen top */
+        if(t<tUp){var s=t/tUp;up=top*(1-(1-s)*(1-s))}                              /* rising, slowing down */
+        else if(t<tUp+hitT){up=top;var p=(t-tUp)/hitT,q=Math.sin(Math.PI*p);sy=1-.22*q;sx=1+.14*q;org='50% 0%'}   /* squashed against the top edge */
+        else if(t<tUp+hitT+tDn){var s2=(t-tUp-hitT)/tDn;up=top*(1-s2*s2)}           /* falling, speeding up */
+        else{
+          var u=t-tUp-hitT-tDn;
+          if(u<landT){var q2=Math.sin(Math.PI*u/landT);sy=1-.2*q2;sx=1+.12*q2;org='50% 100%'}   /* squashed on landing */
+          else{var u2=(u-landT)/.28;if(u2<1)up=bumpH*Math.sin(Math.PI*u2);else{finish();return}}   /* one small rebound */
+        }
+        fx.clearRect(0,0,N,N);fx.drawImage(cv,0,0);                                 /* same spinning picture as the ball in the page */
+        st.width=w+'px';st.height=w+'px';
+        st.transformOrigin=org;st.transform='translate('+x+'px,'+(rest-up)+'px) scale('+sx+','+sy+')';
+        requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+    cv.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();bounce()});
+    cv.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();bounce()}});
     /* auto-size: the ball takes the biggest size that does not touch the text or the button, whatever the text size or screen */
     var fitting=false,fitT=0;
     function fit(){
