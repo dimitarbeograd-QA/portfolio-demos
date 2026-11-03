@@ -3415,7 +3415,7 @@ const FORM_ENDPOINT = '';
       var pp=find(r,'p','събира талантливи ученици'),ph=photos(r,h,3);if(!ph.length)ph=anyPhotos('avtomontyor',3);
       a.push({imgs:ph,date:'20 – 21 март',title:'Регионален кръг на националното състезание „Най-добър млад автомонтьор и водач на МПС“',text:(pp?clean(pp.textContent.split(/\s*Още\s/)[0],260):'Състезанието се провежда в ПГПТ – Лом.')+' В надпреварата участваха 13 отбора от 13 училища в IV регион.',href:'#/avtomontyor',cta:'Прочетете статията'});
       a.push({imgs:[],title:'Класиране на регионалния кръг',text:'Отборно класиране „Най-добър млад автомонтьор“ – I-во място: ПГПТ – Лом. Комплексно отборно класиране – II-ро място: ПГПТ – Лом. Индивидуално „Най-добър млад водач на МПС“ – II-ро място: Денислав Росенов Огнянов (ПГПТ – Лом).',href:'#/avtomontyor',cta:'Цялото класиране'});
-      a.push({imgs:[U('2025/11/IMG_20251120_093626-768x1024.jpg'),U('2025/11/IMG_20251120_091142-1024x768.jpg'),U('2025/11/IMG_20251120_095234-1024x768.jpg')],date:'20 ноември 2025',title:'Междуучилищно състезание в Седмицата на професионалните умения',text:'ПГПТ – Лом посрещна участници от училища в област Монтана и Видин. Отборно класиране: I-во място – ПГПТ – Лом (Първи отбор), II-ро място – ПГТЕ „Христо Ботев“ гр. Монтана и ПГПТ – Лом (Първи отбор), III-то място – ПГПТ – Лом (Втори отбор). В категория „Автомонтьор“ I-во място отборно взе вторият отбор на ПГПТ – Лом.',href:'#/galeriya',cta:'Към галерията'});return a},
+      a.push({imgs:[U('2025/11/IMG_20251120_093626-768x1024.jpg'),U('2025/11/IMG_20251120_091142-1024x768.jpg'),U('2025/11/IMG_20251120_095234-1024x768.jpg')],date:'20 ноември 2025',title:'Междуучилищно състезание в Седмицата на професионалните умения',text:'ПГПТ – Лом посрещна участници от училища в област Монтана и Видин. Отборно класиране: I-во място – ПГПТ – Лом (Първи отбор), II-ро място – ПГТЕ „Христо Ботев“ гр. Монтана и ПГПТ – Лом (Първи отбор), III-то място – ПГПТ – Лом (Втори отбор). В категория „Автомонтьор“ I-во място отборно взе вторият отбор на ПГПТ – Лом.',href:'#/galeriya',cta:'Към галерията',engine:1});return a},
     'Ученическо самоуправление':function(){var r=P('samoupravlenie'),pp=find(r,'p','Националната инициатива'),a=[];
       a.push({imgs:anyPhotos('samoupravlenie',2),title:'Модели на ученическо самоуправление',text:pp?clean(pp.textContent.replace(/Повече за инициативата[^]*$/,''),360):'ПГПТ – Лом представлява област Монтана в национална инициатива на МОН.',href:'#/samoupravlenie',cta:'Прочетете статията'});
       a.push({imgs:[U('2025/10/Sn-1-2-1024x771.jpg'),U('2025/10/Sn-4-1-1024x771.jpg'),U('2025/10/Sn-2-1-1024x771.jpg')],date:'16 октомври',title:'Избори за Училищен ученически омбудсман',text:'В ПГПТ – Лом се проведоха избори за Училищен ученически омбудсман и Заместник омбудсман. Учениците гласуваха, а след преброяването на бюлетините бяха избрани двама ученици от IX А клас.',href:'#/samoupravlenie',cta:'Прочетете повече'});
@@ -3443,7 +3443,7 @@ const FORM_ENDPOINT = '';
       var im=a.imgs||[],ph='';
       if(im.length){ph='<div class="ph n'+Math.min(im.length,3)+'">'+im.slice(0,3).map(function(u,k){return '<button type="button" class="phb" data-a="'+ai+'" data-i="'+k+'" aria-label="Увеличи снимката"><img alt="" decoding="async" src="'+esc(u)+'"></button>'}).join('')+'</div>'}
       var cta=a.nocta?'':'<a class="btn primary" href="'+esc(a.href)+'">'+esc(a.cta||'Прочетете повече')+' →</a>',side=im.length===1&&!a.deco&&cta;   /* one photo beside the text: the button goes under the photo */
-      html+='<article class="la'+(im.length?'':' noimg')+(im.length>1?' multi':'')+'">'+(side?'<div class="phc">'+ph+cta+'</div>':ph)+'<div class="lt">'+(a.date?'<time>'+esc(a.date)+'</time>':'')+'<h4>'+esc(a.title)+'</h4>'+(a.text?'<p>'+esc(a.text)+'</p>':'')+(side?'':cta)+(a.laptop?'<div class="lap" role="button" tabindex="0"></div>':'')+'</div>'+(a.deco?'<span class="la-ball" aria-hidden="true"></span>':'')+'</article>';
+      html+='<article class="la'+(im.length?'':' noimg')+(im.length>1?' multi':'')+'">'+(side?'<div class="phc">'+ph+cta+'</div>':ph)+'<div class="lt">'+(a.date?'<time>'+esc(a.date)+'</time>':'')+'<h4>'+esc(a.title)+'</h4>'+(a.text?'<p>'+esc(a.text)+'</p>':'')+(side?'':(a.engine?'<div class="ar">'+cta+'<div class="eng" role="button" tabindex="0"></div></div>':cta))+(a.laptop?'<div class="lap" role="button" tabindex="0"></div>':'')+'</div>'+(a.deco?'<span class="la-ball" aria-hidden="true"></span>':'')+'</article>';
     });
     if(!items.length)html+='<p>Скоро ще добавим статии по тази тема.</p>';
     panel.innerHTML=html;
@@ -3988,6 +3988,110 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
 .stats .grid>*,.info>*,.info .row>*:not(.ic){min-width:0}
 .stat,.stat b,.stat span,.info .row,.info strong,.info small{overflow-wrap:anywhere;word-wrap:break-word}
 </style>
+<style id="engine-css">
+/* an animated cutaway V-engine: pistons, rods, crankshaft, valves, camshafts and the timing chain move in step like a real four-stroke; click pauses / resumes */
+.life-panel .la .ar{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px 24px}
+.eng{flex:none;width:190px;height:178px;margin:0 clamp(24px,6vw,90px) 0 auto;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+.eng:focus-visible{outline:3px solid var(--accent);outline-offset:4px;border-radius:12px}
+.eng svg{display:block;width:100%;height:100%;overflow:visible}
+@media(max-width:700px){.eng{margin:0 auto}}
+</style>
+<script id="engine-js">
+(function(){
+  var D=document,CX=120,CY=160,R=14,LR=50,BANKS=[-30,30],CR=7,KR=13,KS=112,SPEED=300;
+  var SIN=Math.sin,COS=Math.cos,PI=Math.PI;
+  function rad(d){return d*PI/180}
+  function wrap(d){d=((d%360)+360)%360;return d>180?d-360:d}
+  function lobe(){var p=[],i,ph,r,t;for(i=0;i<72;i++){ph=i*5-180;r=5;if(Math.abs(ph)<50)r+=5*Math.pow(COS(PI/2*ph/50),2);t=rad(ph);p.push((r*SIN(t)).toFixed(1)+','+(r*COS(t)).toFixed(1))}return 'M'+p.join('L')+'Z'}
+  function bankPos(a,s){return [CX+s*SIN(rad(a)),CY-s*COS(rad(a))]}
+  /* the timing chain: a loop round the crank sprocket and the two cam sprockets */
+  function chainPath(){
+    var c=[[CX,CY,CR+1.5],bankPos(BANKS[0],KS).concat([KR+1.5]),bankPos(BANKS[1],KS).concat([KR+1.5])],seg=[],i;
+    for(i=0;i<3;i++){
+      var A=c[i],B=c[(i+1)%3],C3=c[(i+2)%3],dx=B[0]-A[0],dy=B[1]-A[1],d=Math.hypot(dx,dy),be=Math.atan2(dy,dx),ga=Math.acos((A[2]-B[2])/d),best=null,sg;
+      for(sg=-1;sg<=1;sg+=2){var n=[COS(be+sg*ga),SIN(be+sg*ga)];if(n[0]*(C3[0]-A[0])+n[1]*(C3[1]-A[1])<0)best=n}
+      seg.push([[A[0]+A[2]*best[0],A[1]+A[2]*best[1]],[B[0]+B[2]*best[0],B[1]+B[2]*best[1]]]);
+    }
+    function pt(p){return p[0].toFixed(1)+' '+p[1].toFixed(1)}
+    return 'M'+pt(seg[0][0])+'L'+pt(seg[0][1])+'A'+c[1][2]+' '+c[1][2]+' 0 0 1 '+pt(seg[1][0])+'L'+pt(seg[1][1])+'A'+c[2][2]+' '+c[2][2]+' 0 0 1 '+pt(seg[2][0])+'L'+pt(seg[2][1])+'A'+c[0][2]+' '+c[0][2]+' 0 0 1 '+pt(seg[0][0])+'Z';
+  }
+  var ST='stroke="#2b3546" stroke-width="1.2" stroke-linejoin="round"';
+  function lower(a){return '<g transform="translate('+CX+' '+CY+') rotate('+a+')">'+
+    '<rect x="-18" y="-84" width="36" height="58" fill="#dde4ee" '+ST+'/>'+
+    '<rect x="-11.5" y="-78" width="23" height="52" fill="#fff" '+ST+'/>'+
+    '<rect class="ch" x="-11.5" y="-78" width="23" height="6" fill="#ffd9a8" opacity=".9"/></g>'}
+  function upper(a){return '<g transform="translate('+CX+' '+CY+') rotate('+a+')">'+
+    '<rect x="-18" y="-98" width="36" height="22" fill="#cdd6e2" '+ST+'/>'+
+    '<rect x="-21" y="-125" width="42" height="28" rx="3" fill="#eef2f7" '+ST+'/>'+
+    '<g class="vi"><rect x="-6.9" y="-107" width="1.8" height="29" fill="#4b586b"/><rect x="-10.2" y="-79.4" width="8.4" height="2.2" rx="1" fill="#33415a"/><rect x="-8.4" y="-108.4" width="4.8" height="2.4" rx="1" fill="#33415a"/></g>'+
+    '<g class="ve"><rect x="5.1" y="-107" width="1.8" height="29" fill="#4b586b"/><rect x="1.8" y="-79.4" width="8.4" height="2.2" rx="1" fill="#33415a"/><rect x="3.6" y="-108.4" width="4.8" height="2.4" rx="1" fill="#33415a"/></g>'+
+    '<line x1="0" y1="-98" x2="0" y2="-79" stroke="#6b778a" stroke-width="2"/>'+
+    '<circle class="sp" cx="0" cy="-78" r="3.4" fill="#ffe14a" opacity="0"/>'+
+    '<path class="li" transform="translate(-6 -112)" d="'+lobe()+'" fill="#6fa8ff" fill-opacity=".75" '+ST+'/>'+
+    '<path class="le" transform="translate(6 -112)" d="'+lobe()+'" fill="#ff8f6b" fill-opacity=".75" '+ST+'/>'+
+    '</g>'}
+  function sprocket(cx,cy,r,teeth){var d=(2*PI*(r-1.5))/teeth;return '<g class="spr"><circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="#f4f6fa" fill-opacity=".92" '+ST+'/>'+
+    '<circle cx="'+cx+'" cy="'+cy+'" r="'+(r-1.5)+'" fill="none" stroke="#2b3546" stroke-width="2.4" stroke-dasharray="'+(d*.55).toFixed(2)+' '+(d*.45).toFixed(2)+'"/>'+
+    '<circle cx="'+cx+'" cy="'+cy+'" r="'+(r*.38)+'" fill="#8895a8" '+ST+'/><line x1="'+cx+'" y1="'+(cy-r*.62)+'" x2="'+cx+'" y2="'+(cy+r*.62)+'" stroke="#2b3546" stroke-width="1.6"/><line x1="'+(cx-r*.62)+'" y1="'+cy+'" x2="'+(cx+r*.62)+'" y2="'+cy+'" stroke="#2b3546" stroke-width="1.6"/></g>'}
+  function svg(){
+    var k0=bankPos(BANKS[0],KS),k1=bankPos(BANKS[1],KS),cp=chainPath(),h='';
+    h+='<svg viewBox="40 40 160 162" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">';
+    h+='<path d="M84 170 Q84 196 120 199 Q156 196 156 170 Z" fill="#cfd8e3" '+ST+'/><circle cx="'+CX+'" cy="'+CY+'" r="30" fill="#fff" '+ST+'/>';
+    BANKS.forEach(function(a){h+=lower(a)});
+    BANKS.forEach(function(){h+='<g class="pg"><rect x="-10" y="-8" width="20" height="16" rx="2" fill="#c3ccd9" '+ST+'/><line x1="-10" y1="-5" x2="10" y2="-5" stroke="#2b3546" stroke-width=".8"/><line x1="-10" y1="-3" x2="10" y2="-3" stroke="#2b3546" stroke-width=".8"/><circle r="2.2" fill="#2b3546"/></g><g class="rd"><line stroke="#6b778a" stroke-width="5" stroke-linecap="round"/><line stroke="#e9edf3" stroke-width="2.6" stroke-linecap="round"/><circle class="be" r="5.5" fill="#d9e0ea" '+ST+'/></g>'});
+    BANKS.forEach(function(a){h+=upper(a)});
+    h+='<g id="crk"><path transform="translate('+CX+' '+CY+')" d="M-9 2 L-13 18 A13 13 0 0 0 13 18 L9 2Z" fill="#8a97a8" '+ST+'/><line x1="'+CX+'" y1="'+CY+'" x2="'+CX+'" y2="'+(CY-R)+'" stroke="#2b3546" stroke-width="8" stroke-linecap="round"/><line x1="'+CX+'" y1="'+CY+'" x2="'+CX+'" y2="'+(CY-R)+'" stroke="#8a97a8" stroke-width="5.6" stroke-linecap="round"/><circle cx="'+CX+'" cy="'+(CY-R)+'" r="4.2" fill="#e5e9ef" '+ST+'/><circle cx="'+CX+'" cy="'+CY+'" r="5.5" fill="#2f3b4c"/></g>';
+    h+='<path d="'+cp+'" fill="none" stroke="#9aa7b8" stroke-width="3.6" stroke-linejoin="round" opacity=".9"/><path id="chn" d="'+cp+'" fill="none" stroke="#1f2937" stroke-width="2.4" stroke-dasharray="3 2" stroke-linejoin="round"/>';
+    h+=sprocket(k0[0],k0[1],KR,13)+sprocket(k1[0],k1[1],KR,13)+sprocket(CX,CY,CR,8);
+    return h+'</svg>';
+  }
+  function build(e){
+    if(e.__eng)return;e.__eng=1;e.innerHTML=svg();label(e);
+    var q=function(s){return e.querySelectorAll(s)},pg=q('.pg'),rd=q('.rd'),ch=q('.ch'),vi=q('.vi'),ve=q('.ve'),li=q('.li'),le=q('.le'),sp=q('.sp'),spr=q('.spr'),crk=e.querySelector('#crk'),chn=e.querySelector('#chn');
+    var th=0,last=null,vis=true,run=false;
+    function draw(){
+      var t=rad(th),P=[CX+R*SIN(t),CY-R*COS(t)];
+      crk.setAttribute('transform','rotate('+th.toFixed(1)+' '+CX+' '+CY+')');
+      chn.setAttribute('stroke-dashoffset',(-t*CR).toFixed(2));
+      BANKS.forEach(function(a,i){
+        var f=rad(th-a),s=R*COS(f)+Math.sqrt(LR*LR-Math.pow(R*SIN(f),2)),W=bankPos(a,s);
+        pg[i].setAttribute('transform','translate('+W[0].toFixed(2)+' '+W[1].toFixed(2)+') rotate('+a+')');
+        var L=rd[i].querySelectorAll('line');for(var j=0;j<2;j++){L[j].setAttribute('x1',P[0].toFixed(2));L[j].setAttribute('y1',P[1].toFixed(2));L[j].setAttribute('x2',W[0].toFixed(2));L[j].setAttribute('y2',W[1].toFixed(2))}
+        var be=rd[i].querySelector('.be');be.setAttribute('cx',P[0].toFixed(2));be.setAttribute('cy',P[1].toFixed(2));
+        /* four-stroke cycle of this bank: psi = 0 at the firing TDC (power 0-180, exhaust 180-360, intake 360-540, compression 540-720) */
+        var psi=((th-a-(i?0:360))%720+720)%720,k=psi/2,col,gl;
+        if(psi<180){gl=Math.max(0,1-psi/190);col='rgb('+Math.round(255-30*(1-gl))+','+Math.round(120+90*(1-gl))+','+Math.round(24+130*(1-gl))+')'}
+        else if(psi<360)col='#d3d6db';else if(psi<540)col='#cfe3ff';else col='#fff0d4';
+        var gap=Math.max(0,78-(s+8));ch[i].setAttribute('height',gap.toFixed(1));ch[i].setAttribute('fill',col);
+        var dI=wrap(k-225),dE=wrap(k-135),lI=Math.abs(dI)<50?5*Math.pow(COS(PI/2*dI/50),2):0,lE=Math.abs(dE)<50?5*Math.pow(COS(PI/2*dE/50),2):0;
+        vi[i].setAttribute('transform','translate(0 '+lI.toFixed(2)+')');ve[i].setAttribute('transform','translate(0 '+lE.toFixed(2)+')');
+        li[i].setAttribute('transform','translate(-6 -112) rotate('+dI.toFixed(1)+')');le[i].setAttribute('transform','translate(6 -112) rotate('+dE.toFixed(1)+')');
+        sp[i].setAttribute('opacity',Math.abs(wrap(psi))<9?'1':'0');
+        var kp=bankPos(a,KS);spr[i].setAttribute('transform','rotate('+k.toFixed(1)+' '+kp[0].toFixed(1)+' '+kp[1].toFixed(1)+')');
+      });
+      spr[2].setAttribute('transform','rotate('+th.toFixed(1)+' '+CX+' '+CY+')');
+    }
+    function frame(ts){
+      if(!D.body.contains(e)||!vis||D.hidden||e.__paused){run=false;last=null;return}
+      if(last===null)last=ts;var dt=Math.min(.05,(ts-last)/1000);last=ts;th=(th+SPEED*dt)%1440;draw();requestAnimationFrame(frame);
+    }
+    function go(){if(!run&&vis&&!e.__paused){run=true;requestAnimationFrame(frame)}}
+    e.__go=go;e.__step=function(d){th=(th+d)%1440;draw()};draw();go();
+    if('IntersectionObserver' in window)new IntersectionObserver(function(es){vis=es[0].isIntersecting;go()}).observe(e);
+    D.addEventListener('visibilitychange',go);
+  }
+  function en(){return (D.documentElement.lang||'bg').indexOf('en')===0}
+  function label(e){var p=!!e.__paused;e.setAttribute('aria-pressed',p?'true':'false');
+    e.setAttribute('aria-label',en()?(p?'Engine animation (paused) – press to resume':'Animated engine – press to pause'):(p?'Анимация на двигател (спряна) – натиснете за пускане':'Анимиран двигател – натиснете за пауза'))}
+  function toggle(e){e.__paused=!e.__paused;label(e);if(!e.__paused&&e.__go)e.__go()}
+  function scan(r){var a=r.querySelectorAll?r.querySelectorAll('.eng'):[],i;for(i=0;i<a.length;i++)build(a[i]);if(r.classList&&r.classList.contains('eng'))build(r)}
+  D.addEventListener('click',function(ev){var e=ev.target.closest&&ev.target.closest('.eng');if(e){ev.preventDefault();toggle(e)}});
+  D.addEventListener('keydown',function(ev){var e=ev.target.closest&&ev.target.closest('.eng');if(e&&(ev.key==='Enter'||ev.key===' ')){ev.preventDefault();toggle(e)}});
+  new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1)scan(n)})})}).observe(D.body,{childList:true,subtree:true});
+  new MutationObserver(function(){[].forEach.call(D.querySelectorAll('.eng'),label)}).observe(D.documentElement,{attributes:true,attributeFilter:['lang']});
+  scan(D);
+})();
+</script>
 <style id="laptop-css">
 /* a laptop built from CSS 3D boxes: it turns a full circle left to right, a click opens / closes the screen */
 .lap{position:relative;flex:none;width:190px;height:150px;perspective:900px;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
