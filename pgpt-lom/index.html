@@ -4021,8 +4021,8 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
 .lap .ll{transform:translate3d(-75px,-2.5px,47px) rotateY(-90deg)}
 .lap .lr{transform:translate3d(75px,-2.5px,47px) rotateY(90deg)}
 .life-panel .la:has(.lap) .lt{display:flex;flex-direction:column;align-self:stretch}
-.life-panel .la .lap{align-self:flex-end;margin-top:auto}
-@media(max-width:700px){.life-panel .la .lap{align-self:center;margin-top:6px}}
+.life-panel .la .lap{align-self:flex-end;margin:auto clamp(30px,7vw,110px) 0 0;border-top:32px solid transparent}
+@media(max-width:700px){.life-panel .la .lap{align-self:center;margin:6px 0 0}}
 </style>
 <script id="laptop-js">
 (function(){
