@@ -3990,7 +3990,7 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
 </style>
 <style id="debate-css">
 /* the debate scene from the picture: two speakers at their podiums answer each other, the audience raises a hand with a question */
-.debate{flex:none;display:block;width:min(260px,100%);height:auto;aspect-ratio:450/300;margin:0 clamp(24px,6vw,90px) 0 auto;border-radius:14px;box-shadow:0 6px 18px rgba(15,42,74,.18)}
+.debate{flex:none;display:block;width:min(260px,100%);height:auto;aspect-ratio:450/300;margin:0 clamp(24px,6vw,90px) 0 auto}
 @media(max-width:700px){.debate{margin:6px auto 0}}
 </style>
 <script id="debate-js">
@@ -4010,14 +4010,9 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
     at.decoding='async';at.onload=function(){ready=true;draw(cur)};at.src='img/debate-atlas.webp';
     function part(n){var p=P[n];ctx.drawImage(at,p[0],p[1],p[2],p[3],p[4],p[5],p[2]/UP,p[3]/UP)}
     function rot(px,py,a){ctx.translate(px,py);ctx.rotate(a*PI/180);ctx.translate(-px,-py)}
-    function platform(cx,cy){
-      ctx.save();
-      var g=ctx.createLinearGradient(0,cy,0,cy+12);g.addColorStop(0,'#9a9a9a');g.addColorStop(1,'#4a4a4a');
-      ctx.fillStyle=g;ctx.beginPath();ctx.ellipse(cx,cy+6,58,9.5,0,0,PI);ctx.lineTo(cx-58,cy-1);ctx.lineTo(cx+58,cy-1);ctx.closePath();ctx.fill();
-      var tg=ctx.createRadialGradient(cx,cy-2,4,cx,cy,60);tg.addColorStop(0,'#ffffff');tg.addColorStop(1,'#d2d2d2');
-      ctx.fillStyle=tg;ctx.beginPath();ctx.ellipse(cx,cy,58,9.5,0,0,2*PI);ctx.fill();
-      ctx.fillStyle='rgba(0,0,0,.16)';ctx.beginPath();ctx.ellipse(cx,cy-.5,30,4.2,0,0,2*PI);ctx.fill();
-      ctx.restore();
+    function platform(cx,cy){                         /* soft floor shadow under a speaker */
+      var g=ctx.createRadialGradient(cx,cy,2,cx,cy,60);g.addColorStop(0,'rgba(20,30,50,.28)');g.addColorStop(1,'rgba(20,30,50,0)');
+      ctx.save();ctx.translate(cx,cy);ctx.scale(1,.2);ctx.translate(-cx,-cy);ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,60,0,2*PI);ctx.fill();ctx.restore();
     }
     function bubble(x,y,s,kind,t){                    /* speech bubble: "..." while thinking, "!" or "?" for the point */
       if(s<=.01)return;
@@ -4042,8 +4037,6 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
     function draw(t){
       cur=t;t=t%T;
       ctx.setTransform(K,0,0,K,0,0);ctx.clearRect(0,0,SW,SH);
-      var g=ctx.createLinearGradient(0,0,0,SH);g.addColorStop(0,'#dedede');g.addColorStop(.30,'#afafaf');g.addColorStop(.45,'#cecece');g.addColorStop(.65,'#ffffff');g.addColorStop(.78,'#ffffff');g.addColorStop(.9,'#d2d2d2');g.addColorStop(1,'#bdbdbd');
-      ctx.fillStyle=g;ctx.fillRect(0,0,SW,SH);
       platform(80,213);platform(368,215);
       if(!ready)return;
       var sm_=act(t,MAN),sw_=act(t,WOM),q=win(t,ASK[0]-.3,ASK[1],.5),clap=0,i;
