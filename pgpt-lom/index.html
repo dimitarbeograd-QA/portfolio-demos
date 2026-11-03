@@ -3404,7 +3404,7 @@ const FORM_ENDPOINT = '';
       a.push({imgs:[U('2026/04/20260421_131400-860x1024.jpg'),U('2026/04/Bojidar.jpg'),U('2026/04/20260421_131521-855x1024.jpg')],date:'16 – 17 април 2026',title:'Сребърен медал за Божидар Светлиев',text:'В Благоевград се проведе Национален кръг на състезание за икономисти на английски език. От нашето училище до финалния кръг достигна Божидар Светлиев, който се състезава с още 23 участници. Състезателите са разделени в 6 отбора със задачата да разработят бизнес идея за конкретно населено място в България и да я защитят на английски език пред жури. Със своята бизнес идея за къмпинг в Белоградчик („Beloglamping“) отбор № 4, част от който беше и Божидар, се класира на второ място и завоюва сребърен медал.',nocta:1});
       a.push({imgs:[U('2025/11/IMG_20251120_151530-1024x768.jpg'),U('2025/11/IMG_20251120_151734-1024x768.jpg'),U('2025/11/IMG_20251120_152758-1024x768.jpg')],date:'20 ноември 2025',title:'Междуучилищно състезание в нашата гимназия',text:'ПГПТ – Лом е домакин на междуучилищното състезание „Най-добър млад автомонтьор и водач на МПС“. Отборите ни се класират на призови места – виж класирането към „Най-добър млад автомонтьор“.',href:'#/avtomontyor',cta:'Научете повече',trophy:1});return a},
     'Танцова формация':function(){var r=P('za-nas'),h=find(r,'h2','Образователни постижения'),p=find(r,'p','Нашите прекрасни мажоретки');
-      return [{imgs:[U('2026/09/Kupa-768x1024.jpg'),U('2026/09/Otbor-1024x768.jpg')],title:'Първо място и златни медали за танцова формация „Фантазия“',text:p?clean(p.textContent,420):secText('Танцова формация'),href:'#/za-nas',cta:'Прочетете повече'}]},
+      return [{imgs:[U('2026/09/Kupa-768x1024.jpg'),U('2026/09/Otbor-1024x768.jpg')],title:'Първо място и златни медали за танцова формация „Фантазия“',text:p?clean(p.textContent,420):secText('Танцова формация'),href:'#/za-nas',cta:'Прочетете повече',dancer:1}]},
     'Спорт':function(){var a=[];
       a.push({imgs:['img/7e7612b39aee.jpg'],title:'Поредно първо място за момчетата по волейбол',text:'Поредно първо място за ПГПТ – Лом на Общинското първенство за юноши по волейбол (11 и 12 клас). Нашите момчета изиграха два изключително оспорвани мача: победа срещу ПГХЗ „Дмитрий Иванович Менделеев“ с 2 : 0 гейма и, след драматичен обрат, победа срещу СУ „Димитър Маринов“ с 2 : 1 гейма.',nocta:1});
       a.push({imgs:['img/993ddf47abd6.jpg'],title:'Първо място за девойките по волейбол',text:'Първо място на Общинското първенство по волейбол за девойки (8 – 10 клас). Поздравления за победата и успех на следващия етап!',nocta:1});
@@ -3443,7 +3443,7 @@ const FORM_ENDPOINT = '';
       var im=a.imgs||[],ph='';
       if(im.length){ph='<div class="ph n'+Math.min(im.length,3)+'">'+im.slice(0,3).map(function(u,k){return '<button type="button" class="phb" data-a="'+ai+'" data-i="'+k+'" aria-label="Увеличи снимката"><img alt="" decoding="async" src="'+esc(u)+'"></button>'}).join('')+'</div>'}
       var cta=a.nocta?'':'<a class="btn primary" href="'+esc(a.href)+'">'+esc(a.cta||'Прочетете повече')+' →</a>',side=im.length===1&&!a.deco&&cta;   /* one photo beside the text: the button goes under the photo */
-      html+='<article class="la'+(im.length?'':' noimg')+(im.length>1?' multi':'')+'">'+(side?'<div class="phc">'+ph+cta+'</div>':ph)+'<div class="lt">'+(a.date?'<time>'+esc(a.date)+'</time>':'')+'<h4>'+esc(a.title)+'</h4>'+(a.text?'<p>'+esc(a.text)+'</p>':'')+(side?'':(a.engine||a.trophy?'<div class="ar">'+cta+(a.engine?'<div class="eng" role="button" tabindex="0"></div>':'<canvas class="trophy" role="img"></canvas>')+'</div>':cta))+(a.laptop?'<div class="lap" role="button" tabindex="0"></div>':'')+'</div>'+(a.deco?'<span class="la-ball" aria-hidden="true"></span>':'')+'</article>';
+      html+='<article class="la'+(im.length?'':' noimg')+(im.length>1?' multi':'')+'">'+(side?'<div class="phc">'+ph+cta+'</div>':ph)+'<div class="lt">'+(a.date?'<time>'+esc(a.date)+'</time>':'')+'<h4>'+esc(a.title)+'</h4>'+(a.text?'<p>'+esc(a.text)+'</p>':'')+(side?'':(a.engine||a.trophy||a.dancer?'<div class="ar">'+cta+(a.engine?'<div class="eng" role="button" tabindex="0"></div>':a.trophy?'<canvas class="trophy" role="img"></canvas>':'<canvas class="dancer" role="img"></canvas>')+'</div>':cta))+(a.laptop?'<div class="lap" role="button" tabindex="0"></div>':'')+'</div>'+(a.deco?'<span class="la-ball" aria-hidden="true"></span>':'')+'</article>';
     });
     if(!items.length)html+='<p>Скоро ще добавим статии по тази тема.</p>';
     panel.innerHTML=html;
@@ -3988,6 +3988,93 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
 .stats .grid>*,.info>*,.info .row>*:not(.ic){min-width:0}
 .stat,.stat b,.stat span,.info .row,.info strong,.info small{overflow-wrap:anywhere;word-wrap:break-word}
 </style>
+<style id="dancer-css">
+/* a pom-pom majorette silhouette that performs the poses of the sticker one after another */
+.dancer{flex:none;display:block;width:150px;height:188px;margin:0 clamp(24px,6vw,90px) 0 auto}
+@media(max-width:700px){.dancer{margin:0 auto}}
+</style>
+<script id="dancer-js">
+(function(){
+  var D=document,PI=Math.PI,SIN=Math.sin,COS=Math.cos,W=150,H=188,SC=1.2,INK='#14161c';
+  var TL=22,SL=22,TO=28,UA=14,FA=14,HW=4,SW=7;                         /* thigh, shin, torso, upper arm, forearm, half hip, half shoulder */
+  /* a pose: [lean, headTilt, Larm1, Larm2, Rarm1, Rarm2, Lleg1, Lleg2, Rleg1, Rleg2, air]; limb angles are measured from straight down, clockwise on the screen */
+  var V=[0,0,-150,-160,150,160,-6,-4,6,4,0],                          /* arms in a high V */
+      SPLIT=[0,0,-140,-150,140,150,-78,-84,78,84,26],                 /* straddle jump */
+      HIPS=[0,0,-55,5,55,-5,-6,-4,6,4,0],                           /* pom-poms at the hips */
+      KNEEL=[4,3,-100,-95,100,95,-80,-10,0,92,0],                     /* one knee down, arms low */
+      NEEDLE=[-3,0,-145,-150,145,150,-4,-3,155,165,0],                /* leg lifted high to the side */
+      TUCK=[3,0,-145,-155,145,155,-5,-3,100,10,24];                   /* knee-tuck jump */
+  var SEQ=[[V,.5],[SPLIT,.45],[HIPS,.55],[KNEEL,.7],[V,.5],[NEEDLE,.7],[TUCK,.5],[V,.45]],HOLD=.22,T=0,ST=[],i;
+  for(i=0;i<SEQ.length;i++){ST.push(T);T+=SEQ[i][1]+HOLD}
+  function sm(t){t=t<0?0:t>1?1:t;return t*t*(3-2*t)}
+  function pose(t){
+    t=t%T;var k=SEQ.length-1;while(k>0&&ST[k]>t)k--;
+    var prev=SEQ[(k+SEQ.length-1)%SEQ.length][0],cur=SEQ[k][0],u=sm((t-ST[k])/SEQ[k][1]),o=[],j;
+    for(j=0;j<11;j++)o.push(prev[j]+(cur[j]-prev[j])*u);
+    return o;
+  }
+  function build(cv){
+    if(cv.__d)return;cv.__d=1;if(!cv.getContext)return;
+    var dpr=Math.min(2,window.devicePixelRatio||1);cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
+    var ctx=cv.getContext('2d');if(!ctx)return;label(cv);
+    var S=SC*dpr,CX=cv.width/2,GY=cv.height-14*dpr,vis=true,run=false,t0=null;
+    function P(x,y){return [CX+S*x,GY+S*y]}
+    function seg(a,b,w){ctx.lineWidth=w*S;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke()}
+    function dir(a){return [SIN(a*PI/180),COS(a*PI/180)]}
+    function pom(h,t,seed){
+      ctx.lineWidth=2.1*S;for(var q=0;q<16;q++){var an=q*2*PI/16+t*1.3+seed,len=8.5+2*SIN(t*13+q*1.7+seed);
+        ctx.beginPath();ctx.moveTo(h[0],h[1]);ctx.lineTo(h[0]+COS(an)*len*S,h[1]+SIN(an)*len*S);ctx.stroke()}
+      ctx.beginPath();ctx.arc(h[0],h[1],4.6*S,0,2*PI);ctx.fill();
+    }
+    function draw(t){
+      var p=pose(t),lean=p[0]*PI/180,air=p[10],c=COS(lean),s=SIN(lean),i;
+      var ux=s,uy=-c,px=c,py=s;                                            /* torso direction and its perpendicular */
+      /* legs first (hip at the origin) to find how low the feet reach, then stand on the ground */
+      var hl=[-HW*px,-HW*py],hr=[HW*px,HW*py],legs=[[hl,p[6],p[7]],[hr,p[8],p[9]]],low=0,info=[];
+      legs.forEach(function(L){var a=dir(L[1]),b=dir(L[2]),k=[L[0][0]+TL*a[0],L[0][1]+TL*a[1]],f=[k[0]+SL*b[0],k[1]+SL*b[1]];info.push([L[0],k,f]);low=Math.max(low,f[1],k[1]-6)});
+      var hy=-low-air,H0=[0,hy];
+      ctx.clearRect(0,0,cv.width,cv.height);
+      var q=Math.min(1,air/26);ctx.fillStyle='rgba(20,30,50,'+(.20-.10*q)+')';ctx.beginPath();ctx.ellipse(CX,GY+2*dpr,(26-8*q)*S,5*S*(1-.3*q),0,0,2*PI);ctx.fill();
+      ctx.fillStyle=INK;ctx.strokeStyle=INK;ctx.lineCap='round';ctx.lineJoin='round';
+      function pt(o){return P(H0[0]+o[0],H0[1]+o[1])}
+      /* legs */
+      info.forEach(function(L){var a=pt(L[0]),k=pt(L[1]),f=pt(L[2]);seg(a,k,8.2);seg(k,f,6);ctx.beginPath();ctx.arc(f[0],f[1],3.2*S,0,2*PI);ctx.fill()});
+      /* skirt */
+      var sw=2*SIN(t*9);ctx.beginPath();var w1=pt([-HW*px*1.2,-HW*py*1.2]),w2=pt([HW*px*1.2,HW*py*1.2]),h1=pt([-14*px+sw,-14*py+11]),h2=pt([14*px+sw,14*py+11]);
+      ctx.moveTo(w1[0],w1[1]);ctx.lineTo(w2[0],w2[1]);ctx.lineTo(h2[0],h2[1]);ctx.quadraticCurveTo((h1[0]+h2[0])/2,(h1[1]+h2[1])/2+3*S,h1[0],h1[1]);ctx.closePath();ctx.fill();
+      /* torso */
+      var sh=[TO*ux,TO*uy],sl=[sh[0]-SW*px,sh[1]-SW*py],sr=[sh[0]+SW*px,sh[1]+SW*py],a1=pt([-HW*px,-HW*py]),a2=pt([HW*px,HW*py]),b1=pt(sl),b2=pt(sr);
+      ctx.beginPath();ctx.moveTo(a1[0],a1[1]);ctx.lineTo(b1[0],b1[1]);ctx.lineTo(b2[0],b2[1]);ctx.lineTo(a2[0],a2[1]);ctx.closePath();ctx.fill();seg(b1,b2,3);
+      /* head, neck and ponytail */
+      var ha=lean+p[1]*PI/180,hx=sh[0]+12*SIN(ha),hy2=sh[1]-12*COS(ha),hc=pt([hx,hy2]),nk=pt(sh);
+      seg(nk,hc,4.4);ctx.beginPath();ctx.arc(hc[0],hc[1],7.2*S,0,2*PI);ctx.fill();
+      var sway=SIN(t*7)*4+lean*18,tl0=[hc[0]+5.5*S,hc[1]-4*S],tl1=[hc[0]+(15+sway)*S,hc[1]-(5-3*SIN(t*7+1))*S],tl2=[hc[0]+(17+sway*1.4)*S,hc[1]+(7+2*SIN(t*7))*S];
+      ctx.lineWidth=4.2*S;ctx.beginPath();ctx.moveTo(tl0[0],tl0[1]);ctx.quadraticCurveTo(tl1[0],tl1[1],tl2[0],tl2[1]);ctx.stroke();
+      ctx.beginPath();ctx.arc(hc[0]+6*S,hc[1]-5*S,2.8*S,0,2*PI);ctx.fill();
+      /* arms and pom-poms */
+      [[sl,p[2],p[3],0],[sr,p[4],p[5],2.1]].forEach(function(A){
+        var a=dir(A[1]),b=dir(A[2]),e=[A[0][0]+UA*a[0],A[0][1]+UA*a[1]],h=[e[0]+FA*b[0],e[1]+FA*b[1]],sp=pt(A[0]),ep=pt(e),hp=pt(h);
+        seg(sp,ep,5.2);seg(ep,hp,4.4);pom(hp,t,A[3]);
+      });
+    }
+    function frame(ts){
+      if(!D.body.contains(cv)||!vis||D.hidden){run=false;t0=null;return}
+      if(t0===null)t0=ts;draw((ts-t0)/1000);requestAnimationFrame(frame);
+    }
+    function go(){if(!run&&vis){run=true;requestAnimationFrame(frame)}}
+    cv.__draw=draw;draw(0);
+    if('IntersectionObserver' in window)new IntersectionObserver(function(es){vis=es[0].isIntersecting;if(vis){t0=null;go()}}).observe(cv);
+    D.addEventListener('visibilitychange',function(){t0=null;go()});
+    go();
+  }
+  function en(){return (D.documentElement.lang||'bg').indexOf('en')===0}
+  function label(c){c.setAttribute('aria-label',en()?'Animated majorette performing a dance routine':'Анимирана мажоретка, изпълняваща танцови движения')}
+  function scan(r){var a=r.querySelectorAll?r.querySelectorAll('.dancer'):[],i;for(i=0;i<a.length;i++)build(a[i]);if(r.classList&&r.classList.contains('dancer'))build(r)}
+  new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1)scan(n)})})}).observe(D.body,{childList:true,subtree:true});
+  new MutationObserver(function(){[].forEach.call(D.querySelectorAll('.dancer'),label)}).observe(D.documentElement,{attributes:true,attributeFilter:['lang']});
+  scan(D);
+})();
+</script>
 <style id="trophy-css">
 /* a gold "1st place" trophy, a real lathe-turned 3D model drawn on a canvas, turning a full circle left to right */
 .trophy{flex:none;display:block;width:140px;height:160px;margin:0 clamp(24px,6vw,90px) 0 auto}
