@@ -6,7 +6,7 @@ Live demo: https://dimitarbeograd-qa.github.io/portfolio-demos/pgpt-lom/
 
 ## What it is
 
-A single-file website (one `index.html`, all pictures embedded, works offline) with:
+A lightweight website (one `index.html` plus an `img/` folder of optimized pictures, loaded lazily) with:
 
 - pages for the programmes, news, gallery, documents and European projects;
 - Bulgarian and English versions, font size controls and a high-contrast mode;
