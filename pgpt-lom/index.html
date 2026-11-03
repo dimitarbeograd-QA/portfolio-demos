@@ -3426,7 +3426,7 @@ const FORM_ENDPOINT = '';
       a.push({imgs:photos(r,h1,3),date:'25 юни 2026',title:'Тържествено откриване на STEM център в гимназията',text:p1?clean(p1.textContent,320):'Откриване на новото STEM пространство.',href:'#/stem',cta:'Прочетете статията'});
       var h2=find(r,'h4','Днес, 27 май');if(h2)a.push({imgs:photos(r,h2,3),date:'27 май',title:'Мисията е изпълнена: вече имаме модерни STEM кабинети',text:norm(h2.textContent),href:'#/stem',cta:'Прочетете статията'});
       var h3=find(r,'h4','Следващ етап');if(h3)a.push({imgs:photos(r,h3,3),title:'Следващ етап по проекта',text:norm(h3.textContent),href:'#/stem',cta:'Прочетете статията'});
-      var h4=find(r,'h2','Започва нашето STEM');if(h4){var nx=h4.nextElementSibling;a.push({imgs:photos(r,h4,3),title:norm(h4.textContent),text:nx&&nx.tagName==='P'?clean(nx.textContent,300):'',href:'#/stem',cta:'Прочетете статията'})}
+      var h4=find(r,'h2','Започва нашето STEM');if(h4){var nx=h4.nextElementSibling;a.push({imgs:photos(r,h4,3),title:norm(h4.textContent),text:nx&&nx.tagName==='P'?clean(nx.textContent,300):'',href:'#/stem',cta:'Прочетете статията',laptop:1})}
       return a}
   };
   var panel=document.createElement('div');panel.id='lifePanel';panel.className='life-panel';panel.hidden=true;panel.setAttribute('role','region');panel.setAttribute('aria-labelledby','lifePanelTitle');
@@ -3443,7 +3443,7 @@ const FORM_ENDPOINT = '';
       var im=a.imgs||[],ph='';
       if(im.length){ph='<div class="ph n'+Math.min(im.length,3)+'">'+im.slice(0,3).map(function(u,k){return '<button type="button" class="phb" data-a="'+ai+'" data-i="'+k+'" aria-label="Увеличи снимката"><img alt="" decoding="async" src="'+esc(u)+'"></button>'}).join('')+'</div>'}
       var cta=a.nocta?'':'<a class="btn primary" href="'+esc(a.href)+'">'+esc(a.cta||'Прочетете повече')+' →</a>',side=im.length===1&&!a.deco&&cta;   /* one photo beside the text: the button goes under the photo */
-      html+='<article class="la'+(im.length?'':' noimg')+(im.length>1?' multi':'')+'">'+(side?'<div class="phc">'+ph+cta+'</div>':ph)+'<div class="lt">'+(a.date?'<time>'+esc(a.date)+'</time>':'')+'<h4>'+esc(a.title)+'</h4>'+(a.text?'<p>'+esc(a.text)+'</p>':'')+(side?'':cta)+'</div>'+(a.deco?'<span class="la-ball" aria-hidden="true"></span>':'')+'</article>';
+      html+='<article class="la'+(im.length?'':' noimg')+(im.length>1?' multi':'')+'">'+(side?'<div class="phc">'+ph+cta+'</div>':ph)+'<div class="lt">'+(a.date?'<time>'+esc(a.date)+'</time>':'')+'<h4>'+esc(a.title)+'</h4>'+(a.text?'<p>'+esc(a.text)+'</p>':'')+(side?'':cta)+(a.laptop?'<div class="lap" role="button" tabindex="0"></div>':'')+'</div>'+(a.deco?'<span class="la-ball" aria-hidden="true"></span>':'')+'</article>';
     });
     if(!items.length)html+='<p>Скоро ще добавим статии по тази тема.</p>';
     panel.innerHTML=html;
@@ -3988,6 +3988,70 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
 .stats .grid>*,.info>*,.info .row>*:not(.ic){min-width:0}
 .stat,.stat b,.stat span,.info .row,.info strong,.info small{overflow-wrap:anywhere;word-wrap:break-word}
 </style>
+<style id="laptop-css">
+/* a laptop built from CSS 3D boxes: it turns a full circle left to right, a click opens / closes the screen */
+.lap{position:relative;flex:none;width:190px;height:150px;perspective:900px;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+.lap:focus-visible{outline:3px solid var(--accent);outline-offset:4px;border-radius:12px}
+.lap-tilt{position:absolute;left:0;top:0;width:100%;height:100%;transform-style:preserve-3d;transform:rotateX(-20deg)}
+.lap-spin{position:absolute;left:50%;top:70%;width:0;height:0;transform-style:preserve-3d;animation:lapspin 12s linear infinite}
+@keyframes lapspin{to{transform:rotateY(360deg)}}
+.lap .f{position:absolute;left:0;top:0;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.lap .bt,.lap .bb{width:150px;height:100px;margin:-50px 0 0 -75px}
+.lap .bt{transform:translateY(-3.5px) rotateX(90deg);background:linear-gradient(180deg,#26282c,#17181b)}
+.lap .bt::before{content:"";position:absolute;left:7%;right:7%;top:8%;height:56%;border-radius:3px;background:repeating-linear-gradient(90deg,#08090a 0 7px,transparent 7px 9px),repeating-linear-gradient(0deg,#08090a 0 7px,#1f2a22 7px 9px);box-shadow:0 0 6px rgba(68,214,44,.35) inset}
+.lap .bt::after{content:"";position:absolute;left:34%;right:34%;bottom:7%;height:20%;border-radius:3px;background:#2d3035;box-shadow:0 0 0 1px #0b0b0c inset}
+.lap .bb{transform:translateY(3.5px) rotateX(-90deg);background:#0b0b0c}
+.lap .bf,.lap .bk{width:150px;height:7px;margin:-3.5px 0 0 -75px;background:linear-gradient(#34373c,#16171a)}
+.lap .bf{transform:translateZ(50px)}
+.lap .bk{transform:rotateY(180deg) translateZ(50px)}
+.lap .bl,.lap .br{width:100px;height:7px;margin:-3.5px 0 0 -50px;background:linear-gradient(#2b2d31,#141517)}
+.lap .bl{transform:rotateY(-90deg) translateZ(75px)}
+.lap .br{transform:rotateY(90deg) translateZ(75px)}
+.lap-hinge{position:absolute;left:0;top:0;width:0;height:0;transform-style:preserve-3d;transform:translate3d(0,-3.5px,-50px) rotateX(0deg);transition:transform .9s cubic-bezier(.3,.75,.25,1)}
+.lap.open .lap-hinge{transform:translate3d(0,-3.5px,-50px) rotateX(108deg)}
+.lap .lo,.lap .li{width:150px;height:94px;margin:-47px 0 0 -75px}
+.lap .lo{transform:translate3d(0,-4.5px,47px) rotateX(90deg) rotateZ(180deg);background:radial-gradient(circle at 50% 50%,#44d62c 0 4px,rgba(68,214,44,.25) 5px 11px,transparent 12px),linear-gradient(135deg,#2b2d32,#141518 60%,#222428)}
+.lap .li{transform:translate3d(0,-.5px,47px) rotateX(-90deg);box-sizing:border-box;border:4px solid #050506;border-radius:3px;background:radial-gradient(circle at 50% 52%,#04050a 0 10%,transparent 11%),repeating-radial-gradient(circle at 50% 52%,rgba(0,0,0,.20) 0 5px,transparent 5px 12px),conic-gradient(from 210deg at 50% 52%,#2a35ff,#8a2bff,#ff2f9a,#ff9a2d,#1fd37a,#20b8ff,#2a35ff)}
+.lap .li::before{content:"";position:absolute;left:50%;top:52%;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:#44d62c;box-shadow:0 0 8px #44d62c}
+.lap .li::after{content:"";position:absolute;left:0;right:0;bottom:0;height:7px;background:linear-gradient(rgba(14,16,24,.85),rgba(14,16,24,.95)),radial-gradient(circle,#fff 0 1.4px,transparent 2px) center/9px 7px repeat-x}
+.lap .le,.lap .lc{width:150px;height:4px;margin:-2px 0 0 -75px;background:#0e0f11}
+.lap .le{transform:translate3d(0,-2.5px,94px)}
+.lap .lc{transform:translate3d(0,-2.5px,0) rotateY(180deg)}
+.lap .ll,.lap .lr{width:94px;height:4px;margin:-2px 0 0 -47px;background:#0e0f11}
+.lap .ll{transform:translate3d(-75px,-2.5px,47px) rotateY(-90deg)}
+.lap .lr{transform:translate3d(75px,-2.5px,47px) rotateY(90deg)}
+.life-panel .la:has(.lap) .lt{display:flex;flex-direction:column;align-self:stretch}
+.life-panel .la .lap{align-self:flex-end;margin-top:auto}
+@media(max-width:700px){.life-panel .la .lap{align-self:center;margin-top:6px}}
+</style>
+<script id="laptop-js">
+(function(){
+  var D=document,FACES=['bt','bb','bf','bk','bl','br'],LID=['lo','li','le','lc','ll','lr'];
+  function f(c){return '<i class="f '+c+'"></i>'}
+  function build(l){
+    if(l.__lap)return;l.__lap=1;
+    l.classList.add('open');
+    l.innerHTML='<div class="lap-tilt"><div class="lap-spin">'+FACES.map(f).join('')+'<div class="lap-hinge">'+LID.map(f).join('')+'</div></div></div>';
+    label(l);
+  }
+  function en(){return (D.documentElement.lang||'bg').indexOf('en')===0}
+  function label(l){
+    var o=l.classList.contains('open');
+    l.setAttribute('aria-pressed',o?'true':'false');
+    l.setAttribute('aria-label',en()?(o?'Laptop – press to close the screen':'Laptop – press to open the screen'):(o?'Лаптоп – натиснете, за да затворите екрана':'Лаптоп – натиснете, за да отворите екрана'));
+  }
+  function toggle(l){l.classList.toggle('open');label(l)}
+  function scan(root){
+    var a=root.querySelectorAll?root.querySelectorAll('.lap'):[];for(var i=0;i<a.length;i++)build(a[i]);
+    if(root.classList&&root.classList.contains('lap'))build(root);
+  }
+  D.addEventListener('click',function(e){var l=e.target.closest&&e.target.closest('.lap');if(l){e.preventDefault();toggle(l)}});
+  D.addEventListener('keydown',function(e){var l=e.target.closest&&e.target.closest('.lap');if(l&&(e.key==='Enter'||e.key===' ')){e.preventDefault();toggle(l)}});
+  new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1)scan(n)})})}).observe(D.body,{childList:true,subtree:true});
+  new MutationObserver(function(){[].forEach.call(D.querySelectorAll('.lap'),label)}).observe(D.documentElement,{attributes:true,attributeFilter:['lang']});
+  scan(D);
+})();
+</script>
 <style id="ball3d-css">
 .la-ball canvas{position:absolute;inset:0;width:100%;height:100%;display:block;border-radius:50%}
 </style>
