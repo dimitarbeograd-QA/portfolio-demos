@@ -593,6 +593,16 @@ html.hc #contactForm,html.hc .quiz-box{border:3px solid #000!important;backgroun
 img.map{border-color:transparent!important;background:conic-gradient(from var(--bang),#0f2a4a,#1a47b8 20%,#f2a900 38%,#fff3c4 50%,#f2a900 62%,#1a47b8 80%,#0f2a4a) border-box;animation:bRun 5s linear infinite}
 @media(prefers-reduced-motion:reduce){.content-box,.doc-text,.stem-head,section.comp-cat,article.nf-post,.docs a,.docs-page a,#slider,.tour-view,img.map{animation:none}}
 html.hc .content-box,html.hc .doc-text,html.hc .stem-head,html.hc section.comp-cat,html.hc article.nf-post,html.hc .docs a,html.hc .docs-page a,html.hc #slider,html.hc .tour-view,html.hc img.map{border-color:#000!important;animation:none}
+
+/* running border on form fields, quiz options, buttons and photos */
+#contactForm input,#contactForm select,#contactForm textarea{border:2px solid transparent!important;background:linear-gradient(#f7f9fd,#f7f9fd) padding-box,conic-gradient(from var(--bang),#0f2a4a,#1a47b8 20%,#f2a900 38%,#fff3c4 50%,#f2a900 62%,#1a47b8 80%,#0f2a4a) border-box;animation:bRun 5s linear infinite}
+#contactForm input:focus,#contactForm select:focus,#contactForm textarea:focus{background:linear-gradient(#fff,#fff) padding-box,conic-gradient(from var(--bang),#0f2a4a,#1a47b8 20%,#f2a900 38%,#fff3c4 50%,#f2a900 62%,#1a47b8 80%,#0f2a4a) border-box;box-shadow:0 0 0 4px rgba(31,95,168,.18)}
+.qopts button{border:2px solid transparent;background:linear-gradient(#f7f9fd,#f7f9fd) padding-box,conic-gradient(from var(--bang),#0f2a4a,#1a47b8 20%,#f2a900 38%,#fff3c4 50%,#f2a900 62%,#1a47b8 80%,#0f2a4a) border-box;animation:bRun 5s linear infinite}
+.qopts button:hover{border-color:transparent;background:linear-gradient(#f3eeff,#fde8f3) padding-box,conic-gradient(from var(--bang),#0f2a4a,#1a47b8 20%,#f2a900 38%,#fff3c4 50%,#f2a900 62%,#1a47b8 80%,#0f2a4a) border-box}
+.nf-allph,ul.sub{border-color:transparent!important;background:linear-gradient(#fff,#fff) padding-box,conic-gradient(from var(--bang),#0f2a4a,#1a47b8 20%,#f2a900 38%,#fff3c4 50%,#f2a900 62%,#1a47b8 80%,#0f2a4a) border-box;animation:bRun 5s linear infinite}
+.fig img,.dir-photo img,img.dt-photo,p>img,button>img{border-color:transparent!important;background:conic-gradient(from var(--bang),#0f2a4a,#1a47b8 20%,#f2a900 38%,#fff3c4 50%,#f2a900 62%,#1a47b8 80%,#0f2a4a) border-box;animation:bRun 5s linear infinite}
+@media(prefers-reduced-motion:reduce){#contactForm input,#contactForm select,#contactForm textarea,.qopts button,.nf-allph,ul.sub,.qopts button,.fig img,.dir-photo img,img.dt-photo,p>img,button>img{animation:none}}
+html.hc #contactForm input,html.hc #contactForm select,html.hc #contactForm textarea,html.hc .qopts button,html.hc .nf-allph,html.hc ul.sub,html.hc .fig img,html.hc .dir-photo img,html.hc img.dt-photo,html.hc p>img,html.hc button>img{border-color:#000!important;animation:none}
 .life-panel{margin-top:22px;border:3px solid var(--accent);border-radius:18px;background:#fff;padding:18px 20px 22px;box-shadow:0 12px 30px rgba(15,42,74,.14);scroll-margin-top:170px;animation:lpIn .3s ease both}
 .life-panel[hidden]{display:none}
 .life-panel .lp-h{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-bottom:6px}
