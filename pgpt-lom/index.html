@@ -615,7 +615,9 @@ html.hc #aMinus::after,html.hc #aPlus::after,html.hc #hcBtn::after,html.hc #lang
  nav ul#links>li>a{justify-content:center;text-align:center}
  nav ul#links>li.dd>a::after,nav ul#links>li.dd.open>a::after{margin-left:10px}
  nav ul#links ul.sub>li>a{text-align:center}
- #links .m-bar .m-title{text-align:center}
+ #links .m-bar .m-title{position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;text-align:center;pointer-events:none;padding:0 90px}
+ #links .m-bar button{position:relative;z-index:1}
+ #links .m-bar .m-close{margin-left:auto}
 }
 .life-panel{margin-top:22px;border:3px solid var(--accent);border-radius:18px;background:#fff;padding:18px 20px 22px;box-shadow:0 12px 30px rgba(15,42,74,.14);scroll-margin-top:170px;animation:lpIn .3s ease both}
 .life-panel[hidden]{display:none}
