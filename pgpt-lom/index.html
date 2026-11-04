@@ -507,6 +507,28 @@ html.hc #gerbBg{display:none}
 #life .card.life-card.on{box-shadow:0 0 0 4px var(--accent),0 10px 28px rgba(15,42,74,.18)}
 #life .card.life-card.on .lc-more{background:var(--accent);color:#3a2500}
 html.hc #life .card.life-card{border:3px solid #000}
+
+/* important-this-year link cards + figures: same look as the life cards */
+.card.link-card{--c1:#1f5fa8;--c2:#0f2a4a;position:relative;border:0!important;border-radius:22px;padding:0 0 22px!important;overflow:hidden;background:#fff;box-shadow:0 10px 28px rgba(15,42,74,.14)}
+.card.link-card::before{content:"";display:block;height:70px;background:radial-gradient(circle at 85% 20%,rgba(255,255,255,.35),transparent 55%),linear-gradient(135deg,var(--c1),var(--c2))}
+.card.link-card:nth-child(1){--c1:#38bdf8;--c2:#1d4ed8}
+.card.link-card:nth-child(2){--c1:#fb923c;--c2:#c2410c}
+.card.link-card:nth-child(3){--c1:#34d399;--c2:#047857}
+.card.link-card:nth-child(4){--c1:#a78bfa;--c2:#5b21b6}
+.card.link-card .ico{position:absolute;left:18px;top:38px;width:62px;height:62px;border-radius:20px;border:4px solid #fff;background:linear-gradient(135deg,var(--c1),var(--c2));color:#fff;box-shadow:0 8px 18px rgba(15,42,74,.25)}
+.card.link-card:hover .ico{transform:rotate(-8deg) scale(1.08);background:linear-gradient(135deg,var(--c1),var(--c2))}
+.card.link-card h3{margin:42px 18px 6px}
+.card.link-card p{margin:0 18px}
+.card.link-card:hover h3{color:var(--c2)}
+.stats .stat{position:relative;overflow:hidden;border:0;border-radius:22px;padding-top:30px;box-shadow:0 10px 28px rgba(15,42,74,.18)}
+.stats .stat::before{content:"";position:absolute;left:0;right:0;top:0;height:8px;background:linear-gradient(90deg,var(--c1,#1f5fa8),var(--c2,#0f2a4a))}
+.stats .stat:nth-child(1){--c1:#f7b733;--c2:#e8590c}
+.stats .stat:nth-child(2){--c1:#38bdf8;--c2:#1d4ed8}
+.stats .stat:nth-child(3){--c1:#34d399;--c2:#047857}
+.stats .stat:nth-child(4){--c1:#f472b6;--c2:#9d174d}
+.stats .stat b{background:linear-gradient(135deg,var(--c1),var(--c2));-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+html.hc .stats .stat b{background:none;-webkit-text-fill-color:currentColor;color:#000}
+html.hc .card.link-card,html.hc .stats .stat{border:3px solid #000!important}
 .life-panel{margin-top:22px;border:3px solid var(--accent);border-radius:18px;background:#fff;padding:18px 20px 22px;box-shadow:0 12px 30px rgba(15,42,74,.14);scroll-margin-top:170px;animation:lpIn .3s ease both}
 .life-panel[hidden]{display:none}
 .life-panel .lp-h{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-bottom:6px}
