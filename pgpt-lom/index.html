@@ -610,6 +610,15 @@ html.hc #contactForm input,html.hc #contactForm select,html.hc #contactForm text
 #aMinus::after,#aPlus::after,#hcBtn::after,#langBtn::after,a.btn.ghost-dark::after,#toTop::after,#backBtn::after{content:"";position:absolute;inset:calc(-1*var(--rw,2px));padding:var(--rw,2px);border-radius:inherit;background:conic-gradient(from var(--bang),#0f2a4a,#1a47b8 20%,#f2a900 38%,#fff3c4 50%,#f2a900 62%,#1a47b8 80%,#0f2a4a);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;animation:bRun 5s linear infinite}
 @media(prefers-reduced-motion:reduce){#aMinus::after,#aPlus::after,#hcBtn::after,#langBtn::after,a.btn.ghost-dark::after,#toTop::after,#backBtn::after{animation:none}}
 html.hc #aMinus::after,html.hc #aPlus::after,html.hc #hcBtn::after,html.hc #langBtn::after,html.hc a.btn.ghost-dark::after,html.hc #toTop::after,html.hc #backBtn::after{animation:none;background:#fff}
+
+/* desktop menu: items grow slightly on hover */
+@media(min-width:1101px) and (hover:hover){
+ nav ul#links>li>a,nav ul#links ul.sub>li>a{transition:transform .22s cubic-bezier(.2,.8,.3,1),color .2s,background .2s}
+ nav ul#links>li>a:hover,nav ul#links>li:hover>a,nav ul#links>li>a:focus-visible{transform:scale(1.1)}
+ nav ul#links ul.sub>li>a{transform-origin:left center}
+ nav ul#links ul.sub>li>a:hover,nav ul#links ul.sub>li>a:focus-visible{transform:scale(1.1)}
+}
+@media(prefers-reduced-motion:reduce){nav ul#links a{transition:none!important;transform:none!important}}
 /* mobile (hamburger) menu: everything centred */
 @media(max-width:1100px){
  nav ul#links>li>a{justify-content:center;text-align:center}
