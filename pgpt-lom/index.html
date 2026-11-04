@@ -568,6 +568,18 @@ html.hc .tour-st{border:3px solid #000}
 .video-card:nth-child(2){--c1:#f472b6;--c2:#9d174d}
 .video-card::before{content:"";position:absolute;left:0;right:0;top:0;height:8px;background:linear-gradient(90deg,var(--c1),var(--c2));z-index:7}
 html.hc .video-card{border:3px solid #000!important}
+
+/* enquiry form + specialty quiz */
+#contactForm,.quiz-box{position:relative;overflow:hidden;border:0!important;border-radius:22px;padding-top:clamp(28px,4.5vw,40px);box-shadow:0 12px 32px rgba(15,42,74,.18)}
+#contactForm::before,.quiz-box::before{content:"";position:absolute;left:0;right:0;top:0;height:9px;background:linear-gradient(90deg,#f7b733,#e8590c)}
+.quiz-box::before{background:linear-gradient(90deg,#a78bfa,#5b21b6 55%,#f472b6)}
+#contactForm input,#contactForm select,#contactForm textarea{border:2px solid #d3ddec!important;border-radius:14px!important;background:#f7f9fd;transition:border-color .2s,box-shadow .2s,background .2s}
+#contactForm input:focus,#contactForm select:focus,#contactForm textarea:focus{border-color:#1f5fa8!important;background:#fff;box-shadow:0 0 0 4px rgba(31,95,168,.18);outline:none}
+#contactForm button[type=submit],#contactForm .btn{border-radius:14px;background:linear-gradient(135deg,#f7b733,#e8590c);color:#2a1700;box-shadow:0 8px 18px rgba(232,89,12,.35);transition:transform .2s,box-shadow .2s}
+#contactForm button[type=submit]:hover,#contactForm .btn:hover{transform:translateY(-2px);box-shadow:0 12px 24px rgba(232,89,12,.45)}
+.qopts button{border:2px solid #d3ddec;border-radius:16px;background:#f7f9fd;padding:14px 18px}
+.qopts button:hover{background:linear-gradient(135deg,#f3eeff,#fde8f3);border-color:#8b5cf6;transform:translateX(6px)}
+html.hc #contactForm,html.hc .quiz-box{border:3px solid #000!important}
 .life-panel{margin-top:22px;border:3px solid var(--accent);border-radius:18px;background:#fff;padding:18px 20px 22px;box-shadow:0 12px 30px rgba(15,42,74,.14);scroll-margin-top:170px;animation:lpIn .3s ease both}
 .life-panel[hidden]{display:none}
 .life-panel .lp-h{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-bottom:6px}
