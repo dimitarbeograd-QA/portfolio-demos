@@ -624,6 +624,8 @@ html.hc #aMinus::after,html.hc #aPlus::after,html.hc #hcBtn::after,html.hc #lang
 .docs-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;margin:6px 0 12px;padding:14px 20px;font:inherit;font-weight:800;font-size:1.1rem;color:var(--navy);cursor:pointer;border:3px solid transparent;border-radius:16px;background:linear-gradient(#fff,#fff) padding-box,conic-gradient(from var(--bang),#0f2a4a,#1a47b8 20%,#f2a900 38%,#fff3c4 50%,#f2a900 62%,#1a47b8 80%,#0f2a4a) border-box;animation:bRun 5s linear infinite;box-shadow:0 8px 22px rgba(15,42,74,.14);transition:transform .2s}
 .docs-toggle:hover{transform:translateY(-2px)}
 .docs-toggle:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.docs-toggle .dt-t{display:flex;align-items:center;gap:14px}
+.docs-toggle .dt-t::before{content:"";flex:none;width:40px;height:32px;background:url(img/folder-icon.png) center/contain no-repeat}
 .docs-toggle .dt-hide,.docs-toggle[aria-expanded=true] .dt-show{display:none}
 .docs-toggle[aria-expanded=true] .dt-hide{display:inline}
 .docs-toggle .dt-arrow{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#f7b733,#e8590c);color:#fff;font-size:1.2rem;transition:transform .35s}
