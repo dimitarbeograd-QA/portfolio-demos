@@ -25,6 +25,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Build
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
         run: python pgpt-lom/tools/build_content.py
       - name: Commit generated files
         run: |
