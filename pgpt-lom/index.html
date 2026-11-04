@@ -619,6 +619,20 @@ html.hc #aMinus::after,html.hc #aPlus::after,html.hc #hcBtn::after,html.hc #lang
  nav ul#links ul.sub>li>a:hover,nav ul#links ul.sub>li>a:focus-visible{transform:scale(1.1)}
 }
 @media(prefers-reduced-motion:reduce){nav ul#links a{transition:none!important;transform:none!important}}
+
+/* collapsible documents list (home page) */
+.docs-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;margin:6px 0 12px;padding:14px 20px;font:inherit;font-weight:800;font-size:1.1rem;color:var(--navy);cursor:pointer;border:3px solid transparent;border-radius:16px;background:linear-gradient(#fff,#fff) padding-box,conic-gradient(from var(--bang),#0f2a4a,#1a47b8 20%,#f2a900 38%,#fff3c4 50%,#f2a900 62%,#1a47b8 80%,#0f2a4a) border-box;animation:bRun 5s linear infinite;box-shadow:0 8px 22px rgba(15,42,74,.14);transition:transform .2s}
+.docs-toggle:hover{transform:translateY(-2px)}
+.docs-toggle:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.docs-toggle .dt-hide,.docs-toggle[aria-expanded=true] .dt-show{display:none}
+.docs-toggle[aria-expanded=true] .dt-hide{display:inline}
+.docs-toggle .dt-arrow{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#f7b733,#e8590c);color:#fff;font-size:1.2rem;transition:transform .35s}
+.docs-toggle[aria-expanded=true] .dt-arrow{transform:rotate(180deg)}
+#docsList{overflow:hidden;transition:max-height .45s ease,visibility 0s .45s}
+#docsList[aria-hidden=false]{transition:max-height .45s ease,visibility 0s}
+#docsList[aria-hidden=true]{visibility:hidden}
+@media(prefers-reduced-motion:reduce){.docs-toggle{animation:none}#docsList{transition:none}}
+html.hc .docs-toggle{border-color:#000;background:#000;color:#fff;animation:none}
 /* mobile (hamburger) menu: everything centred */
 @media(max-width:1100px){
  nav ul#links>li>a{justify-content:center;text-align:center}
@@ -962,7 +976,8 @@ html.lb-lock{overflow:hidden}
   <div class="wrap">
    <h2>Документи</h2>
    <p class="lead">Основни училищни графици и нормативни документи.</p>
-   <div class="docs">
+   <button type="button" class="docs-toggle" aria-expanded="false" aria-controls="docsList"><span class="dt-t"><span class="dt-show">Покажи документите</span><span class="dt-hide">Скрий документите</span></span><span class="dt-arrow" aria-hidden="true">▾</span></button>
+   <div class="docs" id="docsList" style="max-height:0" aria-hidden="true">
     <a href="https://pgptlom.com/wp-content/uploads/2025/10/%D0%94%D0%BD%D0%B5%D0%B2%D0%B5%D0%BD_%D1%80%D0%B5%D0%B6%D0%B8%D0%BC-%D0%9F%D0%93%D0%9F%D0%A2.pdf" target="_blank" rel="noopener">Дневен режим на институцията</a>
     <a href="https://pgptlom.com/wp-content/uploads/2026/08/%D0%93%D0%BE%D0%B4-%D0%BF%D0%BB%D0%B0%D0%BD_%D0%9F%D0%93%D0%9F%D0%A2.pdf" target="_blank" rel="noopener">Годишен план на ПГПТ</a>
     <a href="https://pgptlom.com/wp-content/uploads/2025/10/%D0%9F%D1%80%D0%B0%D0%B2%D0%B8%D0%BB%D0%BD%D0%B8%D0%BA_%D0%B7%D0%B0-%D0%B4%D0%B5%D0%B9%D0%BD%D0%BE%D1%81%D1%82%D1%82%D0%B0-%D1%83%D1%87.pdf" target="_blank" rel="noopener">Правилник за дейността на училището</a>
@@ -2958,7 +2973,7 @@ const FORM_ENDPOINT = '';
   var onChange = [];
 
   /* ================= English dictionary ================= */
-  var EN = {
+  var EN = {'Покажи документите':'Show documents','Скрий документите':'Hide documents',
     'Съобщение': 'Message', 'Знаме на България': 'Flag of Bulgaria', 'България': 'Bulgaria',
     'Знаме на Европейския съюз': 'Flag of the European Union', 'Европейски съюз': 'European Union',
     'Добре дошли в демонстрационния сайт на Професионална гимназия по производствени технологии град Лом': 'Welcome to the demo website of the Vocational High School of Production Technologies, Lom',
@@ -5441,6 +5456,18 @@ select{width:100%;padding:10px;border-radius:12px;border:1px solid var(--line);b
   ACT.pgmsg=function(){S.msg.c=0;openApp('msg')};
   function filterSet(){$$('.sc .row[data-s]').forEach(function(r){r.hidden=S.sq&&r.getAttribute('data-s').indexOf(S.sq)<0})}
   function saveNotes(){lsSet('pgpt-aph-notes',JSON.stringify(S.notes.list))}
+})();
+</script>
+<script id="docs-fold">
+(function(){
+  var l=document.getElementById('docsList'),b=document.querySelector('.docs-toggle');if(!l||!b)return;
+  function set(open){
+    b.setAttribute('aria-expanded',open?'true':'false');l.setAttribute('aria-hidden',open?'false':'true');
+    if(open){[].forEach.call(l.querySelectorAll('a'),function(a){a.classList.add('in')});l.style.maxHeight=l.scrollHeight+'px';
+      setTimeout(function(){if(b.getAttribute('aria-expanded')==='true')l.style.maxHeight='none'},500)}
+    else{l.style.maxHeight=l.scrollHeight+'px';void l.offsetHeight;l.style.maxHeight='0'}
+  }
+  b.addEventListener('click',function(){set(b.getAttribute('aria-expanded')!=='true')});
 })();
 </script>
 <style id="ball3d-css">
