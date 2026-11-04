@@ -529,6 +529,26 @@ html.hc #life .card.life-card{border:3px solid #000}
 .stats .stat b{background:linear-gradient(135deg,var(--c1),var(--c2));-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
 html.hc .stats .stat b{background:none;-webkit-text-fill-color:currentColor;color:#000}
 html.hc .card.link-card,html.hc .stats .stat{border:3px solid #000!important}
+
+/* remaining tiles: programmes, "why" tiles, news, contact rows */
+#programs .card,.post,.why>div,.info .row{--c1:#1f5fa8;--c2:#0f2a4a}
+#programs .card:nth-child(1),.post:nth-child(1),.why>div:nth-child(1),.info .row:nth-child(1){--c1:#f7b733;--c2:#e8590c}
+#programs .card:nth-child(2),.post:nth-child(2),.why>div:nth-child(2),.info .row:nth-child(2){--c1:#38bdf8;--c2:#1d4ed8}
+#programs .card:nth-child(3),.post:nth-child(3),.why>div:nth-child(3),.info .row:nth-child(3){--c1:#34d399;--c2:#047857}
+#programs .card:nth-child(4),.post:nth-child(4),.why>div:nth-child(4),.info .row:nth-child(4){--c1:#f472b6;--c2:#9d174d}
+#programs .card:nth-child(5){--c1:#a78bfa;--c2:#5b21b6}
+#programs .card{position:relative;overflow:hidden;border:0!important;border-radius:22px;padding-top:22px;background:linear-gradient(180deg,#fff 55%,#f1f6fd);box-shadow:0 10px 28px rgba(15,42,74,.14)}
+#programs .card::before,.post::before,.why>div::before{content:"";position:absolute;left:0;right:0;top:0;height:8px;background:linear-gradient(90deg,var(--c1),var(--c2));z-index:2}
+#programs .card h3{color:var(--c2)}
+.post{position:relative;border:0!important;border-radius:22px;box-shadow:0 10px 28px rgba(15,42,74,.16)}
+.post time{display:inline-block;padding:3px 11px;border-radius:999px;background:linear-gradient(135deg,var(--c1),var(--c2));color:#fff!important;font-size:.8rem;font-weight:700;margin-bottom:4px}
+.post h3{color:var(--c2)}
+.why>div{position:relative;overflow:hidden;border:0!important;border-radius:22px;padding-top:26px;box-shadow:0 10px 28px rgba(0,0,0,.3)}
+.why>div>span:first-child{display:grid;place-items:center;width:56px;height:56px;border-radius:18px;background:linear-gradient(135deg,var(--c1),var(--c2));box-shadow:0 6px 14px rgba(0,0,0,.3);font-size:1.7rem;margin-bottom:10px}
+.info .row{border:0!important;border-radius:18px;box-shadow:0 8px 22px rgba(15,42,74,.13);border-left:6px solid var(--c2)!important}
+.info .row .ic{flex:none;display:grid;place-items:center;width:48px;height:48px;border-radius:16px;background:linear-gradient(135deg,var(--c1),var(--c2));box-shadow:0 5px 12px rgba(15,42,74,.25)}
+html.hc #programs .card,html.hc .post,html.hc .why>div,html.hc .info .row{border:3px solid #000!important}
+html.hc .post time{background:#000}
 .life-panel{margin-top:22px;border:3px solid var(--accent);border-radius:18px;background:#fff;padding:18px 20px 22px;box-shadow:0 12px 30px rgba(15,42,74,.14);scroll-margin-top:170px;animation:lpIn .3s ease both}
 .life-panel[hidden]{display:none}
 .life-panel .lp-h{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-bottom:6px}
