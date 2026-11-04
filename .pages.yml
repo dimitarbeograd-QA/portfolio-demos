@@ -1,0 +1,48 @@
+# Pages CMS (https://pagescms.org) – редактиране на съдържанието без програмиране.
+# Вход: https://app.pagescms.org с GitHub акаунт, който има право да пише в това хранилище.
+# Редакторът променя файловете в pgpt-lom/content/, а GitHub Actions (.github/workflows/pgpt-lom-content.yml)
+# автоматично сглобява сайта. Подробно ръководство: pgpt-lom/content/README.md
+
+media:
+  input: pgpt-lom/img
+  output: img
+  extensions: [jpg, jpeg, png, webp]
+
+content:
+  - name: pgpt-news
+    label: "ПГПТ – Новини (началната страница показва 4-те най-нови)"
+    type: file
+    path: pgpt-lom/content/news.json
+    format: json
+    fields:
+      - name: items
+        label: "Новини"
+        type: object
+        list: true
+        fields:
+          - { name: published, label: "Дата на публикуване", type: date, required: true }
+          - { name: date_label, label: "Дата като текст (по желание, напр. „16–17 април 2026“)", type: string }
+          - { name: title, label: "Заглавие", type: string, required: true }
+          - { name: text, label: "Кратък текст", type: text, required: true }
+          - { name: image, label: "Снимка", type: image, required: true }
+          - { name: alt, label: "Описание на снимката (за незрящи)", type: string }
+          - { name: title_en, label: "Заглавие на английски (по желание)", type: string }
+          - { name: text_en, label: "Текст на английски (по желание)", type: text }
+          - { name: date_label_en, label: "Дата като текст на английски (ако има „Дата като текст“)", type: string }
+
+  - name: pgpt-documents
+    label: "ПГПТ – Документи"
+    type: file
+    path: pgpt-lom/content/documents.json
+    format: json
+    fields:
+      - name: items
+        label: "Документи"
+        type: object
+        list: true
+        fields:
+          - { name: title, label: "Име на документа", type: string, required: true }
+          - { name: url, label: "Връзка към документа (https://…)", type: string, required: true }
+          - { name: short_title, label: "По-кратко име за началната страница (по желание)", type: string }
+          - { name: title_en, label: "Име на английски (по желание)", type: string }
+          - { name: short_title_en, label: "Кратко име на английски (по желание)", type: string }
