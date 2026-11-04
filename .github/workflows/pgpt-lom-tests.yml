@@ -1,0 +1,50 @@
+name: PGPT-Lom – tests
+
+on:
+  push:
+    paths:
+      - "pgpt-lom/**"
+      - ".github/workflows/pgpt-lom-tests.yml"
+  pull_request:
+    paths:
+      - "pgpt-lom/**"
+  workflow_dispatch:
+
+jobs:
+  static:
+    name: Static checks (Python, no dependencies)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        working-directory: pgpt-lom
+        run: python -m unittest discover -s tests -v
+
+  accessibility:
+    name: Accessibility audit (axe-core in Chromium)
+    runs-on: ubuntu-latest
+    # Reports problems without turning the whole run red until the first green run proves the setup.
+    # Remove the next line to make serious/critical violations block.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Playwright and axe
+        working-directory: pgpt-lom
+        run: |
+          npm init -y >/dev/null
+          npm i --no-save playwright @axe-core/playwright
+          npx playwright install --with-deps chromium
+      - name: Serve the site
+        working-directory: pgpt-lom
+        run: |
+          python3 -m http.server 8000 >/dev/null 2>&1 &
+          sleep 2
+      - name: Audit
+        working-directory: pgpt-lom
+        run: node tests/a11y.mjs

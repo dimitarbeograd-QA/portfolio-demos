@@ -507,7 +507,7 @@ html.hc #gerbBg{display:none}
 /* life cards: colourful header, round icon badge, pill button */
 #life .card.life-card{--c1:#1f5fa8;--c2:#0f2a4a;border:0;border-radius:22px;padding:0 0 62px;overflow:hidden;background:#fff;box-shadow:0 10px 28px rgba(15,42,74,.14);transition:transform .25s ease,box-shadow .25s ease}
 #life .card.life-card::before{content:"";display:block;height:78px;background:radial-gradient(circle at 85% 20%,rgba(255,255,255,.35),transparent 55%),linear-gradient(135deg,var(--c1),var(--c2))}
-#life .card.life-card:nth-child(1){--c1:#f7b733;--c2:#e8590c}
+#life .card.life-card:nth-child(1){--c1:#f7b733;--c2:#c2410c}
 #life .card.life-card:nth-child(2){--c1:#f472b6;--c2:#9d174d}
 #life .card.life-card:nth-child(3){--c1:#fb923c;--c2:#c2410c}
 #life .card.life-card:nth-child(4){--c1:#38bdf8;--c2:#1d4ed8}
@@ -537,7 +537,7 @@ html.hc #life .card.life-card{border:3px solid #000}
 .card.link-card:hover h3{color:var(--c2)}
 .stats .stat{position:relative;overflow:hidden;border:0;border-radius:22px;padding-top:30px;box-shadow:0 10px 28px rgba(15,42,74,.18)}
 .stats .stat::before{content:"";position:absolute;left:0;right:0;top:0;height:8px;background:linear-gradient(90deg,var(--c1,#1f5fa8),var(--c2,#0f2a4a))}
-.stats .stat:nth-child(1){--c1:#f7b733;--c2:#e8590c}
+.stats .stat:nth-child(1){--c1:#f7b733;--c2:#c2410c}
 .stats .stat:nth-child(2){--c1:#38bdf8;--c2:#1d4ed8}
 .stats .stat:nth-child(3){--c1:#34d399;--c2:#047857}
 .stats .stat:nth-child(4){--c1:#f472b6;--c2:#9d174d}
@@ -547,7 +547,7 @@ html.hc .card.link-card,html.hc .stats .stat{border:3px solid #000!important}
 
 /* remaining tiles: programmes, "why" tiles, news, contact rows */
 #programs .card,.post,.why>div,.info .row{--c1:#1f5fa8;--c2:#0f2a4a}
-#programs .card:nth-child(1),.post:nth-child(1),.why>div:nth-child(1),.info .row:nth-child(1){--c1:#f7b733;--c2:#e8590c}
+#programs .card:nth-child(1),.post:nth-child(1),.why>div:nth-child(1),.info .row:nth-child(1){--c1:#f7b733;--c2:#c2410c}
 #programs .card:nth-child(2),.post:nth-child(2),.why>div:nth-child(2),.info .row:nth-child(2){--c1:#38bdf8;--c2:#1d4ed8}
 #programs .card:nth-child(3),.post:nth-child(3),.why>div:nth-child(3),.info .row:nth-child(3){--c1:#34d399;--c2:#047857}
 #programs .card:nth-child(4),.post:nth-child(4),.why>div:nth-child(4),.info .row:nth-child(4){--c1:#f472b6;--c2:#9d174d}
@@ -567,7 +567,7 @@ html.hc .post time{background:#000}
 
 /* virtual tour thumbnails */
 .tour-st{--c1:#1f5fa8;--c2:#0f2a4a;position:relative;border:0;border-radius:18px;box-shadow:0 8px 22px rgba(15,42,74,.16);transition:transform .25s ease,box-shadow .25s ease}
-.tour-st:nth-child(1){--c1:#f7b733;--c2:#e8590c}
+.tour-st:nth-child(1){--c1:#f7b733;--c2:#c2410c}
 .tour-st:nth-child(2){--c1:#38bdf8;--c2:#1d4ed8}
 .tour-st:nth-child(3){--c1:#34d399;--c2:#047857}
 .tour-st:nth-child(4){--c1:#f472b6;--c2:#9d174d}
@@ -1128,7 +1128,7 @@ html.lb-lock{overflow:hidden}
   На 07.04.2003г. със заповед на МОН техникумът е преименуван в Професионална гимназия по производствени технологии.<br>
 На 28 април 2023 година беше отбелязан 60 – годишния юбилей със шествие и тържествен концерт в салона на читалище „Постоянство 1856“ град Лом. <br>
 
-<img src="img/0a297012dea0.jpg" loading="lazy">
+<img src="img/0a297012dea0.jpg" alt="Шествие по случай 60-годишния юбилей на гимназията" loading="lazy">
 </p>
 
 <h3><a href="https://minedusci-my.sharepoint.com/:f:/g/personal/1209012_edu_mon_bg/IgBX2_uOg9QUR4SeOYpCJldaAcs9WcqcY9fSJGMn3hyipMQ?e=CzOTch" target="_blank" rel="noopener">Училищни учебни планове 2025-26 година</a></h3>
@@ -5056,7 +5056,7 @@ select{width:100%;padding:10px;border-radius:12px;border:1px solid var(--line);b
     H=D.createElement('div');H.id='aphone-host';H.setAttribute('translate','no');H.style.cssText='position:fixed;inset:0;z-index:2147483001;display:none';
     R=H.attachShadow({mode:'open'});
     R.innerHTML='<style>'+CSS+'</style><div class="ov" role="dialog" aria-modal="true"><button class="x" data-a="close">✕</button>'+
-      '<div class="frame"><button class="hb vu" data-a="volup"></button><button class="hb vd" data-a="voldn"></button><button class="hb pw" data-a="power"></button>'+
+      '<div class="frame"><button class="hb vu" data-a="volup" data-l="Усили звука|Volume up"></button><button class="hb vd" data-a="voldn" data-l="Намали звука|Volume down"></button><button class="hb pw" data-a="power" data-l="Бутон за захранване|Power button"></button>'+
       '<div class="screen"><div class="wp"></div><i class="holep"></i><div class="view"></div><div class="shade"></div><div class="sb" data-a="shade"></div>'+
       '<div class="nav"><button data-a="back" data-l="Назад|Back"><svg viewBox="0 0 24 24"><path d="M16 4.5L6.5 12 16 19.5z" fill="currentColor"/></svg></button>'+
       '<button data-a="home" data-l="Начало|Home"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></button>'+
