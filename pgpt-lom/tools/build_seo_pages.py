@@ -39,10 +39,15 @@ DESC = {
     "subitiya": "Предстоящи събития в ПГПТ – Лом.",
     "uslugi": "Административни услуги в ПГПТ – Лом – индикативен списък.",
     "dokumenti": "Училищни графици и нормативни документи на ПГПТ – Лом: правилници, планове, програми и процедури.",
+    "spec-prilozhna-informatika": "Приложна информатика в ПГПТ – Лом: професия Икономист – информатик, специалност Икономическа информатика.",
+    "spec-motorni-prevozni-sredstva": "Моторни превозни средства и въздухоплавателни апарати в ПГПТ – Лом: автотранспортна техника, пристанищна механизация и подемно-транспортна техника.",
+    "spec-mashinostroene": "Машиностроене, металообработване и металургия в ПГПТ – Лом: професия Машинен монтьор, специалност Металообработващи машини.",
+    "spec-elektrotehnika": "Електротехника и енергетика в ПГПТ – Лом: професия Електромонтьор, специалност Електрообзавеждане на производството.",
+    "spec-transportni-uslugi": "Транспортни услуги в ПГПТ – Лом: професия Спедитор – логистик, специалност Спедиция, транспортна и складова логистика.",
     "stem": "STEM центърът на ПГПТ – Лом: кабинети за учене чрез опит по математика, информационни технологии и визуални изкуства.",
 }
 # pages whose extracted paragraphs are lists / fragments: show only the description above the button
-NO_BODY = {"ekip", "novini", "avtomontyor", "galeriya", "specialnosti", "uchebni-planove", "byudzhet", "dzi-dki", "vakancii",
+NO_BODY = {"spec-prilozhna-informatika", "spec-motorni-prevozni-sredstva", "spec-mashinostroene", "spec-elektrotehnika", "spec-transportni-uslugi", "ekip", "novini", "avtomontyor", "galeriya", "specialnosti", "uchebni-planove", "byudzhet", "dzi-dki", "vakancii",
            "sedmichna-programa", "sfo", "subitiya", "uslugi", "dokumenti"}
 
 

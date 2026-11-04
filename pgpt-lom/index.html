@@ -650,6 +650,26 @@ html.hc #aMinus::after,html.hc #aPlus::after,html.hc #hcBtn::after,html.hc #lang
 #docsList[aria-hidden=true]{visibility:hidden}
 @media(prefers-reduced-motion:reduce){.docs-toggle{animation:none}#docsList{transition:none}}
 html.hc .docs-toggle{border-color:#000;background:#000;color:#fff;animation:none}
+
+/* specialty pages */
+.spec-hero{display:flex;gap:22px;align-items:center;flex-wrap:wrap;margin:4px 0 18px}
+.spec-hero img{flex:none;width:150px;height:150px;object-fit:contain;border-radius:20px;background:#fff;padding:8px;box-shadow:0 10px 24px rgba(15,42,74,.16)}
+.spec-hero>div{flex:1;min-width:220px}.spec-field{font-weight:800;font-size:1.15rem;color:var(--navy);margin:0 0 6px}.spec-desc{margin:0}
+.spec-block{display:flex;gap:16px;margin:16px 0;padding:18px 20px;border-radius:20px;background:#f4f8fe;box-shadow:0 8px 22px rgba(15,42,74,.1);border-left:8px solid var(--blue)}
+.spec-code{flex:none;display:grid;place-items:center;min-width:70px;height:46px;padding:0 10px;border-radius:14px;background:linear-gradient(135deg,var(--blue),var(--navy));color:#fff;font-weight:800;font-size:1.05rem;letter-spacing:.5px}
+.spec-body{flex:1;min-width:0}.spec-body small{display:block;color:#5d6b7c;font-size:.78rem;text-transform:uppercase;letter-spacing:.6px;font-weight:700}
+.spec-prof h2{margin:0 0 8px;font-size:1.25rem}.spec-spec{margin:10px 0 0;padding-top:10px;border-top:1px dashed #c5d3ea}
+.spec-spec strong{display:block;font-size:1.05rem;color:var(--ink)}.content .spec-cls{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}
+.spec-cls li{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.spec-chip{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.78rem;font-weight:800;color:#fff;background:#1d4ed8}.spec-chip.dual{background:linear-gradient(135deg,#f7b733,#e8590c);color:#2a1700}
+.spec-act{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}
+.spec-links{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}.spec-links a{display:block;padding:8px 14px;border-radius:999px;background:#eaf1fb;color:var(--navy);text-decoration:none;font-weight:700;font-size:.92rem;transition:transform .2s,background .2s}
+.spec-links a:hover{background:var(--navy);color:#fff;transform:translateY(-2px)}
+.prog-more{display:inline-block;margin-top:10px;font-weight:800;font-size:.9rem;color:var(--blue);text-decoration:none}
+.prog-more::after{content:"";position:absolute;inset:0;z-index:7}.prog-more:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+#programs .card:hover .prog-more{color:var(--c2,#0f2a4a);text-decoration:underline}
+@media(max-width:600px){.spec-block{flex-direction:column;gap:10px;padding:16px}.spec-code{align-self:flex-start}}
+html.hc .spec-block{background:#000;border-left-color:#fff}
 /* mobile (hamburger) menu: everything centred */
 @media(max-width:1100px){
  nav ul#links>li>a{justify-content:center;text-align:center}
@@ -859,11 +879,11 @@ html.lb-lock{overflow:hidden}
    <h2>Професионални направления</h2>
    <p class="lead">Изградете бъдещето си с професионално обучение – избирайте сред пет направления.</p>
    <div class="cards">
-    <div class="card"><div class="ico cover" role="img" aria-label="Двигател с вътрешно горене" style="background-image:url(img/aaf5764ee993.webp)"></div><h3>Моторни превозни средства и въздухоплавателни апарати</h3><p>Автомонтьорство и обслужване на превозни средства.</p></div>
-    <div class="card"><div class="ico cover" role="img" aria-label="Лаптоп" style="background-image:url(img/927cd334a7a7.webp)"></div><h3>Приложна информатика</h3><p>Програмиране, ИТ системи и дигитални умения.</p></div>
-    <div class="card"><div class="ico cover" role="img" aria-label="Универсален струг-фреза" style="background-image:url(img/a3276352a655.webp)"></div><h3>Машиностроене, металообработване и металургия</h3><p>Съвременни производствени технологии.</p></div>
-    <div class="card"><div class="ico cover" role="img" aria-label="Предупредителен знак за електрическо напрежение" style="background-image:url(img/2cadb1fb9859.webp)"></div><h3>Електротехника и енергетика</h3><p>Електрообзавеждане и енергийни системи.</p></div>
-    <div class="card"><div class="ico cover" role="img" aria-label="Логистика и транспорт" style="background-image:url(img/5f8d4acd47fd.webp)"></div><h3>Транспортни услуги</h3><p>Логистика и организация на транспорта.</p></div>
+    <div class="card"><div class="ico cover" role="img" aria-label="Двигател с вътрешно горене" style="background-image:url(img/aaf5764ee993.webp)"></div><h3>Моторни превозни средства и въздухоплавателни апарати</h3><p>Автомонтьорство и обслужване на превозни средства.</p><a class="prog-more" href="#/spec-motorni-prevozni-sredstva">Научете повече<span aria-hidden="true"> →</span></a></div>
+    <div class="card"><div class="ico cover" role="img" aria-label="Лаптоп" style="background-image:url(img/927cd334a7a7.webp)"></div><h3>Приложна информатика</h3><p>Програмиране, ИТ системи и дигитални умения.</p><a class="prog-more" href="#/spec-prilozhna-informatika">Научете повече<span aria-hidden="true"> →</span></a></div>
+    <div class="card"><div class="ico cover" role="img" aria-label="Универсален струг-фреза" style="background-image:url(img/a3276352a655.webp)"></div><h3>Машиностроене, металообработване и металургия</h3><p>Съвременни производствени технологии.</p><a class="prog-more" href="#/spec-mashinostroene">Научете повече<span aria-hidden="true"> →</span></a></div>
+    <div class="card"><div class="ico cover" role="img" aria-label="Предупредителен знак за електрическо напрежение" style="background-image:url(img/2cadb1fb9859.webp)"></div><h3>Електротехника и енергетика</h3><p>Електрообзавеждане и енергийни системи.</p><a class="prog-more" href="#/spec-elektrotehnika">Научете повече<span aria-hidden="true"> →</span></a></div>
+    <div class="card"><div class="ico cover" role="img" aria-label="Логистика и транспорт" style="background-image:url(img/5f8d4acd47fd.webp)"></div><h3>Транспортни услуги</h3><p>Логистика и организация на транспорта.</p><a class="prog-more" href="#/spec-transportni-uslugi">Научете повече<span aria-hidden="true"> →</span></a></div>
    </div>
    <p style="margin-top:26px"><a class="btn primary" href="#/specialnosti">Всички специалности</a></p>
   </div>
@@ -1418,6 +1438,7 @@ html.lb-lock{overflow:hidden}
   <div class="content-box">
   <div class="en-note" hidden>Тази страница засега е само на български.</div>
   <div class="content" data-lang="bg">
+<nav class="spec-links" aria-label="Направления"><a href="#/spec-prilozhna-informatika">Приложна информатика</a><a href="#/spec-motorni-prevozni-sredstva">Моторни превозни средства и въздухоплавателни апарати</a><a href="#/spec-mashinostroene">Машиностроене, металообработване и металургия</a><a href="#/spec-elektrotehnika">Електротехника и енергетика</a><a href="#/spec-transportni-uslugi">Транспортни услуги</a></nav>
 <figure class="fig"><img src="img/182d30fa543e.jpg" alt="" loading="lazy"></figure>
 
 <p><strong>Направление:  482 – Приложна информатика; </strong><br>професия: Икономист – информатик;<br>специалност: Икономическа информатика Актуална специалност, която отговаря на изискванията на пазара на труда с високо интелигентни технологи и софтуерни продукти. Подготвя учениците със знания за разработване на информационни системи в бизнеса, системен анализ, средства и технологии за изграждане на професионални уеб сайтове и информационна сигурност. <br>По тази специалност, в гимназията се обучават ученици в 8а, 9а, 10а, 11а и 12а паралелки.</p>
@@ -1448,6 +1469,7 @@ html.lb-lock{overflow:hidden}
 
 </div>
   <div class="content" data-lang="en" hidden>
+<nav class="spec-links" aria-label="Fields of study"><a href="#/spec-prilozhna-informatika">Applied Informatics</a><a href="#/spec-motorni-prevozni-sredstva">Motor Vehicles and Aircraft</a><a href="#/spec-mashinostroene">Mechanical Engineering, Metalworking and Metallurgy</a><a href="#/spec-elektrotehnika">Electrical Engineering and Power Engineering</a><a href="#/spec-transportni-uslugi">Transport Services</a></nav>
 <h2>Specialties</h2>
 <ul>
 <li><strong>Field 482 – Applied Informatics;</strong> profession: Economist – Informatics; specialty: <strong>Economic Informatics</strong>. A current specialty that meets labor market requirements with highly intelligent technologies and software products. It prepares students with knowledge of developing business information systems, system analysis, tools and technologies for building professional websites, and information security. Classes 8а, 9а, 10а, 11а and 12а.</li>
@@ -1462,6 +1484,117 @@ html.lb-lock{overflow:hidden}
   </div>
  </div></div>
 </section>
+
+ <section class="page" id="page-spec-prilozhna-informatika" data-title="Приложна информатика" hidden>
+  <div class="page-hero"><div class="wrap">
+   <div class="crumbs"><a href="#/">Начало</a> › <a href="#/specialnosti">Специалности</a> › <span>Приложна информатика</span></div>
+   <h1>Приложна информатика</h1>
+  </div></div>
+  <div class="page-main"><div class="wrap">
+   <div class="content-box">
+   <div class="en-note" hidden>Тази страница засега е само на български.</div>
+  <div class="content" data-lang="bg">
+<div class="spec-hero"><img src="img/927cd334a7a7.webp" alt="Лаптоп" width="150" height="150"><div><p class="spec-field">Направление 482 – Приложна информатика</p><p class="spec-desc">Актуална специалност, която отговаря на изискванията на пазара на труда с високо интелигентни технологии и софтуерни продукти. Подготвя учениците със знания за разработване на информационни системи в бизнеса, системен анализ, средства и технологии за изграждане на професионални уеб сайтове и информационна сигурност.</p></div></div>
+<div class="spec-block"><div class="spec-code" aria-hidden="true">482</div><div class="spec-body"><div class="spec-prof"><small>Професия</small><h2>Икономист – информатик</h2></div><div class="spec-spec"><small>Специалност</small><strong>Икономическа информатика</strong><ul class="spec-cls"><li>8а, 9а, 10а, 11а и 12а паралелки</li></ul></div></div></div>
+<p class="spec-act"><a class="btn primary" href="#/specialnosti">Всички специалности</a> <a class="btn ghost-dark" href="#contact">Свържете се с нас</a></p>
+</div>
+  <div class="content" data-lang="en" hidden>
+<div class="spec-hero"><img src="img/927cd334a7a7.webp" alt="Laptop" width="150" height="150"><div><p class="spec-field">Field 482 – Applied Informatics</p><p class="spec-desc">A current specialty that meets labor market requirements with highly intelligent technologies and software products. It prepares students with knowledge of developing business information systems, system analysis, tools and technologies for building professional websites, and information security.</p></div></div>
+<div class="spec-block"><div class="spec-code" aria-hidden="true">482</div><div class="spec-body"><div class="spec-prof"><small>Profession</small><h2>Economist – Informatics</h2></div><div class="spec-spec"><small>Specialty</small><strong>Economic Informatics</strong><ul class="spec-cls"><li>Classes 8а, 9а, 10а, 11а and 12а</li></ul></div></div></div>
+<p class="spec-act"><a class="btn primary" href="#/specialnosti">All specialties</a> <a class="btn ghost-dark" href="#contact">Contact us</a></p>
+</div>
+   </div>
+  </div></div>
+ </section>
+
+ <section class="page" id="page-spec-motorni-prevozni-sredstva" data-title="Моторни превозни средства и въздухоплавателни апарати" hidden>
+  <div class="page-hero"><div class="wrap">
+   <div class="crumbs"><a href="#/">Начало</a> › <a href="#/specialnosti">Специалности</a> › <span>Моторни превозни средства и въздухоплавателни апарати</span></div>
+   <h1>Моторни превозни средства и въздухоплавателни апарати</h1>
+  </div></div>
+  <div class="page-main"><div class="wrap">
+   <div class="content-box">
+   <div class="en-note" hidden>Тази страница засега е само на български.</div>
+  <div class="content" data-lang="bg">
+<div class="spec-hero"><img src="img/aaf5764ee993.webp" alt="Двигател с вътрешно горене" width="150" height="150"><div><p class="spec-field">Направление 525 – Моторни превозни средства, кораби и въздухоплавателни апарати</p></div></div>
+<div class="spec-block"><div class="spec-code" aria-hidden="true">525</div><div class="spec-body"><div class="spec-prof"><small>Професия</small><h2>Техник по транспортна техника</h2></div><div class="spec-spec"><small>Специалност</small><strong>Автотранспортна техника</strong><ul class="spec-cls"><li>8б, 9б, 10б – ½ паралелка дневна и ½ паралелка дуална форма</li><li>11б – ½ паралелка дневна и ½ паралелка дуална форма</li><li>12б – само дневна форма</li></ul></div></div></div><div class="spec-block"><div class="spec-code" aria-hidden="true">525060</div><div class="spec-body"><div class="spec-prof"><small>Професия</small><h2>Монтьор на подемно-транспортна техника</h2></div><div class="spec-spec"><small>Специалност</small><strong>Пристанищна механизация</strong><ul class="spec-cls"><li>8в (½ паралелка) и 9в клас</li></ul></div><div class="spec-spec"><small>Специалност</small><strong>Подемно-транспортна техника с електрозадвижване</strong><ul class="spec-cls"><li>12в клас (½ паралелка)</li></ul></div></div></div>
+<p class="spec-act"><a class="btn primary" href="#/specialnosti">Всички специалности</a> <a class="btn ghost-dark" href="#contact">Свържете се с нас</a></p>
+</div>
+  <div class="content" data-lang="en" hidden>
+<div class="spec-hero"><img src="img/aaf5764ee993.webp" alt="Internal combustion engine" width="150" height="150"><div><p class="spec-field">Field 525 – Motor Vehicles, Ships and Aircraft</p></div></div>
+<div class="spec-block"><div class="spec-code" aria-hidden="true">525</div><div class="spec-body"><div class="spec-prof"><small>Profession</small><h2>Transport Equipment Technician</h2></div><div class="spec-spec"><small>Specialty</small><strong>Automotive Transport Technology</strong><ul class="spec-cls"><li>8б, 9б, 10б – half a class in day form and half in dual form</li><li>11б – half a class in day form and half in dual form</li><li>12б – day form only</li></ul></div></div></div><div class="spec-block"><div class="spec-code" aria-hidden="true">525060</div><div class="spec-body"><div class="spec-prof"><small>Profession</small><h2>Lifting and Transport Equipment Mechanic</h2></div><div class="spec-spec"><small>Specialty</small><strong>Port Mechanization</strong><ul class="spec-cls"><li>8в (half a class) and 9в</li></ul></div><div class="spec-spec"><small>Specialty</small><strong>Electrically driven lifting and transport equipment</strong><ul class="spec-cls"><li>12в (half a class)</li></ul></div></div></div>
+<p class="spec-act"><a class="btn primary" href="#/specialnosti">All specialties</a> <a class="btn ghost-dark" href="#contact">Contact us</a></p>
+</div>
+   </div>
+  </div></div>
+ </section>
+
+ <section class="page" id="page-spec-mashinostroene" data-title="Машиностроене, металообработване и металургия" hidden>
+  <div class="page-hero"><div class="wrap">
+   <div class="crumbs"><a href="#/">Начало</a> › <a href="#/specialnosti">Специалности</a> › <span>Машиностроене, металообработване и металургия</span></div>
+   <h1>Машиностроене, металообработване и металургия</h1>
+  </div></div>
+  <div class="page-main"><div class="wrap">
+   <div class="content-box">
+   <div class="en-note" hidden>Тази страница засега е само на български.</div>
+  <div class="content" data-lang="bg">
+<div class="spec-hero"><img src="img/a3276352a655.webp" alt="Универсален струг-фреза" width="150" height="150"><div><p class="spec-field">Направление 521 – Машиностроене, металообработване и металургия</p></div></div>
+<div class="spec-block"><div class="spec-code" aria-hidden="true">521040</div><div class="spec-body"><div class="spec-prof"><small>Професия</small><h2>Машинен монтьор</h2></div><div class="spec-spec"><small>Специалност</small><strong>Металообработващи машини</strong><ul class="spec-cls"><li>10в клас, дуална система на обучение <span class="spec-chip dual">Дуална форма</span></li></ul></div></div></div>
+<p class="spec-act"><a class="btn primary" href="#/specialnosti">Всички специалности</a> <a class="btn ghost-dark" href="#contact">Свържете се с нас</a></p>
+</div>
+  <div class="content" data-lang="en" hidden>
+<div class="spec-hero"><img src="img/a3276352a655.webp" alt="Universal lathe-milling machine" width="150" height="150"><div><p class="spec-field">Field 521 – Mechanical Engineering, Metalworking and Metallurgy</p></div></div>
+<div class="spec-block"><div class="spec-code" aria-hidden="true">521040</div><div class="spec-body"><div class="spec-prof"><small>Profession</small><h2>Machine Fitter</h2></div><div class="spec-spec"><small>Specialty</small><strong>Metalworking machines</strong><ul class="spec-cls"><li>10в, dual system of training <span class="spec-chip dual">Dual form</span></li></ul></div></div></div>
+<p class="spec-act"><a class="btn primary" href="#/specialnosti">All specialties</a> <a class="btn ghost-dark" href="#contact">Contact us</a></p>
+</div>
+   </div>
+  </div></div>
+ </section>
+
+ <section class="page" id="page-spec-elektrotehnika" data-title="Електротехника и енергетика" hidden>
+  <div class="page-hero"><div class="wrap">
+   <div class="crumbs"><a href="#/">Начало</a> › <a href="#/specialnosti">Специалности</a> › <span>Електротехника и енергетика</span></div>
+   <h1>Електротехника и енергетика</h1>
+  </div></div>
+  <div class="page-main"><div class="wrap">
+   <div class="content-box">
+   <div class="en-note" hidden>Тази страница засега е само на български.</div>
+  <div class="content" data-lang="bg">
+<div class="spec-hero"><img src="img/2cadb1fb9859.webp" alt="Предупредителен знак за електрическо напрежение" width="150" height="150"><div><p class="spec-field">Направление 522 – Електротехника и енергетика</p></div></div>
+<div class="spec-block"><div class="spec-code" aria-hidden="true">522020</div><div class="spec-body"><div class="spec-prof"><small>Професия</small><h2>Електромонтьор</h2></div><div class="spec-spec"><small>Специалност</small><strong>Електрообзавеждане на производството</strong><ul class="spec-cls"><li>11в клас, дуална форма на обучение <span class="spec-chip dual">Дуална форма</span></li></ul></div></div></div>
+<p class="spec-act"><a class="btn primary" href="#/specialnosti">Всички специалности</a> <a class="btn ghost-dark" href="#contact">Свържете се с нас</a></p>
+</div>
+  <div class="content" data-lang="en" hidden>
+<div class="spec-hero"><img src="img/2cadb1fb9859.webp" alt="Electrical hazard warning sign" width="150" height="150"><div><p class="spec-field">Field 522 – Electrical Engineering and Power Engineering</p></div></div>
+<div class="spec-block"><div class="spec-code" aria-hidden="true">522020</div><div class="spec-body"><div class="spec-prof"><small>Profession</small><h2>Electrician</h2></div><div class="spec-spec"><small>Specialty</small><strong>Electrical equipment of production</strong><ul class="spec-cls"><li>11в, dual form of training <span class="spec-chip dual">Dual form</span></li></ul></div></div></div>
+<p class="spec-act"><a class="btn primary" href="#/specialnosti">All specialties</a> <a class="btn ghost-dark" href="#contact">Contact us</a></p>
+</div>
+   </div>
+  </div></div>
+ </section>
+
+ <section class="page" id="page-spec-transportni-uslugi" data-title="Транспортни услуги" hidden>
+  <div class="page-hero"><div class="wrap">
+   <div class="crumbs"><a href="#/">Начало</a> › <a href="#/specialnosti">Специалности</a> › <span>Транспортни услуги</span></div>
+   <h1>Транспортни услуги</h1>
+  </div></div>
+  <div class="page-main"><div class="wrap">
+   <div class="content-box">
+   <div class="en-note" hidden>Тази страница засега е само на български.</div>
+  <div class="content" data-lang="bg">
+<div class="spec-hero"><img src="img/5f8d4acd47fd.webp" alt="Логистика и транспорт" width="150" height="150"><div><p class="spec-field">Направление 840 – Транспортни услуги</p></div></div>
+<div class="spec-block"><div class="spec-code" aria-hidden="true">840110</div><div class="spec-body"><div class="spec-prof"><small>Професия</small><h2>Спедитор – логистик</h2></div><div class="spec-spec"><small>Специалност</small><strong>Спедиция, транспортна и складова логистика</strong><ul class="spec-cls"><li>12в клас (½ паралелка)</li></ul></div></div></div>
+<p class="spec-act"><a class="btn primary" href="#/specialnosti">Всички специалности</a> <a class="btn ghost-dark" href="#contact">Свържете се с нас</a></p>
+</div>
+  <div class="content" data-lang="en" hidden>
+<div class="spec-hero"><img src="img/5f8d4acd47fd.webp" alt="Logistics and transport" width="150" height="150"><div><p class="spec-field">Field 840 – Transport Services</p></div></div>
+<div class="spec-block"><div class="spec-code" aria-hidden="true">840110</div><div class="spec-body"><div class="spec-prof"><small>Profession</small><h2>Freight Forwarder – Logistician</h2></div><div class="spec-spec"><small>Specialty</small><strong>Forwarding, Transport and Warehouse Logistics</strong><ul class="spec-cls"><li>12в (half a class)</li></ul></div></div></div>
+<p class="spec-act"><a class="btn primary" href="#/specialnosti">All specialties</a> <a class="btn ghost-dark" href="#contact">Contact us</a></p>
+</div>
+   </div>
+  </div></div>
+ </section>
+
 <section class="page" id="page-evropeyski-proekti" data-title="Европейски проекти" hidden>
  <div class="page-hero"><div class="wrap">
   <div class="crumbs"><a href="#/">Начало</a> › <span>Европейски проекти</span></div>
