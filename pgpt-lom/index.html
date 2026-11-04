@@ -3457,7 +3457,7 @@ const FORM_ENDPOINT = '';
       var im=a.imgs||[],ph='';
       if(im.length){ph='<div class="ph n'+Math.min(im.length,3)+'">'+im.slice(0,3).map(function(u,k){return '<button type="button" class="phb" data-a="'+ai+'" data-i="'+k+'" aria-label="Увеличи снимката"><img alt="" decoding="async" src="'+esc(u)+'"></button>'}).join('')+'</div>'}
       var cta=a.nocta?'':'<a class="btn primary" href="'+esc(a.href)+'">'+esc(a.cta||'Прочетете повече')+' →</a>',side=im.length===1&&!a.deco&&cta;   /* one photo beside the text: the button goes under the photo */
-      html+='<article class="la'+(im.length?'':' noimg')+(im.length>1?' multi':'')+'">'+(side?'<div class="phc">'+ph+cta+'</div>':ph)+'<div class="lt">'+(a.date?'<time>'+esc(a.date)+'</time>':'')+'<h4>'+esc(a.title)+'</h4>'+(a.text?'<p>'+esc(a.text)+'</p>':'')+(side?'':(a.engine||a.trophy||a.dancer||a.debate?'<div class="ar">'+cta+(a.engine?'<div class="eng" role="button" tabindex="0"></div>':a.trophy?'<canvas class="trophy" role="img"></canvas>':a.dancer?'<canvas class="dancer" role="img"></canvas>':'<canvas class="debate" role="img"></canvas>')+'</div>':cta))+(a.laptop?'<div class="lap" role="button" tabindex="0"></div>':'')+'</div>'+(a.deco?'<span class="la-ball2 b-soc"></span><span class="la-ball2 b-bas"></span><span class="la-ball" aria-hidden="true"></span>':'')+'</article>';
+      html+='<article class="la'+(im.length?'':' noimg')+(im.length>1?' multi':'')+'">'+(side?'<div class="phc">'+ph+cta+'</div>':ph)+'<div class="lt">'+(a.date?'<time>'+esc(a.date)+'</time>':'')+'<h4>'+esc(a.title)+'</h4>'+(a.text?'<p>'+esc(a.text)+'</p>':'')+(side?'':(a.engine||a.trophy||a.dancer||a.debate?'<div class="ar">'+cta+(a.engine?'<div class="eng" role="button" tabindex="0"></div>':a.trophy?'<canvas class="trophy" role="img"></canvas>':a.dancer?'<canvas class="dancer" role="img"></canvas>':'<canvas class="debate" role="img"></canvas>')+'</div>':cta))+(a.laptop?'<div class="devs"><div class="aph-mini" role="button" tabindex="0"></div><div class="lap" role="button" tabindex="0"></div></div>':'')+'</div>'+(a.deco?'<span class="la-ball2 b-soc"></span><span class="la-ball2 b-bas"></span><span class="la-ball" aria-hidden="true"></span>':'')+'</article>';
     });
     if(!items.length)html+='<p>Скоро ще добавим статии по тази тема.</p>';
     panel.innerHTML=html;
@@ -4543,6 +4543,756 @@ html.hc #backBtn{background:#ff0!important;color:#000!important;border-color:#00
   new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1)scan(n)})})}).observe(D.body,{childList:true,subtree:true});
   new MutationObserver(function(){[].forEach.call(D.querySelectorAll('.lap'),label)}).observe(D.documentElement,{attributes:true,attributeFilter:['lang']});
   scan(D);
+})();
+</script>
+<style id="aphone-css">
+/* a small Android phone (CSS 3D) next to the laptop; a click opens the full-screen Android simulator (see #aphone-js) */
+.devs{display:flex;align-items:flex-end;gap:clamp(22px,5vw,64px);align-self:flex-end;margin:auto clamp(30px,7vw,110px) 0 0}
+.life-panel .la .devs .lap{margin:0;align-self:flex-end}
+@media(max-width:700px){.devs{align-self:center;margin:6px 0 0;gap:18px}.life-panel .la .devs .lap{align-self:flex-end}}
+.aph-mini{position:relative;flex:none;width:96px;height:164px;perspective:700px;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+.aph-mini:empty{display:none}
+.aph-mini:focus-visible{outline:3px solid var(--accent);outline-offset:4px;border-radius:16px}
+.aph-sway{position:absolute;inset:0;transform-style:preserve-3d;animation:aphsway 7s ease-in-out infinite;transition:transform .3s}
+.aph-mini:hover .aph-sway,.aph-mini:focus-visible .aph-sway{animation-play-state:paused;transform:rotateY(0) scale(1.06)}
+@keyframes aphsway{0%,100%{transform:rotateY(-24deg) rotateX(4deg)}50%{transform:rotateY(24deg) rotateX(4deg)}}
+.aph-body{position:absolute;left:11px;top:0;width:74px;height:152px;border-radius:15px;background:#0d0e11;padding:4px;box-shadow:0 0 0 1.5px #3b3e45,0 12px 20px rgba(15,42,74,.35),inset 0 0 3px #000}
+.aph-body::before{content:"";position:absolute;right:-3px;top:42px;width:2.5px;height:22px;border-radius:0 2px 2px 0;background:#2b2e34}
+.aph-scr{position:relative;width:100%;height:100%;border-radius:11px;overflow:hidden;background:linear-gradient(160deg,#0f2a4a,#1f5fa8 55%,#f2a900);color:#fff;font-family:Roboto,"Segoe UI",system-ui,Arial,sans-serif;text-align:center}
+.aph-scr::before{content:"";position:absolute;left:50%;top:4px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:#000;box-shadow:0 0 0 1px rgba(255,255,255,.15)}
+.aph-clk{display:block;margin-top:26px;font-size:22px;font-weight:300;letter-spacing:-.5px;line-height:1}
+.aph-dt{display:block;margin-top:3px;font-size:7.5px;opacity:.85}
+.aph-apps{position:absolute;left:7px;right:7px;bottom:20px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px 3px;font-size:9px;line-height:1}
+.aph-apps i{font-style:normal;display:block;height:13px;border-radius:5px;background:rgba(255,255,255,.22)}
+.aph-apps i:nth-child(1){background:#16a34a}.aph-apps i:nth-child(2){background:#2563eb}.aph-apps i:nth-child(3){background:#f59e0b}.aph-apps i:nth-child(4){background:#db2777}
+.aph-pill{position:absolute;left:50%;bottom:6px;width:28px;height:3px;margin-left:-14px;border-radius:2px;background:rgba(255,255,255,.75)}
+.aph-hint{position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);white-space:nowrap;font:700 11px/1 system-ui,Arial,sans-serif;color:var(--navy);background:var(--accent);padding:4px 8px;border-radius:999px;box-shadow:0 2px 6px rgba(15,42,74,.25);animation:aphpulse 2.2s ease-in-out infinite}
+@keyframes aphpulse{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.08)}}
+@media(prefers-reduced-motion:reduce){.aph-sway{animation:none;transform:rotateY(-14deg) rotateX(3deg)}.aph-hint{animation:none}}
+</style>
+<script id="aphone-js">
+/* Interactive Android simulator. Opens full screen from the small phone beside the laptop.
+   Everything lives in a Shadow DOM (so the page's own translator and styles never touch it) and nothing is loaded from outside. */
+(function(){
+  'use strict';
+  if(window.top!==window)return;                          /* inside the phone's own browser: no second phone */
+  var D=document,H=null,R=null,SC,WP,SB,VW,NV,SH,DM,TS,VL,OFF,TCH,FR,OV;
+  var built=false,isOpen=false,wasFs=false,lastFocus=null,timers={};
+
+  /* ---------- state ---------- */
+  var S={lang:'',cur:'lock',open:[],wifi:true,data:true,bt:false,air:false,dnd:false,dark:false,bright:85,vol:60,ring:0,vib:true,saver:false,torch:false,
+    font:100,wall:0,timeout:120,net:0,connecting:-1,bd:[false,false,false],bdBusy:-1,batt:86,screen:true,shade:false,dev:0,sq:'',
+    spage:['main'],notifs:null,msgs:null,photos:[],calls:[],last:'',
+    ph:{tab:'keys',num:'',call:null},msg:{c:-1},cam:{front:false,zoom:1,vid:false,t0:0,fl:0},gal:{i:-1},calc:{d:'0',acc:null,op:null,fresh:true},
+    clk:{tab:'clock'},sw:{run:false,t0:0,acc:0,laps:[]},tm:{set:300,run:false,end:0,left:300},cal:{y:0,m:0,sel:-1},notes:{list:null,cur:-1},web:{n:0}};
+  var NETS=[['PGPT-Lom-WiFi',1],['STEM-Lab',1],['Guest',0],['Home_5G',1]];
+  var BTD=[['Слушалки','Headphones','🎧'],['Колонка','Speaker','🔊'],['Часовник','Watch','⌚']];
+  var RINGS=[['Класика','Classic',[[880,.18],[660,.18],[880,.18],[660,.3]]],['Кристал','Crystal',[[1320,.12],[1760,.12],[1320,.12],[1760,.3]]],['Пулс','Pulse',[[440,.25],[440,.25],[550,.4]]]];
+  var WALLS=['linear-gradient(165deg,#0f2a4a,#1f5fa8 55%,#f2a900)','linear-gradient(200deg,#1b1b3a,#6a3093 60%,#ff7e5f)','linear-gradient(165deg,#052e16,#16a34a 60%,#bef264)','radial-gradient(circle at 30% 20%,#fde68a,#f97316 50%,#7c2d12)'];
+  var APPS={
+    phone:{n:['Телефон','Phone'],ic:'📞',bg:'#16a34a'},msg:{n:['Съобщения','Messages'],ic:'💬',bg:'#2563eb'},web:{n:['Браузър','Browser'],ic:'🌐',bg:'#0ea5e9'},
+    cam:{n:['Камера','Camera'],ic:'📷',bg:'#475569'},gal:{n:['Галерия','Gallery'],ic:'🖼️',bg:'#db2777'},calc:{n:['Калкулатор','Calculator'],ic:'🧮',bg:'#ea580c'},
+    clk:{n:['Часовник','Clock'],ic:'⏰',bg:'#7c3aed'},cal:{n:['Календар','Calendar'],ic:'📅',bg:'#dc2626'},notes:{n:['Бележки','Notes'],ic:'📝',bg:'#ca8a04'},
+    set:{n:['Настройки','Settings'],ic:'⚙️',bg:'#64748b'},pgpt:{n:['ПГПТ – Лом','PGPT – Lom'],ic:'🎓',bg:'#0f2a4a'}};
+  var GRID=['pgpt','gal','calc','clk','cal','notes','set'],DOCK=['phone','msg','web','cam'];
+  var PHOTOS=[];
+
+  /* ---------- helpers ---------- */
+  function pageEn(){return (D.documentElement.lang||'bg').indexOf('en')===0}
+  function lang(){return S.lang||(pageEn()?'en':'bg')}
+  function L(b,e){return lang()==='en'?e:b}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+  function pad(n){return n<10?'0'+n:''+n}
+  function hm(d){d=d||new Date();return pad(d.getHours())+':'+pad(d.getMinutes())}
+  function fmt(o,d){try{return new Intl.DateTimeFormat(lang()==='en'?'en-GB':'bg-BG',o).format(d||new Date())}catch(e){return ''}}
+  function cap(s){return s.charAt(0).toUpperCase()+s.slice(1)}
+  function dateLong(){return cap(fmt({weekday:'long',day:'numeric',month:'long'}))}
+  function $(s,r){return (r||R).querySelector(s)}
+  function $$(s,r){return [].slice.call((r||R).querySelectorAll(s))}
+  function nm(id){return APPS[id].n[lang()==='en'?1:0]}
+  function toast(t){TS.textContent=t;TS.classList.add('on');clearTimeout(timers.toast);timers.toast=setTimeout(function(){TS.classList.remove('on')},2200)}
+  var AC=null;
+  function beep(f,d,force){
+    if(S.vol<=0||(S.dnd&&!force))return;
+    try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();var o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime;
+      o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(S.vol/100*.14+.0002,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+d+.02)}catch(e){}
+  }
+  function melody(a){var t=0;a.forEach(function(n){setTimeout(function(){beep(n[0],n[1],true)},t*1000);t+=n[1]+.04})}
+  function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+  function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+
+  /* ---------- the small phone on the page ---------- */
+  function miniLabel(m){m.setAttribute('aria-label',pageEn()?'Android phone – press to open the interactive simulator full screen':'Андроид телефон – натиснете, за да отворите интерактивния симулатор на цял екран')}
+  function buildMini(m){
+    if(m.__aph)return;m.__aph=1;
+    m.innerHTML='<div class="aph-sway"><div class="aph-body"><div class="aph-scr"><span class="aph-clk">'+hm()+'</span><span class="aph-dt">'+esc(dateLong())+'</span><div class="aph-apps"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span class="aph-pill"></span></div></div></div><span class="aph-hint">Android ▸</span>';
+    miniLabel(m);
+  }
+  function scanMini(root){var a=root.querySelectorAll?root.querySelectorAll('.aph-mini'):[];for(var i=0;i<a.length;i++)buildMini(a[i]);if(root.classList&&root.classList.contains('aph-mini'))buildMini(root)}
+  D.addEventListener('click',function(e){var m=e.target.closest&&e.target.closest('.aph-mini');if(m){e.preventDefault();openSim(m)}});
+  D.addEventListener('keydown',function(e){var m=e.target.closest&&e.target.closest('.aph-mini');if(m&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openSim(m)}});
+  new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1)scanMini(n)})})}).observe(D.body,{childList:true,subtree:true});
+  new MutationObserver(function(){[].forEach.call(D.querySelectorAll('.aph-mini'),miniLabel)}).observe(D.documentElement,{attributes:true,attributeFilter:['lang']});
+  setInterval(function(){[].forEach.call(D.querySelectorAll('.aph-clk'),function(c){c.textContent=hm()})},15000);
+  scanMini(D);
+
+  /* ---------- simulator shell ---------- */
+  var CSS='\
+:host{all:initial}*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}\
+.ov{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 38%,#1c2c48 0,#080c16 78%);font-family:Roboto,"Segoe UI",system-ui,-apple-system,Arial,sans-serif;color:#fff;overflow:hidden;animation:ovin .25s ease}\
+@keyframes ovin{from{opacity:0}to{opacity:1}}\
+.x{position:absolute;top:14px;right:16px;z-index:9;width:46px;height:46px;border-radius:50%;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.1);color:#fff;font-size:20px;cursor:pointer}\
+.x:hover{background:rgba(255,255,255,.24)}.x:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #f2a900;outline-offset:2px}\
+.hint{position:absolute;left:0;right:0;bottom:10px;text-align:center;font-size:13px;color:rgba(255,255,255,.55);pointer-events:none}\
+.frame{position:absolute;left:50%;top:50%;width:404px;height:844px;margin:-422px 0 0 -202px;transform:scale(var(--sc,1));background:#0b0b0d;border-radius:56px;padding:12px;box-shadow:0 0 0 2px #3a3d44,0 0 0 5px #15171b,0 30px 90px rgba(0,0,0,.65),inset 0 0 6px #000}\
+.hb{position:absolute;right:-7px;width:5px;border-radius:0 3px 3px 0;background:#2a2d33;cursor:pointer;border:0;padding:0}.hb::after{content:"";position:absolute;inset:0 -7px 0 -3px}.hb:hover{background:#4a4e57}\
+.hb.vu{top:150px;height:46px}.hb.vd{top:202px;height:46px}.hb.pw{top:280px;height:66px}\
+.screen{position:relative;width:380px;height:820px;border-radius:44px;overflow:hidden;background:#000;color:var(--fg);font-size:calc(14px*var(--fs,1));\
+--bg:#f4f6fa;--fg:#111827;--mut:#6b7280;--card:#fff;--line:#e3e7ee;--acc:#1f5fa8;--sh:rgba(244,246,250,.97);user-select:none;-webkit-user-select:none}\
+.screen.dark{--bg:#121316;--fg:#f3f4f6;--mut:#9ca3af;--card:#1e2025;--line:#2d3038;--acc:#8ab4f8;--sh:rgba(18,19,22,.97)}\
+.wp{position:absolute;inset:0;transition:background .4s}\
+.holep{position:absolute;left:50%;top:10px;width:13px;height:13px;margin-left:-6.5px;border-radius:50%;background:#000;box-shadow:0 0 0 2px rgba(255,255,255,.07);z-index:30;pointer-events:none}\
+.sb{position:absolute;top:0;left:0;right:0;height:36px;padding:3px 22px 0;display:flex;align-items:center;justify-content:space-between;font-size:.9em;font-weight:600;color:#fff;z-index:20;cursor:pointer;text-shadow:0 1px 3px rgba(0,0,0,.35)}\
+.screen.inapp .sb,.screen.shd .sb{color:var(--fg);text-shadow:none}.screen.v-cam .sb{color:#fff;text-shadow:none}\
+.sr{display:flex;align-items:center;gap:6px}.sr svg{width:1.15em;height:1.15em}.sr .sg{display:inline-flex;align-items:flex-end;gap:1.5px;height:.95em}.sg i{display:block;width:3px;background:currentColor;border-radius:1px}\
+.bat{display:inline-flex;align-items:center;gap:3px;font-size:.88em}.bat b{position:relative;display:inline-block;width:1.7em;height:.85em;border:1.5px solid currentColor;border-radius:3px;padding:1px}.bat b::after{content:"";position:absolute;right:-4px;top:25%;width:2px;height:50%;background:currentColor;border-radius:0 1px 1px 0}.bat b i{display:block;height:100%;background:currentColor;border-radius:1px}.screen.saver .bat b i{background:#f59e0b}\
+.view{position:absolute;inset:0;overflow:hidden}\
+.app{position:absolute;inset:0;padding:36px 0 48px;background:var(--bg);color:var(--fg);display:flex;flex-direction:column;animation:appin .22s ease}\
+@keyframes appin{from{opacity:.4;transform:scale(.94)}to{opacity:1;transform:none}}\
+.nav{position:absolute;left:0;right:0;bottom:0;height:48px;display:flex;justify-content:center;gap:34px;align-items:center;z-index:20;color:#fff}\
+.screen.inapp .nav,.screen.shd .nav{color:var(--fg)}.screen.v-cam .nav{color:#fff}.screen.v-lock .nav{display:none}\
+.nav button{width:64px;height:40px;border:0;background:none;color:inherit;cursor:pointer;border-radius:20px;display:grid;place-items:center}.nav button:hover{background:rgba(127,127,127,.22)}.nav svg{width:22px;height:22px}\
+.dim{position:absolute;inset:0;background:#000;pointer-events:none;z-index:40;transition:opacity .2s}\
+.tch{position:absolute;right:-30px;top:-30px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,230,.95),rgba(255,255,200,0) 70%);pointer-events:none;z-index:25;opacity:0;transition:opacity .3s}.tch.on{opacity:1}\
+.toast{position:absolute;left:50%;bottom:78px;transform:translate(-50%,20px);background:rgba(30,32,37,.95);color:#fff;font-size:.9em;padding:9px 16px;border-radius:20px;opacity:0;pointer-events:none;transition:all .25s;z-index:45;max-width:86%;text-align:center}.toast.on{opacity:1;transform:translate(-50%,0)}\
+.vol{position:absolute;right:12px;top:34%;width:44px;height:170px;border-radius:22px;background:rgba(30,32,37,.92);z-index:44;opacity:0;pointer-events:none;transition:opacity .2s;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:8px 0;gap:5px;font-size:.85em;color:#fff}.vol.on{opacity:1}.vol i{display:block;width:12px;border-radius:6px;background:#8ab4f8;min-height:6px}.vol .vt{flex:1;display:flex;align-items:flex-end}\
+.off{position:absolute;inset:0;background:#000;z-index:60;cursor:pointer;display:none;align-items:center;justify-content:center;color:#444;font-size:.85em}.off.on{display:flex}\
+/* lock + home */\
+.lock{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.35);cursor:pointer;touch-action:none;padding-top:88px}\
+.lk-t{font-size:5.6em;font-weight:300;letter-spacing:-2px;line-height:1}.lk-d{font-size:1.1em;margin-top:6px}.lk-n{margin-top:26px;width:84%;display:grid;gap:8px}\
+.lk-n div{background:rgba(255,255,255,.2);backdrop-filter:blur(10px);border-radius:16px;padding:10px 14px;font-size:.9em;text-shadow:none}.lk-n b{display:block}\
+.lk-h{position:absolute;bottom:34px;left:0;right:0;text-align:center;font-size:.9em;animation:lkh 2s ease-in-out infinite}@keyframes lkh{50%{transform:translateY(-6px);opacity:.7}}\
+.home{position:absolute;inset:0;padding:48px 16px 56px;display:flex;flex-direction:column;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.35)}\
+.wid{padding:14px 8px 10px}.wclk{font-size:4.2em;font-weight:300;letter-spacing:-2px;line-height:1}.wdt{font-size:1.05em;margin-top:4px}\
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px 4px;margin-top:20px}\
+.ic{border:0;background:none;color:inherit;font:inherit;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;text-shadow:inherit;padding:4px 0;border-radius:14px}\
+.ic:hover .ib{transform:scale(1.08)}.ib{width:54px;height:54px;border-radius:17px;display:grid;place-items:center;font-size:27px;box-shadow:0 3px 8px rgba(0,0,0,.3);transition:transform .15s;overflow:hidden;text-shadow:none}.ib img{width:86%;height:86%;object-fit:contain}.il{font-size:.78em;max-width:74px;text-align:center;line-height:1.15}\
+.sp{flex:1}.srch{margin:0 4px 16px;padding:13px 18px;border-radius:28px;background:rgba(255,255,255,.9);color:#4b5563;text-shadow:none;cursor:pointer;display:flex;gap:10px;align-items:center}.dock{display:grid;grid-template-columns:repeat(4,1fr);padding:10px 6px;border-radius:30px;background:rgba(255,255,255,.2);backdrop-filter:blur(12px)}.dock .il{display:none}\
+/* recents */\
+.rec{position:absolute;inset:0;padding:60px 0 56px;color:#fff;display:flex;flex-direction:column;background:rgba(10,14,24,.55);backdrop-filter:blur(8px)}\
+.rl{flex:1;display:flex;gap:16px;overflow-x:auto;padding:10px 40px;scroll-snap-type:x mandatory;align-items:center}.rl::-webkit-scrollbar{display:none}\
+.rc{flex:none;width:236px;height:430px;border-radius:24px;background:var(--bg);color:var(--fg);scroll-snap-align:center;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;box-shadow:0 8px 30px rgba(0,0,0,.4)}\
+.rc header{display:flex;align-items:center;gap:8px;padding:10px 12px;font-weight:600;border-bottom:1px solid var(--line)}.rc header span.ib{width:28px;height:28px;font-size:15px;border-radius:9px}.rc header b{flex:1}.rc header button{border:0;background:none;color:var(--mut);font-size:1.3em;cursor:pointer;width:32px;height:32px;border-radius:50%}\
+.rc .rb{flex:1;display:grid;place-items:center;font-size:64px}.rcl{align-self:center;margin-top:6px;border:1px solid rgba(255,255,255,.4);background:none;color:#fff;border-radius:20px;padding:9px 20px;font:inherit;cursor:pointer}.emp{margin:auto;font-size:1.1em;opacity:.85}\
+/* shade */\
+.shade{position:absolute;inset:0;padding:44px 14px 56px;background:var(--sh);color:var(--fg);z-index:15;transform:translateY(-104%);transition:transform .28s cubic-bezier(.3,.8,.3,1);display:flex;flex-direction:column;gap:12px;overflow:hidden;touch-action:none}.shade.on{transform:none}\
+.sh-t{font-size:2.6em;font-weight:300;line-height:1}.sh-d{color:var(--mut);margin-top:2px}\
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.tile{border:0;border-radius:22px;background:var(--card);color:var(--fg);font:inherit;padding:12px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;font-size:.74em;line-height:1.1;box-shadow:0 1px 3px rgba(0,0,0,.08)}.tile .ti{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:rgba(127,127,127,.22);font-size:19px}.tile.on .ti{background:var(--acc);color:#fff}\
+.sh-br{display:flex;align-items:center;gap:10px;padding:4px 8px}.sh-br input{flex:1}\
+.nots{flex:1;overflow:auto;display:flex;flex-direction:column;gap:8px}.nots::-webkit-scrollbar{display:none}\
+.nt{display:flex;gap:10px;background:var(--card);border-radius:18px;padding:10px 12px;font-size:.92em;align-items:flex-start;box-shadow:0 1px 3px rgba(0,0,0,.08)}.nt .ib{width:30px;height:30px;font-size:15px;border-radius:10px;flex:none;box-shadow:none}.nt div{flex:1;min-width:0}.nt b{display:block}.nt span{color:var(--mut);display:block;font-size:.95em}.nt button{border:0;background:none;color:var(--mut);cursor:pointer;font-size:1.1em}\
+.sh-a{display:flex;justify-content:space-between;align-items:center}.sh-a button{border:0;background:none;color:var(--acc);font:inherit;font-weight:600;cursor:pointer;padding:6px 8px;border-radius:10px}\
+/* shared app bits */\
+.hd{display:flex;align-items:center;gap:6px;padding:6px 8px 6px 6px;min-height:52px}.hd h1{margin:0;font-size:1.35em;font-weight:500;flex:1}.hd .bk,.ib2{width:42px;height:42px;border:0;border-radius:50%;background:none;color:var(--fg);font-size:1.4em;cursor:pointer}.hd .bk:hover,.ib2:hover{background:rgba(127,127,127,.18)}\
+.sc{flex:1;overflow-y:auto;overflow-x:hidden;padding:0 12px 12px}.sc::-webkit-scrollbar{width:0}\
+button{font-family:inherit}input,textarea,select{font-family:inherit;color:inherit;font-size:1em}\
+input[type=range]{width:100%;accent-color:var(--acc)}\
+.row{display:flex;align-items:center;gap:14px;width:100%;border:0;background:none;color:inherit;text-align:left;padding:11px 8px;border-radius:16px;cursor:pointer;font:inherit}.row:hover{background:rgba(127,127,127,.12)}\
+.ri{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:19px;color:#fff}.rt{flex:1;min-width:0}.rt b{display:block;font-weight:500}.rt small{display:block;color:var(--mut);font-size:.84em;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\
+.sw{flex:none;width:46px;height:26px;border-radius:13px;background:#9ca3af;position:relative;transition:background .2s}.sw::after{content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}.sw.on{background:var(--acc)}.sw.on::after{transform:translateX(20px)}\
+.card{background:var(--card);border-radius:22px;padding:6px 6px;margin:8px 0;box-shadow:0 1px 3px rgba(0,0,0,.06)}.cp{padding:14px 16px}\
+.srchb{display:block;width:100%;border:0;border-radius:26px;background:var(--card);padding:13px 18px;margin:4px 0 10px;box-shadow:0 1px 3px rgba(0,0,0,.08);outline-offset:2px}\
+.sl{padding:10px 12px}.sl label{display:flex;justify-content:space-between;margin-bottom:4px}.sl label span{color:var(--mut)}\
+.big{font-size:3.6em;font-weight:300;text-align:center;margin:12px 0 4px}.bar{height:12px;border-radius:6px;background:rgba(127,127,127,.25);overflow:hidden;display:flex;margin:10px 0}.bar i{display:block;height:100%}\
+.wl{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:10px 12px}.wl button{aspect-ratio:9/14;border-radius:14px;border:3px solid transparent;cursor:pointer}.wl button.on{border-color:var(--acc)}\
+select{width:100%;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--card)}\
+.tabs{display:flex;border-top:1px solid var(--line);background:var(--card)}.tabs button{flex:1;border:0;background:none;color:var(--mut);padding:9px 0 8px;font-size:.78em;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}.tabs button span{font-size:1.5em}.tabs button.on{color:var(--acc);font-weight:600}\
+/* phone */\
+.pnum{min-height:60px;text-align:center;font-size:2em;padding:14px 10px 4px;letter-spacing:1px;word-break:break-all}.pn2{text-align:center;color:var(--mut);min-height:20px;font-size:.9em}\
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 14px;padding:12px 26px}.keys button{height:60px;border-radius:30px;border:0;background:var(--card);color:var(--fg);font-size:1.6em;cursor:pointer;line-height:1;box-shadow:0 1px 2px rgba(0,0,0,.1)}.keys button small{display:block;font-size:.34em;color:var(--mut);letter-spacing:2px;margin-top:2px;height:1em}.keys button:active{background:var(--line)}\
+.callb{display:flex;justify-content:center;gap:24px;padding:4px 0 10px}.callb button{width:64px;height:64px;border-radius:50%;border:0;color:#fff;font-size:1.7em;cursor:pointer;background:#16a34a}.callb .bs{background:var(--card);color:var(--fg)}\
+.call{position:absolute;inset:0;z-index:5;background:linear-gradient(170deg,#0f2a4a,#13335c);color:#fff;display:flex;flex-direction:column;align-items:center;padding-top:110px;text-shadow:none}.call .av{width:104px;height:104px;border-radius:50%;background:rgba(255,255,255,.18);display:grid;place-items:center;font-size:48px}.call h2{font-weight:400;margin:16px 0 4px;font-size:1.7em}.call .cs{opacity:.8}.call .cb{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:70px}.call .cb button{width:64px;height:64px;border-radius:50%;border:0;background:rgba(255,255,255,.18);color:#fff;font-size:1.4em;cursor:pointer}.call .cb button.on{background:#fff;color:#0f2a4a}.call .end{position:absolute;bottom:80px;width:70px;height:70px;border-radius:50%;border:0;background:#dc2626;color:#fff;font-size:1.8em;cursor:pointer;transform:rotate(135deg)}\
+/* messages */\
+.chat{flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:6px}.chat::-webkit-scrollbar{width:0}.bub{max-width:78%;padding:9px 13px;border-radius:18px;line-height:1.3;word-wrap:break-word;white-space:pre-wrap;user-select:text;-webkit-user-select:text}.bub.me{align-self:flex-end;background:var(--acc);color:#fff;border-bottom-right-radius:5px}.bub.th{align-self:flex-start;background:var(--card);border-bottom-left-radius:5px;box-shadow:0 1px 2px rgba(0,0,0,.08)}.bub small{display:block;opacity:.65;font-size:.72em;margin-top:2px}\
+.cin{display:flex;gap:8px;padding:8px 10px;background:var(--card);border-top:1px solid var(--line)}.cin input,.cin textarea{flex:1;border:0;background:var(--bg);border-radius:22px;padding:11px 16px;min-width:0;user-select:text;-webkit-user-select:text}.cin button{width:44px;height:44px;border:0;border-radius:50%;background:var(--acc);color:#fff;font-size:1.2em;cursor:pointer}\
+.av2{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:19px;color:#fff;flex:none}\
+/* camera / gallery */\
+.camv{background:#000!important;color:#fff}.vf{position:absolute;inset:0;background-size:cover;background-position:center;transition:transform .25s}.vf.fr{transform:scaleX(-1)}.vfz{position:absolute;inset:0;overflow:hidden}\
+.camt{position:absolute;left:0;right:0;bottom:48px;padding:12px 0 18px;background:linear-gradient(transparent,rgba(0,0,0,.65));display:flex;flex-direction:column;align-items:center;gap:12px}.modes{display:flex;gap:18px;font-size:.88em}.modes button{border:0;background:none;color:#ccc;font:inherit;cursor:pointer;padding:4px 6px}.modes .on{color:#fcd34d;font-weight:600}\
+.shut{display:flex;align-items:center;justify-content:space-between;width:100%;padding:0 34px}.shut .th{width:48px;height:48px;border-radius:12px;border:2px solid #fff;background:#333 center/cover;cursor:pointer}.shb{width:68px;height:68px;border-radius:50%;border:4px solid #fff;background:none;cursor:pointer;display:grid;place-items:center}.shb i{display:block;width:52px;height:52px;border-radius:50%;background:#fff;transition:all .15s}.shb.rec i{width:26px;height:26px;border-radius:6px;background:#ef4444}.shut .fl{width:48px;height:48px;border-radius:50%;border:0;background:rgba(255,255,255,.2);color:#fff;font-size:1.4em;cursor:pointer}\
+.camh{position:absolute;top:44px;left:0;right:0;display:flex;justify-content:center;gap:10px;z-index:3}.camh button{border:0;border-radius:16px;background:rgba(0,0,0,.45);color:#fff;padding:5px 12px;cursor:pointer;font:inherit;font-size:.85em}.camh .on{background:#fcd34d;color:#000}.recd{position:absolute;top:84px;left:50%;transform:translateX(-50%);background:#ef4444;color:#fff;border-radius:14px;padding:3px 12px;font-size:.85em;z-index:3}\
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:4}.flash.on{animation:fl .35s}@keyframes fl{0%{opacity:.9}100%{opacity:0}}\
+.gg{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:0 3px}.gg button{aspect-ratio:1;border:0;padding:0;background:#ccc center/cover;cursor:pointer;position:relative}.gg button em{position:absolute;right:4px;bottom:4px;background:rgba(0,0,0,.6);color:#fff;border-radius:8px;padding:0 5px;font-size:.7em;font-style:normal}\
+.gv{position:absolute;inset:0;background:#000;z-index:5;color:#fff;display:flex;flex-direction:column}.gv .gi{flex:1;background:center/contain no-repeat}.gv .gt{display:flex;justify-content:space-between;align-items:center;padding:42px 12px 8px}.gv .gb{display:flex;justify-content:space-around;padding:8px 0 56px}.gv button{border:0;background:none;color:#fff;font-size:1.5em;cursor:pointer;width:48px;height:44px;border-radius:50%}\
+/* calc */\
+.cd{flex:1;display:flex;align-items:flex-end;justify-content:flex-end;padding:20px 22px 10px;font-size:4em;font-weight:300;overflow:hidden;white-space:nowrap}.ck{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:10px 14px 16px}.ck button{height:62px;border-radius:31px;border:0;font-size:1.5em;cursor:pointer;background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.1)}.ck .op{background:#f2a900;color:#111}.ck .fn{background:rgba(127,127,127,.3)}.ck .z{grid-column:span 2}.ck button:active{filter:brightness(.85)}\
+/* clock / cal / notes / web */\
+.an{display:block;margin:6px auto;width:230px;height:230px}.dg{text-align:center;font-size:2.8em;font-weight:300}.cities{padding:8px 4px}.ct{display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--line)}.ct span{color:var(--mut);font-size:.85em;display:block}\
+.swd{font-size:3.4em;font-weight:300;text-align:center;margin:40px 0 10px;font-variant-numeric:tabular-nums}.cbtn{display:flex;gap:14px;justify-content:center;padding:6px}.cbtn button,.pill{border:0;border-radius:26px;padding:12px 24px;font:inherit;font-weight:600;cursor:pointer;background:var(--acc);color:#fff}.cbtn .gr{background:rgba(127,127,127,.28);color:var(--fg)}.lap2{display:flex;justify-content:space-between;padding:8px 24px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}\
+.tmc{display:flex;align-items:center;justify-content:center;gap:16px;margin:14px 0}.tmc button{width:44px;height:44px;border-radius:50%;border:0;background:rgba(127,127,127,.28);color:var(--fg);font-size:1.4em;cursor:pointer}.pr{display:flex;gap:8px;justify-content:center;margin-bottom:14px}.pr button{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:18px;padding:7px 14px;cursor:pointer}\
+.cg{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;gap:2px;padding:4px 8px}.cg b{font-size:.74em;color:var(--mut);font-weight:500;padding:6px 0}.cg button{aspect-ratio:1;border:0;background:none;color:var(--fg);border-radius:50%;cursor:pointer;font:inherit;position:relative}.cg button.td{background:var(--acc);color:#fff}.cg button.sl2{box-shadow:0 0 0 2px var(--acc) inset}.cg button.hol::after{content:"";position:absolute;bottom:4px;left:50%;margin-left:-2px;width:4px;height:4px;border-radius:50%;background:#dc2626}.cg button.o{opacity:.35}\
+.nl{padding:2px 0}.nl .row b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nta{flex:1;width:100%;border:0;background:var(--bg);padding:6px 16px;resize:none;line-height:1.45;user-select:text;-webkit-user-select:text}.fab{position:absolute;right:18px;bottom:66px;width:56px;height:56px;border-radius:18px;border:0;background:var(--acc);color:#fff;font-size:1.9em;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:3}\
+.wb{display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--card);border-bottom:1px solid var(--line)}.wb .u{flex:1;border-radius:18px;background:var(--bg);padding:9px 14px;font-size:.84em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--mut)}.wf{flex:1;border:0;width:100%;background:#fff}.off2{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:30px;color:var(--mut)}.off2 span{font-size:64px}\
+.hero{border-radius:22px;background:linear-gradient(150deg,#0f2a4a,#1f5fa8);color:#fff;padding:18px;display:flex;gap:14px;align-items:center;margin-top:6px}.hero img{width:64px;height:64px;object-fit:contain;background:#fff;border-radius:16px;padding:4px}.hero h2{margin:0;font-size:1.25em}.hero p{margin:4px 0 0;font-size:.86em;opacity:.9}\
+.act{display:flex;gap:10px;margin:10px 0}.act button{flex:1;border:0;border-radius:20px;padding:12px;font:inherit;font-weight:600;cursor:pointer;background:var(--acc);color:#fff}.act button+button{background:#f2a900;color:#111}\
+';
+
+  function build(){
+    if(built)return;built=true;
+    H=D.createElement('div');H.id='aphone-host';H.setAttribute('translate','no');H.style.cssText='position:fixed;inset:0;z-index:2147483001;display:none';
+    R=H.attachShadow({mode:'open'});
+    R.innerHTML='<style>'+CSS+'</style><div class="ov" role="dialog" aria-modal="true"><button class="x" data-a="close">✕</button>'+
+      '<div class="frame"><button class="hb vu" data-a="volup"></button><button class="hb vd" data-a="voldn"></button><button class="hb pw" data-a="power"></button>'+
+      '<div class="screen"><div class="wp"></div><i class="holep"></i><div class="view"></div><div class="shade"></div><div class="sb" data-a="shade"></div>'+
+      '<div class="nav"><button data-a="back" data-l="Назад|Back"><svg viewBox="0 0 24 24"><path d="M16 4.5L6.5 12 16 19.5z" fill="currentColor"/></svg></button>'+
+      '<button data-a="home" data-l="Начало|Home"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></button>'+
+      '<button data-a="recents" data-l="Скорошни|Recent apps"><svg viewBox="0 0 24 24"><rect x="5.5" y="5.5" width="13" height="13" rx="3" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></button></div>'+
+      '<div class="tch"></div><div class="dim"></div><div class="vol"></div><div class="toast" role="status"></div><div class="off" data-a="wake"></div></div></div>'+
+      '<div class="hint"></div></div>';
+    OV=$('.ov');FR=$('.frame');SC=$('.screen');WP=$('.wp');SB=$('.sb');VW=$('.view');NV=$('.nav');SH=$('.shade');DM=$('.dim');TS=$('.toast');VL=$('.vol');OFF=$('.off');TCH=$('.tch');
+    D.body.appendChild(H);
+    R.addEventListener('click',onClick);R.addEventListener('input',onInput);R.addEventListener('change',onInput);R.addEventListener('keydown',onKey);
+    R.addEventListener('pointerdown',wakeTimer,true);
+    swipe(SB,function(){},function(){openShade(true)});
+    swipe(SH,function(){openShade(false)},function(){});
+    D.addEventListener('keydown',function(e){if(isOpen&&e.key==='Escape'){e.preventDefault();closeSim()}});
+    D.addEventListener('fullscreenchange',function(){if(isOpen&&wasFs&&!D.fullscreenElement)closeSim(true)});
+    window.addEventListener('resize',function(){if(isOpen)fit()});
+    setInterval(tick1s,1000);
+    setInterval(function(){if(!isOpen||!S.screen)return;S.drain=(S.drain||0)+1;if(S.drain>=(S.saver?240:120)){S.drain=0;if(S.batt>1){S.batt--;if(S.batt===15)toast(L('Батерията е ниска (15%)','Battery low (15%)'));SB.innerHTML=sbHTML()}}},1000);
+  }
+
+  function swipe(el,up,down){
+    var y0=null,x0=0;
+    el.addEventListener('pointerdown',function(e){y0=e.clientY;x0=e.clientX});
+    el.addEventListener('pointerup',function(e){if(y0==null)return;var dy=e.clientY-y0,dx=e.clientX-x0;y0=null;if(Math.abs(dy)>46&&Math.abs(dy)>Math.abs(dx)){el.__sw=Date.now();if(dy<0)up();else down()}});
+    el.addEventListener('pointercancel',function(){y0=null});
+  }
+
+  /* ---------- open / close / fit ---------- */
+  function openSim(from){
+    build();lastFocus=from||D.activeElement;
+    S.lang=S.lang||'';S.cur='lock';S.screen=true;S.shade=false;S.spage=['main'];
+    if(!S.notifs)initData();
+    collectPhotos();
+    H.style.display='block';isOpen=true;
+    [].forEach.call(D.body.children,function(c){if(c!==H&&!c.hasAttribute('inert')){c.setAttribute('inert','');c.__aph=1}});
+    D.documentElement.style.overflow='hidden';
+    fit();render();wakeTimer();
+    var fs=H.requestFullscreen||H.webkitRequestFullscreen;
+    if(fs){try{var p=fs.call(H);wasFs=true;if(p&&p.catch)p.catch(function(){wasFs=false})}catch(e){wasFs=false}}
+    setTimeout(function(){var b=$('.x');if(b)b.focus({preventScroll:true})},50);
+  }
+  function closeSim(fromFs){
+    if(!isOpen)return;isOpen=false;
+    clearFast();clearTimeout(timers.sleep);
+    H.style.display='none';
+    [].forEach.call(D.body.children,function(c){if(c.__aph&&c!==H){c.removeAttribute('inert');c.__aph=0}});
+    D.documentElement.style.overflow='';
+    if(!fromFs&&D.fullscreenElement){try{D.exitFullscreen()}catch(e){}}
+    wasFs=false;
+    if(lastFocus&&lastFocus.focus){try{lastFocus.focus({preventScroll:true})}catch(e){}}
+  }
+  function fit(){
+    var w=window.innerWidth,h=window.innerHeight,mob=w<=560||h<=520;
+    OV.classList.toggle('mob',mob);
+    var st=R.getElementById?null:null;
+    if(mob){FR.style.cssText='position:absolute;inset:0;width:auto;height:auto;margin:0;transform:none;padding:0;border-radius:0;box-shadow:none;background:#000';
+      SC.style.cssText='width:100%;height:100%;border-radius:0';$$('.hb,.hint,.holep').forEach(function(e){e.style.display='none'});
+      var x=$('.x');x.style.cssText='top:6px;right:6px;width:30px;height:30px;font-size:13px;background:rgba(0,0,0,.35);z-index:50';SB.style.paddingRight='44px'}
+    else{FR.style.cssText='';SC.style.cssText='';$$('.hb,.hint,.holep').forEach(function(e){e.style.display=''});$('.x').style.cssText='';SB.style.paddingRight='';
+      var sc=Math.min((h-58)/844,(w-24)/404,1.45);FR.style.setProperty('--sc',Math.max(.35,sc).toFixed(3));
+      $('.hint').textContent=L('Esc – изход · клик върху екрана, за да използвате телефона · бутоните отстрани работят','Esc – exit · click the screen to use the phone · the side buttons work');}
+    var ct=$('.x');ct.setAttribute('aria-label',L('Затвори симулатора','Close the simulator'));
+  }
+
+  /* ---------- data ---------- */
+  function initData(){
+    S.notifs=[{id:1,app:'pgpt',t:['ПГПТ – Лом','PGPT – Lom'],x:['Добре дошли в симулатора! Разгледайте приложенията.','Welcome to the simulator! Explore the apps.']},
+      {id:2,app:'set',t:['Съвет','Tip'],x:['Плъзнете надолу от горния ръб за бързи настройки.','Swipe down from the top edge for quick settings.']},
+      {id:3,app:'gal',t:['Галерия','Gallery'],x:['Вижте снимките от новия STEM център.','See the photos from the new STEM center.']}];
+    S.msgs=[{n:['ПГПТ – Лом','PGPT – Lom'],ic:'🎓',c:'#0f2a4a',bot:1,m:[[0,['Здравейте! Аз съм помощникът на ПГПТ – Лом. Питайте за специалности, STEM център, прием или контакти.','Hello! I am the PGPT – Lom assistant. Ask about programmes, the STEM center, admission or contacts.']]]},
+      {n:['Клас 11 Б','Class 11 B'],ic:'👥',c:'#16a34a',m:[[0,['Утре има ли практика?','Is there practice tomorrow?']]]},
+      {n:['Мама','Mom'],ic:'❤️',c:'#db2777',m:[[0,['Не забравяй да обядваш 🙂','Don\'t forget to have lunch 🙂']]]}];
+    var d=new Date();S.cal.y=d.getFullYear();S.cal.m=d.getMonth();
+    var raw=lsGet('pgpt-aph-notes'),nl=null;try{nl=raw?JSON.parse(raw):null}catch(e){}
+    S.notes.list=nl&&nl.length?nl:[{id:1,x:'Добре дошли!\nТова е бележка в симулатора. Редактирайте я – записва се в браузъра ви.'}];
+  }
+  function collectPhotos(){
+    if(PHOTOS.length)return;
+    $$('.tour-st[data-src]',D).forEach(function(b){var s=b.getAttribute('data-src');if(s&&PHOTOS.every(function(p){return p.s!==s}))PHOTOS.push({s:s,t:b.getAttribute('data-title')||''})});
+    ['img/32366ac7625b.jpg','img/ef255abd6ae1.jpg'].forEach(function(s){if(PHOTOS.every(function(p){return p.s!==s}))PHOTOS.push({s:s,t:''})});
+    PHOTOS=PHOTOS.slice(0,12);
+  }
+  function logoSrc(){var i=D.querySelector('.brand img');return i?i.getAttribute('src'):''}
+  function icoHTML(id,cls){var a=APPS[id],lg=id==='pgpt'?logoSrc():'';return '<span class="ib'+(cls?' '+cls:'')+'" style="background:'+(lg?'#fff':a.bg)+'">'+(lg?'<img alt="" src="'+esc(lg)+'">':a.ic)+'</span>'}
+
+  /* ---------- status bar / shade ---------- */
+  function sbHTML(){
+    var r='';
+    if(S.torch)r+='<span>🔦</span>';
+    if(S.dnd)r+='<span>🔕</span>';
+    if(S.bt&&!S.air)r+='<svg viewBox="0 0 24 24"><path d="M7 7l10 10-5 5V2l5 5L7 17" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>';
+    if(S.air)r+='<span>✈️</span>';
+    else{
+      if(S.wifi)r+='<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 18.6a1.7 1.7 0 110 3.4 1.7 1.7 0 010-3.4zM5 12.8a10 10 0 0114 0l-1.8 1.8a7.5 7.5 0 00-10.4 0zM1.3 9a15.2 15.2 0 0121.4 0l-1.8 1.8a12.7 12.7 0 00-17.8 0z"/></svg>';
+      if(S.data)r+='<span class="sg"><i style="height:35%"></i><i style="height:55%"></i><i style="height:78%"></i><i style="height:100%"></i></span>';
+    }
+    r+='<span class="bat"><b><i style="width:'+S.batt+'%"></i></b>'+S.batt+'%</span>';
+    return '<span class="sbt">'+hm()+'</span><span class="sr">'+r+'</span>';
+  }
+  function renderShade(){
+    var T=[['wifi','wifi','Wi-Fi','Wi-Fi','📶'],['bt','bt','Bluetooth','Bluetooth','🔵'],['dnd','dnd','Не безпокойте','Do not disturb','🔕'],['torch','torch','Фенерче','Flashlight','🔦'],
+      ['air','air','Самолетен режим','Airplane mode','✈️'],['dark','dark','Тъмна тема','Dark theme','🌙'],['saver','saver','Икономичен режим','Battery saver','🔋'],['data','data','Мобилни данни','Mobile data','📡']];
+    SH.innerHTML='<div><div class="sh-t">'+hm()+'</div><div class="sh-d">'+esc(dateLong())+'</div></div>'+
+      '<div class="tiles">'+T.map(function(t){return '<button class="tile'+(S[t[1]]?' on':'')+'" data-a="tog" data-k="'+t[1]+'" aria-pressed="'+(S[t[1]]?'true':'false')+'"><span class="ti">'+t[4]+'</span>'+L(t[2],t[3])+'</button>'}).join('')+'</div>'+
+      '<div class="sh-br"><span>☀️</span><input type="range" min="5" max="100" value="'+S.bright+'" data-i="bright" aria-label="'+L('Яркост','Brightness')+'"></div>'+
+      '<div class="nots">'+S.notifs.map(function(n){return '<div class="nt">'+icoHTML(n.app)+'<div><b>'+esc(n.t[lang()==='en'?1:0])+'</b><span>'+esc(n.x[lang()==='en'?1:0])+'</span></div><button data-a="delnot" data-v="'+n.id+'" aria-label="'+L('Премахни','Dismiss')+'">✕</button></div>'}).join('')+
+      (S.notifs.length?'':'<div class="emp" style="margin:20px auto;color:var(--mut)">'+L('Няма известия','No notifications')+'</div>')+'</div>'+
+      '<div class="sh-a"><button data-a="clearn">'+L('Изчисти всички','Clear all')+'</button><button data-a="shade" aria-label="'+L('Затвори','Close')+'">▲</button></div>';
+    SH.classList.toggle('on',S.shade);SC.classList.toggle('shd',S.shade);
+  }
+  function openShade(on){if(S.cur==='lock')return;S.shade=on;renderShade()}
+  function applyFx(){DM.style.opacity=((100-S.bright)/100*.72).toFixed(2);SC.style.setProperty('--fs',(S.font/100).toFixed(2));TCH.classList.toggle('on',S.torch)}
+  function wakeTimer(){clearTimeout(timers.sleep);if(S.timeout>0&&S.screen)timers.sleep=setTimeout(function(){if(isOpen&&!(S.cur==='cam'&&S.cam.vid))sleep()},S.timeout*1000)}
+  function sleep(){S.screen=false;S.cur='lock';S.shade=false;OFF.textContent='';OFF.classList.add('on');OFF.setAttribute('aria-label',L('Включи екрана','Wake screen'));clearFast();VW.innerHTML=''}
+  function wake(){S.screen=true;OFF.classList.remove('on');S.cur='lock';render();wakeTimer()}
+  function clearFast(){clearInterval(timers.fast);timers.fast=0}
+
+  /* ---------- render ---------- */
+  function render(){
+    clearFast();
+    var c=S.cur,key=c+'|'+(c==='set'?S.spage.join('>'):'')+'|'+(c==='msg'?S.msg.c:'')+(c==='gal'?S.gal.i:''),sc=$('.sc',VW),st=sc&&S.last===key?sc.scrollTop:0,h;
+    S.last=key;
+    SC.className='screen'+(S.dark?' dark':'')+(S.saver?' saver':'')+(S.shade?' shd':'')+(c==='lock'||c==='home'||c==='recents'?'':' inapp')+' v-'+c+(c==='gal'&&S.gal.i>=0?' v-cam':'');
+    WP.style.background=WALLS[S.wall];
+    SB.innerHTML=sbHTML();
+    if(c==='web'&&S.webOn===online()&&$('.wf',VW)){renderShade();applyFx();return}
+    if(c==='lock')h=lockHTML();else if(c==='home')h=homeHTML();else if(c==='recents')h=recentsHTML();else h='<div class="app'+(c==='cam'?' camv':'')+'">'+VIEWS[c]()+'</div>';
+    VW.innerHTML=h;
+    $$('[data-l]').forEach(function(b){var p=b.getAttribute('data-l').split('|');b.setAttribute('aria-label',p[lang()==='en'?1:0])});
+    var s2=$('.sc',VW);if(s2&&st)s2.scrollTop=st;
+    if(MOUNT[c])MOUNT[c]();
+    renderShade();applyFx();
+    var lk=$('.lock');if(lk)swipe(lk,function(){unlock()},function(){});
+  }
+  function lockHTML(){
+    return '<div class="lock" data-a="unlock" role="button" tabindex="0" aria-label="'+L('Отключи – плъзнете нагоре или натиснете','Unlock – swipe up or press')+'"><div class="lk-t">'+hm()+'</div><div class="lk-d">'+esc(dateLong())+'</div>'+
+      '<div class="lk-n">'+S.notifs.slice(0,2).map(function(n){return '<div><b>'+esc(n.t[lang()==='en'?1:0])+'</b>'+esc(n.x[lang()==='en'?1:0])+'</div>'}).join('')+'</div>'+
+      '<div class="lk-h">⌃ '+L('Плъзнете нагоре за отключване','Swipe up to unlock')+'</div></div>';
+  }
+  function homeHTML(){
+    return '<div class="home"><div class="wid"><div class="wclk">'+hm()+'</div><div class="wdt">'+esc(dateLong())+'</div></div>'+
+      '<div class="grid">'+GRID.map(function(id){return '<button class="ic" data-a="app" data-v="'+id+'">'+icoHTML(id)+'<span class="il">'+esc(nm(id))+'</span></button>'}).join('')+'</div><div class="sp"></div>'+
+      '<button class="srch" data-a="app" data-v="web" style="border:0;font:inherit;text-align:left"><span>🔍</span>'+L('Търсене или адрес','Search or type URL')+'</button>'+
+      '<div class="dock">'+DOCK.map(function(id){return '<button class="ic" data-a="app" data-v="'+id+'" aria-label="'+esc(nm(id))+'">'+icoHTML(id)+'<span class="il">'+esc(nm(id))+'</span></button>'}).join('')+'</div></div>';
+  }
+  function recentsHTML(){
+    if(!S.open.length)return '<div class="rec"><div class="emp">'+L('Няма скорошни приложения','No recent apps')+'</div></div>';
+    return '<div class="rec"><div class="rl">'+S.open.slice().reverse().map(function(id){return '<div class="rc" data-a="app" data-v="'+id+'" role="button" tabindex="0"><header>'+icoHTML(id)+'<b>'+esc(nm(id))+'</b><button data-a="kill" data-v="'+id+'" aria-label="'+L('Затвори','Close')+'">✕</button></header><div class="rb">'+APPS[id].ic+'</div></div>'}).join('')+'</div>'+
+      '<button class="rcl" data-a="killall">'+L('Изчисти всички','Clear all')+'</button></div>';
+  }
+
+  /* ---------- navigation ---------- */
+  function openApp(id){S.open=S.open.filter(function(x){return x!==id});S.open.push(id);S.cur=id;S.shade=false;render()}
+  function goHome(){S.cur='home';S.shade=false;render()}
+  function unlock(){if(S.cur!=='lock')return;S.cur='home';render()}
+  function goBack(){
+    if(S.shade){openShade(false);return}
+    var c=S.cur;if(c==='home'||c==='lock')return;
+    if(c==='recents'){goHome();return}
+    if(BACK[c]&&BACK[c]()){render();return}
+    goHome();
+  }
+  function notify(app,t,x){S.notifs.unshift({id:Date.now()+Math.random(),app:app,t:t,x:x});renderShade();if(S.cur==='lock')render()}
+
+  /* ---------- events ---------- */
+  function onKey(e){
+    if(phKey(e)){e.preventDefault();return}
+    if(e.key==='Enter'||e.key===' '){var t=e.target;if(t.getAttribute&&t.getAttribute('role')==='button'){e.preventDefault();t.click();return}}
+    if(e.key==='Enter'&&e.target.matches&&e.target.matches('[data-enter]')&&!e.shiftKey){e.preventDefault();ACT[e.target.getAttribute('data-enter')](e.target)}
+  }
+  function onClick(e){
+    var el=e.target.closest('[data-a]');if(!el)return;
+    if(el.__sw&&Date.now()-el.__sw<400)return;
+    var a=el.getAttribute('data-a');if(ACT[a])ACT[a](el,e);
+  }
+  function onInput(e){
+    var el=e.target,i=el.getAttribute&&el.getAttribute('data-i');if(!i)return;var v=el.value;
+    if(i==='bright'){S.bright=+v;applyFx();$$('[data-i=bright]').forEach(function(x){if(x!==el)x.value=v});var lb=$('[data-lv=bright]');if(lb)lb.textContent=v+'%'}
+    else if(i==='vol'){S.vol=+v;var l2=$('[data-lv=vol]');if(l2)l2.textContent=v+'%';beep(660,.08,true)}
+    else if(i==='font'){S.font=+v;applyFx();var l3=$('[data-lv=font]');if(l3)l3.textContent=v+'%'}
+    else if(i==='timeout'){S.timeout=+v;wakeTimer()}
+    else if(i==='sq'){S.sq=v.toLowerCase();filterSet()}
+    else if(i==='pnum'){S.ph.num=v.replace(/[^0-9+*#]/g,'');el.value=S.ph.num;phLabel()}
+    else if(i==='note'){var n=S.notes.list[S.notes.cur];if(n){n.x=v;saveNotes()}}
+  }
+  var ACT={
+    close:function(){closeSim()},
+    unlock:function(){unlock()},
+    home:function(){goHome()},back:function(){goBack()},
+    recents:function(){if(S.cur==='lock')return;S.shade=false;S.cur=S.cur==='recents'?'home':'recents';render()},
+    shade:function(el,e){if(S.cur==='lock')return;if(el&&el.classList&&el.classList.contains('sb')&&el.__sw&&Date.now()-el.__sw<400)return;openShade(!S.shade)},
+    power:function(){if(S.screen){sleep()}else wake()},wake:function(){wake()},
+    volup:function(){volBtn(10)},voldn:function(){volBtn(-10)},
+    app:function(el){var id=el.getAttribute('data-v');if(id==='gal')S.gal.i=-1;openApp(id)},
+    kill:function(el,e){e.stopPropagation();var id=el.getAttribute('data-v');S.open=S.open.filter(function(x){return x!==id});if(id==='cam')S.cam.vid=false;render()},
+    killall:function(){S.open=[];render()},
+    delnot:function(el){var id=el.getAttribute('data-v');S.notifs=S.notifs.filter(function(n){return String(n.id)!==id});renderShade()},
+    clearn:function(){S.notifs=[];renderShade();if(S.cur==='lock')render()},
+    tog:function(el){togg(el.getAttribute('data-k'))}
+  };
+  function volBtn(d){
+    S.vol=Math.max(0,Math.min(100,S.vol+d));
+    VL.innerHTML='<div class="vt"><i style="height:'+Math.max(4,S.vol*1.1)+'px"></i></div><span>'+(S.vol?'🔊':'🔇')+'</span><span>'+S.vol+'</span>';
+    VL.classList.add('on');clearTimeout(timers.vol);timers.vol=setTimeout(function(){VL.classList.remove('on')},1300);beep(660,.1,true);
+    if(S.cur==='set'&&S.spage[S.spage.length-1]==='sound')render();
+  }
+  function togg(k){
+    if(k==='air'){S.air=!S.air;if(S.air){S.wifi=false;S.bt=false;S.bd=[false,false,false];S.data=false}else{S.wifi=true;S.data=true}}
+    else if(k==='wifi'){S.wifi=!S.wifi;if(S.wifi&&S.air){S.air=false;S.data=true}}
+    else if(k==='bt'){S.bt=!S.bt;if(!S.bt)S.bd=[false,false,false];if(S.bt&&S.air)S.air=false}
+    else if(k==='data'){S.data=!S.data;if(S.data&&S.air)S.air=false}
+    else S[k]=!S[k];
+    if(k==='dnd'&&S.dnd)toast(L('Режим „Не безпокойте“ е включен','Do not disturb is on'));
+    if(k==='torch')toast(S.torch?L('Фенерчето е включено','Flashlight on'):L('Фенерчето е изключено','Flashlight off'));
+    if(k==='saver')toast(S.saver?L('Икономичният режим е включен','Battery saver on'):L('Икономичният режим е изключен','Battery saver off'));
+    render();
+  }
+
+  var VIEWS={},MOUNT={},BACK={};
+
+  /* ---------- clocks refreshed every second ---------- */
+  function tick1s(){
+    if(!isOpen||!S.screen)return;
+    var t=hm();$$('.sbt,.lk-t,.wclk,.sh-t').forEach(function(e){if(e.textContent!==t)e.textContent=t});
+    var ph=S.ph.call;if(S.cur==='phone'&&ph&&ph.state==='on'){var cs=$('.cs');if(cs)cs.textContent=dur(Math.round((Date.now()-ph.t0)/1000))}
+    if(S.cur==='clk'&&S.clk.tab==='clock')drawAnalog();
+    if(S.tm.run&&Date.now()>=S.tm.end)tmDone();
+  }
+  function dur(s){return pad(Math.floor(s/60))+':'+pad(s%60)}
+  /* ================= apps ================= */
+  function hdr(t,back,extra){return '<div class="hd">'+(back?'<button class="bk" data-a="'+back+'" aria-label="'+L('Назад','Back')+'">←</button>':'')+'<h1>'+t+'</h1>'+(extra||'')+'</div>'}
+  function online(){return !S.air&&(S.wifi||S.data)}
+
+  /* ----- Settings ----- */
+  function srow(ic,bg,t,sub,act,v){return '<button class="row" data-a="'+act+'" data-v="'+esc(v==null?'':v)+'" data-s="'+esc((t+' '+sub).toLowerCase())+'"><span class="ri" style="background:'+bg+'">'+ic+'</span><span class="rt"><b>'+t+'</b><small>'+sub+'</small></span></button>'}
+  function trow(k,t,sub,ic,bg){return '<button class="row" role="switch" aria-checked="'+(S[k]?'true':'false')+'" data-a="tog" data-k="'+k+'">'+(ic?'<span class="ri" style="background:'+bg+'">'+ic+'</span>':'')+'<span class="rt"><b>'+t+'</b>'+(sub?'<small>'+sub+'</small>':'')+'</span><span class="sw'+(S[k]?' on':'')+'"></span></button>'}
+  function slider(k,t,min,max,unit){return '<div class="sl"><label>'+t+'<span data-lv="'+k+'">'+S[k]+unit+'</span></label><input type="range" min="'+min+'" max="'+max+'" value="'+S[k]+'" data-i="'+k+'" aria-label="'+t+'"></div>'}
+  function onoff(v){return v?L('Включено','On'):L('Изключено','Off')}
+  var PG={};
+  PG.main=function(){
+    var wsub=S.air?L('Самолетен режим','Airplane mode'):(S.wifi?NETS[S.net][0]:L('Wi-Fi е изключен','Wi-Fi is off')),cn=S.bd.indexOf(true);
+    return hdr(L('Настройки','Settings'))+'<div class="sc"><input class="srchb" data-i="sq" value="'+esc(S.sq)+'" placeholder="🔍  '+L('Търсене в настройките','Search settings')+'" aria-label="'+L('Търсене в настройките','Search settings')+'"><div class="card">'+
+      srow('📶','#2563eb',L('Мрежа и интернет','Network & internet'),wsub,'spush','net')+
+      srow('🔵','#0ea5e9','Bluetooth',S.bt&&!S.air?(cn>=0?BTD[cn][lang()==='en'?1:0]:L('Включен','On')):L('Изключен','Off'),'spush','bt')+
+      srow('☀️','#f59e0b',L('Екран','Display'),(S.dark?L('Тъмна тема','Dark theme'):L('Светла тема','Light theme'))+' · '+S.bright+'%','spush','display')+
+      srow('🔊','#16a34a',L('Звук','Sound'),L('Мултимедия','Media')+' '+S.vol+'%'+(S.dnd?' · '+L('Не безпокойте','DND'):''),'spush','sound')+
+      srow('🔋','#22c55e',L('Батерия','Battery'),S.batt+'%'+(S.saver?' · '+L('Икономичен режим','Battery saver'):''),'spush','batt')+
+      srow('💾','#8b5cf6',L('Хранилище','Storage'),'48,3 GB / 128 GB','spush','storage')+
+      srow('🌍','#0f766e',L('Език','Language'),lang()==='en'?'English':'Български','spush','lang')+
+      srow('ℹ️','#64748b',L('Относно телефона','About phone'),'PGPT Phone X1','spush','about')+'</div></div>';
+  };
+  PG.net=function(){
+    return hdr(L('Мрежа и интернет','Network & internet'),'sback')+'<div class="sc"><div class="card">'+
+      srow('📶','#2563eb','Wi-Fi',S.wifi&&!S.air?NETS[S.net][0]:L('Изключен','Off'),'spush','wifi')+
+      trow('data',L('Мобилни данни','Mobile data'),S.data?L('Свързан · 4G','Connected · 4G'):L('Изключени','Off'),'📡','#0ea5e9')+
+      trow('air',L('Самолетен режим','Airplane mode'),'','✈️','#64748b')+'</div></div>';
+  };
+  PG.wifi=function(){
+    var h=hdr('Wi-Fi','sback')+'<div class="sc"><div class="card">'+trow('wifi',L('Използвай Wi-Fi','Use Wi-Fi'),'','')+'</div>';
+    if(S.wifi&&!S.air){
+      h+='<div class="card">'+NETS.map(function(n,i){var st=S.connecting===i?L('Свързване…','Connecting…'):(S.net===i?L('Свързано','Connected'):(n[1]?L('Защитена мрежа','Secured'):L('Отворена мрежа','Open')));
+        return '<button class="row" data-a="wifinet" data-v="'+i+'"><span class="ri" style="background:'+(S.net===i?'#2563eb':'#9ca3af')+'">📶</span><span class="rt"><b>'+esc(n[0])+'</b><small>'+st+'</small></span>'+(n[1]?'<span>🔒</span>':'')+'</button>'}).join('')+'</div>';
+    }else h+='<p style="text-align:center;color:var(--mut);padding:30px">'+L('Включете Wi-Fi, за да видите наличните мрежи.','Turn on Wi-Fi to see available networks.')+'</p>';
+    return h+'</div>';
+  };
+  PG.bt=function(){
+    var h=hdr('Bluetooth','sback')+'<div class="sc"><div class="card">'+trow('bt',L('Използвай Bluetooth','Use Bluetooth'),'','')+'</div>';
+    if(S.bt&&!S.air)h+='<div class="card">'+BTD.map(function(d,i){var st=S.bdBusy===i?L('Свързване…','Connecting…'):(S.bd[i]?L('Свързано','Connected'):L('Сдвоено','Paired'));
+      return '<button class="row" data-a="btdev" data-v="'+i+'"><span class="ri" style="background:'+(S.bd[i]?'#0ea5e9':'#9ca3af')+'">'+d[2]+'</span><span class="rt"><b>'+d[lang()==='en'?1:0]+'</b><small>'+st+'</small></span></button>'}).join('')+'</div>';
+    else h+='<p style="text-align:center;color:var(--mut);padding:30px">'+L('Включете Bluetooth, за да видите устройствата.','Turn on Bluetooth to see devices.')+'</p>';
+    return h+'</div>';
+  };
+  PG.display=function(){
+    var to=[[30,'30 '+L('сек','sec')],[60,'1 '+L('мин','min')],[120,'2 '+L('мин','min')],[300,'5 '+L('мин','min')],[0,L('Никога','Never')]];
+    return hdr(L('Екран','Display'),'sback')+'<div class="sc"><div class="card">'+trow('dark',L('Тъмна тема','Dark theme'),'','🌙','#334155')+slider('bright',L('Яркост','Brightness'),5,100,'%')+'</div>'+
+      '<div class="card">'+slider('font',L('Размер на шрифта','Font size'),80,130,'%')+'<p style="padding:0 12px 10px;margin:0">'+L('Примерен текст: ПГПТ – Лом','Sample text: PGPT – Lom')+'</p></div>'+
+      '<div class="card"><div class="sl"><label>'+L('Тапет','Wallpaper')+'</label></div><div class="wl">'+WALLS.map(function(w,i){return '<button class="'+(S.wall===i?'on':'')+'" style="background:'+w+'" data-a="wall" data-v="'+i+'" aria-label="'+L('Тапет','Wallpaper')+' '+(i+1)+'"></button>'}).join('')+'</div></div>'+
+      '<div class="card"><div class="sl"><label for="to">'+L('Автоматично заспиване','Screen timeout')+'</label><select id="to" data-i="timeout">'+to.map(function(t){return '<option value="'+t[0]+'"'+(S.timeout===t[0]?' selected':'')+'>'+t[1]+'</option>'}).join('')+'</select></div></div></div>';
+  };
+  PG.sound=function(){
+    return hdr(L('Звук','Sound'),'sback')+'<div class="sc"><div class="card">'+slider('vol',L('Сила на звука','Media volume'),0,100,'%')+'</div>'+
+      '<div class="card"><div class="sl"><label>'+L('Мелодия','Ringtone')+'</label></div>'+RINGS.map(function(r,i){return '<button class="row" role="radio" aria-checked="'+(S.ring===i)+'" data-a="ring" data-v="'+i+'"><span class="ri" style="background:'+(S.ring===i?'var(--acc)':'#9ca3af')+'">'+(S.ring===i?'✓':'♪')+'</span><span class="rt"><b>'+r[lang()==='en'?1:0]+'</b></span></button>'}).join('')+'</div>'+
+      '<div class="card">'+trow('vib',L('Вибрация','Vibration'),'')+trow('dnd',L('Не безпокойте','Do not disturb'),S.dnd?L('Звуците са заглушени','Sounds are muted'):'')+'</div></div>';
+  };
+  PG.batt=function(){
+    return hdr(L('Батерия','Battery'),'sback')+'<div class="sc"><div class="big">'+S.batt+'%</div><div class="bar"><i style="width:'+S.batt+'%;background:'+(S.batt<20?'#ef4444':S.saver?'#f59e0b':'#22c55e')+'"></i></div>'+
+      '<p style="text-align:center;color:var(--mut);margin:0 0 8px">'+L('Остават около ','About ')+Math.round(S.batt*(S.saver?.34:.19))+L(' ч',' h')+L(' до изтощаване',' remaining')+'</p><div class="card">'+trow('saver',L('Икономичен режим','Battery saver'),L('Намалява разхода на енергия','Reduces power use'),'🔋','#f59e0b')+'</div></div>';
+  };
+  PG.storage=function(){
+    var rows=[[L('Снимки и видео','Photos & videos'),12.4,'#db2777'],[L('Приложения','Apps'),21.8,'#2563eb'],[L('Система','System'),14.1,'#64748b']];
+    return hdr(L('Хранилище','Storage'),'sback')+'<div class="sc"><div class="card cp"><b style="font-size:1.4em">48,3 GB</b> <span style="color:var(--mut)">'+L('използвани от 128 GB','used of 128 GB')+'</span><div class="bar">'+rows.map(function(r){return '<i style="width:'+r[1]/128*100+'%;background:'+r[2]+'"></i>'}).join('')+'</div></div>'+
+      '<div class="card">'+rows.map(function(r){return '<div class="row" style="cursor:default"><span class="ri" style="background:'+r[2]+'">●</span><span class="rt"><b>'+r[0]+'</b></span><span>'+String(r[1]).replace('.',',')+' GB</span></div>'}).join('')+'</div></div>';
+  };
+  PG.lang=function(){
+    return hdr(L('Език','Language'),'sback')+'<div class="sc"><div class="card">'+[['bg','Български'],['en','English']].map(function(l){return '<button class="row" role="radio" aria-checked="'+(lang()===l[0])+'" data-a="setlang" data-v="'+l[0]+'"><span class="ri" style="background:'+(lang()===l[0]?'var(--acc)':'#9ca3af')+'">'+(lang()===l[0]?'✓':'')+'</span><span class="rt"><b>'+l[1]+'</b></span></button>'}).join('')+'</div></div>';
+  };
+  PG.about=function(){
+    var rows=[[L('Име на устройството','Device name'),'PGPT Phone X1'],[L('Версия на Android','Android version'),'15'],[L('Ниво на защитни корекции','Security patch level'),'1.11.2026'],[L('Процесор','Processor'),'Octa-core 2.8 GHz'],['RAM','8 GB'],[L('Хранилище','Storage'),'128 GB']];
+    return hdr(L('Относно телефона','About phone'),'sback')+'<div class="sc"><div class="card">'+rows.map(function(r){return '<div class="row" style="cursor:default"><span class="rt"><b>'+r[0]+'</b><small>'+r[1]+'</small></span></div>'}).join('')+
+      '<button class="row" data-a="build"><span class="rt"><b>'+L('Номер на компилацията','Build number')+'</b><small>PGPT.261104.001</small></span></button></div>'+
+      '<p style="text-align:center;color:var(--mut);font-size:.85em;padding:6px 18px">'+L('Това е симулатор – всички данни са примерни.','This is a simulator – all data are examples.')+(S.dev>=7?'<br>🛠 '+L('Режимът за програмисти е включен.','Developer mode is on.'):'')+'</p></div>';
+  };
+  VIEWS.set=function(){return PG[S.spage[S.spage.length-1]]()};
+  MOUNT.set=function(){if(S.spage.length===1)filterSet()};
+  BACK.set=function(){if(S.spage.length>1){S.spage.pop();return true}return false};
+  ACT.spush=function(el){S.spage.push(el.getAttribute('data-v'));render()};
+  ACT.sback=function(){S.spage.pop();render()};
+  ACT.wifinet=function(el){var i=+el.getAttribute('data-v');if(S.net===i||S.connecting>-1)return;S.connecting=i;render();setTimeout(function(){S.connecting=-1;if(!S.wifi)return;S.net=i;if(isOpen&&S.cur==='set')render();else SB.innerHTML=sbHTML()},1100)};
+  ACT.btdev=function(el){var i=+el.getAttribute('data-v');if(S.bdBusy>-1)return;S.bdBusy=i;render();setTimeout(function(){S.bdBusy=-1;if(S.bt){S.bd[i]=!S.bd[i];toast(BTD[i][lang()==='en'?1:0]+': '+(S.bd[i]?L('свързано','connected'):L('прекъснато','disconnected')))}if(isOpen&&S.cur==='set')render()},1000)};
+  ACT.ring=function(el){S.ring=+el.getAttribute('data-v');melody(RINGS[S.ring][2]);render()};
+  ACT.wall=function(el){S.wall=+el.getAttribute('data-v');render()};
+  ACT.setlang=function(el){S.lang=el.getAttribute('data-v');fit();render();renderShade()};
+  ACT.build=function(){S.dev++;if(S.dev===7){toast(L('Вече сте програмист!','You are now a developer!'));render()}else if(S.dev>=3&&S.dev<7)toast(L('Остават ','You are ')+(7-S.dev)+L(' стъпки до режима за програмисти',' steps away from developer mode'))};
+
+  /* ----- Phone ----- */
+  var CON=[[['ПГПТ – Директор','PGPT – Principal'],'+359 888 98 48 96','🎓'],[['Национална линия за деца','National children’s helpline'],'116 111','💙'],[['Спешен телефон','Emergency number'],'112','🚑']];
+  var KEYS=[['1',''],['2','ABC'],['3','DEF'],['4','GHI'],['5','JKL'],['6','MNO'],['7','PQRS'],['8','TUV'],['9','WXYZ'],['*',''],['0','+'],['#','']];
+  function digs(s){return String(s).replace(/[^0-9+]/g,'')}
+  function findCon(n){var d=digs(n);if(!d)return null;for(var i=0;i<CON.length;i++)if(digs(CON[i][1])===d)return CON[i];return null}
+  function phLabel(){var n=$('.pnum'),l=$('.pn2');if(!n)return;n.textContent=S.ph.num;var c=findCon(S.ph.num);l.textContent=c?c[0][lang()==='en'?1:0]:''}
+  function callHTML(){
+    var c=S.ph.call;
+    return '<div class="call"><div class="av">'+(c.ic||'👤')+'</div><h2>'+esc(c.name)+'</h2><div class="cs">'+(c.state==='ring'?L('Свързване…','Calling…'):dur(Math.round((Date.now()-c.t0)/1000)))+'</div>'+
+      '<div class="cb"><button class="'+(c.mute?'on':'')+'" data-a="ctog" data-v="mute" aria-label="'+L('Заглуши','Mute')+'" aria-pressed="'+!!c.mute+'">🎙️</button><button class="'+(c.kp?'on':'')+'" data-a="ctog" data-v="kp" aria-label="'+L('Клавиатура','Keypad')+'">⌗</button><button class="'+(c.spk?'on':'')+'" data-a="ctog" data-v="spk" aria-label="'+L('Високоговорител','Speaker')+'" aria-pressed="'+!!c.spk+'">🔊</button></div>'+
+      '<p style="margin-top:34px;font-size:.78em;opacity:.6">'+L('Симулация – не се осъществява реално обаждане','Simulation – no real call is made')+'</p><button class="end" data-a="pend" aria-label="'+L('Затвори','End call')+'">📞</button></div>';
+  }
+  VIEWS.phone=function(){
+    var P=S.ph,body='';
+    if(P.tab==='keys')body='<div class="pnum">'+esc(P.num)+'</div><div class="pn2"></div><div class="sp" style="flex:1"></div><div class="keys">'+KEYS.map(function(k){return '<button data-a="pk" data-v="'+k[0]+'">'+k[0]+'<small>'+k[1]+'</small></button>'}).join('')+'</div><div class="callb"><button class="bs" data-a="pdel" aria-label="'+L('Изтрий','Delete')+'">⌫</button><button data-a="pcall" aria-label="'+L('Обади се','Call')+'">📞</button><span style="width:64px"></span></div>';
+    else if(P.tab==='con')body='<div class="sc">'+hdr(L('Контакти','Contacts'))+'<div class="card">'+CON.map(function(c){return '<button class="row" data-a="pcall" data-v="'+esc(c[1])+'"><span class="ri" style="background:#0f2a4a">'+c[2]+'</span><span class="rt"><b>'+esc(c[0][lang()==='en'?1:0])+'</b><small>'+c[1]+'</small></span><span>📞</span></button>'}).join('')+'</div></div>';
+    else body='<div class="sc">'+hdr(L('Последни','Recent'))+(S.calls.length?'<div class="card">'+S.calls.map(function(c){return '<button class="row" data-a="pcall" data-v="'+esc(c.num)+'"><span class="ri" style="background:#16a34a">↗</span><span class="rt"><b>'+esc(c.name)+'</b><small>'+c.time+' · '+dur(c.d)+'</small></span></button>'}).join('')+'</div>':'<p style="text-align:center;color:var(--mut);padding:40px">'+L('Няма обаждания','No calls yet')+'</p>')+'</div>';
+    var tb=[['keys','⌗',L('Клавиши','Keypad')],['con','👤',L('Контакти','Contacts')],['rec','🕘',L('Последни','Recent')]];
+    return body+'<div class="tabs">'+tb.map(function(t){return '<button class="'+(P.tab===t[0]?'on':'')+'" data-a="ptab" data-v="'+t[0]+'"><span>'+t[1]+'</span>'+t[2]+'</button>'}).join('')+'</div>'+(P.call?callHTML():'');
+  };
+  MOUNT.phone=function(){phLabel()};
+  ACT.ptab=function(el){S.ph.tab=el.getAttribute('data-v');render()};
+  ACT.pk=function(el){var v=el.getAttribute('data-v');if(S.ph.num.length<20)S.ph.num+=v;beep(500+(parseInt(v,10)||0)*60,.09);phLabel()};
+  ACT.pdel=function(){S.ph.num=S.ph.num.slice(0,-1);phLabel()};
+  ACT.pcall=function(el){
+    var num=el.getAttribute('data-v')||S.ph.num;
+    if(!num){toast(L('Въведете номер','Enter a number'));return}
+    if(S.air){toast(L('Няма мрежа – изключете самолетния режим','No network – turn off airplane mode'));return}
+    var c=findCon(num);S.ph.call={num:num,name:c?c[0][lang()==='en'?1:0]:num,ic:c?c[2]:'👤',state:'ring',t0:0};S.ph.tab='keys';render();
+    beep(440,.35);setTimeout(function(){beep(440,.35)},700);
+    clearTimeout(timers.call);timers.call=setTimeout(function(){var cc=S.ph.call;if(cc&&cc.state==='ring'){cc.state='on';cc.t0=Date.now();if(isOpen&&S.cur==='phone')render()}},2200);
+  };
+  ACT.pend=function(){var c=S.ph.call;if(!c)return;clearTimeout(timers.call);S.calls.unshift({num:c.num,name:c.name,time:hm(),d:c.state==='on'?Math.round((Date.now()-c.t0)/1000):0});S.ph.call=null;S.ph.num='';render()};
+  ACT.ctog=function(el){var k=el.getAttribute('data-v'),c=S.ph.call;if(c){c[k]=!c[k];render()}};
+  function phKey(e){
+    if(S.cur!=='phone'||S.ph.tab!=='keys'||S.ph.call||e.ctrlKey||e.metaKey||e.altKey)return false;
+    var t=e.target;if(t&&t.matches&&t.matches('input,textarea,select'))return false;
+    if(/^[0-9*#+]$/.test(e.key)){ACT.pk({getAttribute:function(){return e.key}});return true}
+    if(e.key==='Backspace'){ACT.pdel();return true}
+    return false;
+  }
+
+  /* ----- Messages ----- */
+  function mt(x){return Array.isArray(x)?x[lang()==='en'?1:0]:x}
+  function bubHTML(m){return '<div class="bub '+(m[0]?'me':'th')+'">'+esc(mt(m[1]))+'<small>'+(m[2]||'')+'</small></div>'}
+  VIEWS.msg=function(){
+    var c=S.msg.c;
+    if(c<0)return hdr(L('Съобщения','Messages'))+'<div class="sc"><div class="card">'+S.msgs.map(function(m,i){var l=m.m[m.m.length-1];
+      return '<button class="row" data-a="mopen" data-v="'+i+'"><span class="av2" style="background:'+m.c+'">'+m.ic+'</span><span class="rt"><b>'+esc(m.n[lang()==='en'?1:0])+'</b><small>'+(l[0]?L('Вие: ','You: '):'')+esc(mt(l[1]))+'</small></span></button>'}).join('')+'</div></div>';
+    var m=S.msgs[c];
+    return hdr(esc(m.n[lang()==='en'?1:0]),'mback','<span class="av2" style="background:'+m.c+'">'+m.ic+'</span>')+'<div class="chat">'+m.m.map(bubHTML).join('')+'</div>'+
+      '<div class="cin"><input data-enter="msend" placeholder="'+L('Напишете съобщение','Type a message')+'" aria-label="'+L('Съобщение','Message')+'" maxlength="300" autocomplete="off"><button data-a="msend" aria-label="'+L('Изпрати','Send')+'">➤</button></div>';
+  };
+  MOUNT.msg=function(){var ch=$('.chat');if(ch)ch.scrollTop=ch.scrollHeight};
+  BACK.msg=function(){if(S.msg.c>=0){S.msg.c=-1;return true}return false};
+  ACT.mopen=function(el){S.msg.c=+el.getAttribute('data-v');render()};
+  ACT.mback=function(){S.msg.c=-1;render()};
+  function botText(ci,q){
+    var m=S.msgs[ci];q=q.toLowerCase();
+    if(m.bot){
+      var A=[[/специалност|направлени|професи|speciali|programme|field/,['В ПГПТ – Лом се обучават ученици от 8 до 12 клас по професии и специалности от пет направления. Вижте „Специалности“ в менюто на сайта.','Students in grades 8–12 study professions and specialities in five fields. See “Specialities” in the site menu.']],
+        [/стем|stem/,['Новият STEM център е по математика, информационни технологии и визуални изкуства – с кабинети за учене чрез опит. Разгледайте Галерията!','The new STEM center covers mathematics, IT and visual arts, with classrooms for learning by doing. Have a look in the Gallery!']],
+        [/дуал|практик|dual|practice/,['Обучението е в дневна и дуална форма. В 10 и 11 клас практиката може да е в реална работна среда в предприятие.','Training is full-time or dual. In grades 10–11 practice can take place in a real workplace at a company.']],
+        [/прием|кандидат|admission|apply/,['За прием на ученици пишете през формата „Контакти“ на сайта или се обадете на директора: +359 888 98 48 96.','For admission, use the Contacts form on the site or call the principal: +359 888 98 48 96.']],
+        [/контакт|телефон|номер|имейл|phone|contact|call|email/,['Директор: +359 888 98 48 96 · pgpt@pgptlom.com. Можете да наберете номера от приложението „Телефон“.','Principal: +359 888 98 48 96 · pgpt@pgptlom.com. You can dial the number in the Phone app.']],
+        [/здравей|здрасти|добър|hello|hi\b|hey/,['Здравейте! С какво мога да помогна?','Hello! How can I help?']]];
+      for(var i=0;i<A.length;i++)if(A[i][0].test(q))return A[i][1];
+      return ['Благодаря за съобщението! Опитайте с думи като „специалности“, „STEM“, „прием“ или „контакти“.','Thanks for your message! Try words like “specialities”, “STEM”, “admission” or “contacts”.'];
+    }
+    var G=[['👍','👍'],['Добре, става!','Okay, sounds good!'],['Ще се чуем по-късно.','Talk to you later.'],['Ха-ха 🙂','Haha 🙂']];
+    return G[q.length%G.length];
+  }
+  ACT.msend=function(){
+    var inp=$('.cin input');if(!inp)return;var t=inp.value.trim();if(!t)return;
+    if(S.air){toast(L('Няма мрежа – изключете самолетния режим','No network – turn off airplane mode'));return}
+    var ci=S.msg.c,m=S.msgs[ci],msg=[1,t,hm()];m.m.push(msg);
+    var ch=$('.chat');ch.insertAdjacentHTML('beforeend',bubHTML(msg));ch.scrollTop=ch.scrollHeight;inp.value='';beep(1000,.06);
+    setTimeout(function(){
+      var r=botText(ci,t),rm=[0,r,hm()];m.m.push(rm);
+      if(isOpen&&S.screen&&S.cur==='msg'&&S.msg.c===ci){var c2=$('.chat');if(c2){c2.insertAdjacentHTML('beforeend',bubHTML(rm));c2.scrollTop=c2.scrollHeight}beep(880,.12)}
+      else if(isOpen){notify('msg',m.n,r);toast(L('Ново съобщение','New message'));beep(880,.12)}
+    },900+Math.random()*700);
+  };
+
+  /* ----- Camera ----- */
+  function camSrc(){var p=PHOTOS;return p.length?p[S.cam.front?Math.min(1,p.length-1):0].s:''}
+  VIEWS.cam=function(){
+    var C=S.cam,last=S.photos[0]||(PHOTOS[0]?{s:PHOTOS[0].s}:null),mode=C.mode||'p';
+    return '<div class="vfz"><div class="vf" style="background-image:url('+esc(camSrc())+');transform:scale('+C.zoom+') scaleX('+(C.front?-1:1)+')"></div></div><div class="flash"></div>'+
+      '<div class="camh"><button class="'+(C.zoom===1?'on':'')+'" data-a="czoom" data-v="1">1×</button><button class="'+(C.zoom===2?'on':'')+'" data-a="czoom" data-v="2">2×</button></div>'+(C.vid?'<div class="recd">● <span class="rt2">00:00</span></div>':'')+
+      '<div class="camt"><div class="modes"><button class="'+(mode==='p'?'on':'')+'" data-a="cmode" data-v="p">'+L('ФОТО','PHOTO')+'</button><button class="'+(mode==='v'?'on':'')+'" data-a="cmode" data-v="v">'+L('ВИДЕО','VIDEO')+'</button></div>'+
+      '<div class="shut"><button class="th" data-a="app" data-v="gal" aria-label="'+L('Галерия','Gallery')+'" style="'+(last?'background-image:url('+esc(last.s)+')':'')+'"></button><button class="shb'+(C.vid?' rec':'')+'" data-a="shot" aria-label="'+L('Снимай','Shutter')+'"><i></i></button><button class="fl" data-a="cflip" aria-label="'+L('Смени камерата','Switch camera')+'">🔄</button></div></div>';
+  };
+  MOUNT.cam=function(){
+    if(S.cam.vid)timers.fast=setInterval(function(){var e=$('.rt2');if(e)e.textContent=dur(Math.round((Date.now()-S.cam.t0)/1000))},500);
+  };
+  ACT.czoom=function(el){S.cam.zoom=+el.getAttribute('data-v');render()};
+  ACT.cmode=function(el){if(S.cam.vid)return;S.cam.mode=el.getAttribute('data-v');render()};
+  ACT.cflip=function(){S.cam.front=!S.cam.front;render()};
+  ACT.shot=function(){
+    var C=S.cam;
+    if((C.mode||'p')==='v'){
+      if(!C.vid){C.vid=true;C.t0=Date.now();render()}
+      else{C.vid=false;S.photos.unshift({s:camSrc(),v:Math.max(1,Math.round((Date.now()-C.t0)/1000))});toast(L('Видеото е запазено в Галерията','Video saved to Gallery'));render()}
+      return;
+    }
+    var f=$('.flash');if(f){f.classList.remove('on');void f.offsetWidth;f.classList.add('on')}
+    beep(1500,.05);S.photos.unshift({s:camSrc()});toast(L('Снимката е запазена в Галерията','Photo saved to Gallery'));
+    var th=$('.shut .th');if(th)th.style.backgroundImage='url('+camSrc()+')';
+  };
+  BACK.cam=function(){if(S.cam.vid){S.cam.vid=false;return true}return false};
+
+  /* ----- Gallery ----- */
+  function galItems(){return S.photos.map(function(p){return {s:p.s,v:p.v,own:1}}).concat(PHOTOS.map(function(p){return {s:p.s,t:p.t}}))}
+  VIEWS.gal=function(){
+    var it=galItems(),i=S.gal.i;
+    if(i>=0&&it[i]){var p=it[i],fav=S.favs&&S.favs[p.s];
+      return '<div class="gv"><div class="gt"><button data-a="gclose" aria-label="'+L('Назад','Back')+'">←</button><span>'+(i+1)+' / '+it.length+'</span><span style="width:48px"></span></div><div class="gi" style="background-image:url('+esc(p.s)+')" role="img" aria-label="'+esc(p.t||L('Снимка','Photo'))+'"></div>'+
+        '<div class="gb"><button data-a="gnav" data-v="-1" aria-label="'+L('Предишна','Previous')+'">‹</button><button data-a="gfav" aria-label="'+L('Любима','Favourite')+'" aria-pressed="'+!!fav+'">'+(fav?'❤️':'🤍')+'</button>'+(p.own?'<button data-a="gdel" aria-label="'+L('Изтрий','Delete')+'">🗑</button>':'')+'<button data-a="gnav" data-v="1" aria-label="'+L('Следваща','Next')+'">›</button></div></div>';}
+    return hdr(L('Галерия','Gallery'))+'<div class="sc" style="padding:0"><div class="gg">'+it.map(function(p,k){return '<button data-a="gopen" data-v="'+k+'" style="background-image:url('+esc(p.s)+')" aria-label="'+esc(p.t||L('Снимка','Photo')+' '+(k+1))+'">'+(p.v?'<em>▶ '+dur(p.v)+'</em>':'')+'</button>'}).join('')+'</div>'+(it.length?'':'<p style="text-align:center;color:var(--mut);padding:40px">'+L('Още няма снимки. Заснемете нещо с Камерата!','No photos yet. Take one with the Camera!')+'</p>')+'</div>';
+  };
+  BACK.gal=function(){if(S.gal.i>=0){S.gal.i=-1;return true}return false};
+  ACT.gopen=function(el){S.gal.i=+el.getAttribute('data-v');render()};
+  ACT.gclose=function(){S.gal.i=-1;render()};
+  ACT.gnav=function(el){var n=galItems().length;S.gal.i=(S.gal.i+ +el.getAttribute('data-v')+n)%n;render()};
+  ACT.gfav=function(){var p=galItems()[S.gal.i];S.favs=S.favs||{};S.favs[p.s]=!S.favs[p.s];render()};
+  ACT.gdel=function(){var n=galItems().length,i=S.gal.i;if(i<S.photos.length){S.photos.splice(i,1);S.gal.i=S.photos.length+PHOTOS.length?Math.min(i,galItems().length-1):-1;render()}};
+
+  /* ----- Calculator ----- */
+  var CK=['AC','±','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','0','.','='];
+  function nfmt(n){if(!isFinite(n))return L('Грешка','Error');var r=parseFloat(n.toPrecision(10));return String(r).replace('e+','E')}
+  VIEWS.calc=function(){return '<div class="cd" role="status" aria-live="polite">'+esc(S.calc.d)+'</div><div class="ck">'+CK.map(function(k){var c=/[÷×−+=]/.test(k)?'op':(/AC|±|%/.test(k)?'fn':'');if(k==='0')c+=' z';return '<button class="'+c+'" data-a="ck" data-v="'+k+'">'+k+'</button>'}).join('')+'</div>'};
+  ACT.ck=function(el){
+    var k=el.getAttribute('data-v'),c=S.calc,v=parseFloat(c.d);if(isNaN(v))v=0;
+    function ap(a,b,o){return o==='+'?a+b:o==='−'?a-b:o==='×'?a*b:(b===0?NaN:a/b)}
+    if(/[0-9]/.test(k)){if(c.fresh){c.d=k;c.fresh=false}else if(c.d.replace(/[-.]/g,'').length<10)c.d=c.d==='0'?k:c.d+k}
+    else if(k==='.'){if(c.fresh){c.d='0.';c.fresh=false}else if(c.d.indexOf('.')<0)c.d+='.'}
+    else if(k==='AC'){c.d='0';c.acc=null;c.op=null;c.fresh=true}
+    else if(k==='±'){c.d=c.d==='0'?'0':(c.d[0]==='-'?c.d.slice(1):'-'+c.d)}
+    else if(k==='%'){c.d=nfmt(v/100);c.fresh=true}
+    else if(k==='='){if(c.op){c.d=nfmt(ap(c.acc,v,c.op));c.acc=null;c.op=null;c.fresh=true}}
+    else{if(c.op&&!c.fresh){c.acc=ap(c.acc,v,c.op);c.d=nfmt(c.acc)}else c.acc=v;c.op=k;c.fresh=true}
+    var d=$('.cd');d.textContent=c.d;d.style.fontSize=c.d.length>12?'1.8em':c.d.length>9?'2.6em':c.d.length>6?'3.2em':'';
+  };
+
+  /* ----- Clock ----- */
+  var CITIES=[['София','Sofia','Europe/Sofia'],['Лондон','London','Europe/London'],['Ню Йорк','New York','America/New_York'],['Токио','Tokyo','Asia/Tokyo']];
+  function cityTime(tz){try{return new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tz}).format(new Date())}catch(e){return '--:--'}}
+  function swNow(){var s=S.sw;return s.acc+(s.run?Date.now()-s.t0:0)}
+  function swFmt(ms){var cs=Math.floor(ms/10)%100,s=Math.floor(ms/1000)%60,m=Math.floor(ms/60000);return pad(m)+':'+pad(s)+'.'+pad(cs)}
+  function tmLeft(){var t=S.tm;return t.run?Math.max(0,Math.ceil((t.end-Date.now())/1000)):t.left}
+  VIEWS.clk=function(){
+    var T=S.clk.tab,b='';
+    if(T==='clock')b='<div class="sc"><svg class="an" viewBox="0 0 200 200" role="img" aria-label="'+L('Аналогов часовник','Analog clock')+'"><circle cx="100" cy="100" r="94" fill="var(--card)" stroke="var(--line)" stroke-width="3"/>'+
+      [0,1,2,3,4,5,6,7,8,9,10,11].map(function(i){return '<line x1="100" y1="12" x2="100" y2="'+(i%3?20:26)+'" stroke="var(--fg)" stroke-width="'+(i%3?2:4)+'" transform="rotate('+i*30+' 100 100)"/>'}).join('')+
+      '<line class="hh" x1="100" y1="100" x2="100" y2="56" stroke="var(--fg)" stroke-width="6" stroke-linecap="round"/><line class="mh" x1="100" y1="100" x2="100" y2="30" stroke="var(--fg)" stroke-width="4" stroke-linecap="round"/><line class="sh" x1="100" y1="112" x2="100" y2="24" stroke="#f2a900" stroke-width="2" stroke-linecap="round"/><circle cx="100" cy="100" r="5" fill="#f2a900"/></svg>'+
+      '<div class="dg"><span class="dgt">'+hm()+'</span></div><div class="cities">'+CITIES.map(function(c){return '<div class="ct"><div>'+c[lang()==='en'?1:0]+'</div><b data-tz="'+c[2]+'">'+cityTime(c[2])+'</b></div>'}).join('')+'</div></div>';
+    else if(T==='sw'){var s=S.sw;b='<div class="sc"><div class="swd">'+swFmt(swNow())+'</div><div class="cbtn"><button class="gr" data-a="swlap">'+L('Кръг','Lap')+'</button><button data-a="swgo">'+(s.run?L('Стоп','Stop'):L('Старт','Start'))+'</button><button class="gr" data-a="swreset">'+L('Нулирай','Reset')+'</button></div><div style="margin-top:14px">'+s.laps.map(function(l,i){return '<div class="lap2"><span>'+L('Кръг ','Lap ')+(s.laps.length-i)+'</span><span>'+swFmt(l)+'</span></div>'}).join('')+'</div></div>'}
+    else{var t=S.tm,l=tmLeft();b='<div class="sc"><div class="swd" style="margin-top:34px">'+dur(l)+'</div>'+(t.run?'':'<div class="tmc"><button data-a="tmadj" data-v="-60" aria-label="−1 min">−</button><span>'+Math.round(t.set/60)+' '+L('мин','min')+'</span><button data-a="tmadj" data-v="60" aria-label="+1 min">+</button></div><div class="pr">'+[1,5,10].map(function(m){return '<button data-a="tmset" data-v="'+m*60+'">'+m+' '+L('мин','min')+'</button>'}).join('')+'</div>')+
+      '<div class="cbtn"><button data-a="tmgo">'+(t.run?L('Пауза','Pause'):L('Старт','Start'))+'</button><button class="gr" data-a="tmreset">'+L('Нулирай','Reset')+'</button></div></div>'}
+    var tb=[['clock','🕒',L('Часовник','Clock')],['sw','⏱️',L('Хронометър','Stopwatch')],['tm','⏳',L('Таймер','Timer')]];
+    return hdr(L('Часовник','Clock'))+b+'<div class="tabs">'+tb.map(function(t){return '<button class="'+(S.clk.tab===t[0]?'on':'')+'" data-a="ctab" data-v="'+t[0]+'"><span>'+t[1]+'</span>'+t[2]+'</button>'}).join('')+'</div>';
+  };
+  function drawAnalog(){
+    var d=new Date(),h=$('.hh'),m=$('.mh'),s=$('.sh');if(!h)return;
+    h.setAttribute('transform','rotate('+((d.getHours()%12)*30+d.getMinutes()/2)+' 100 100)');m.setAttribute('transform','rotate('+(d.getMinutes()*6+d.getSeconds()/10)+' 100 100)');s.setAttribute('transform','rotate('+d.getSeconds()*6+' 100 100)');
+    var g=$('.dgt');if(g)g.textContent=hm(d);$$('[data-tz]').forEach(function(e){e.textContent=cityTime(e.getAttribute('data-tz'))});
+  }
+  MOUNT.clk=function(){
+    if(S.clk.tab==='clock')drawAnalog();
+    else if(S.clk.tab==='sw'&&S.sw.run)timers.fast=setInterval(function(){var e=$('.swd');if(e)e.textContent=swFmt(swNow())},50);
+    else if(S.clk.tab==='tm'&&S.tm.run)timers.fast=setInterval(function(){var e=$('.swd');if(e)e.textContent=dur(tmLeft())},250);
+  };
+  function tmDone(){var t=S.tm;t.run=false;t.left=t.set;melody([[988,.18],[988,.18],[988,.18],[1318,.4]]);notify('clk',['Таймер','Timer'],['Времето изтече!','Time is up!']);toast(L('Таймерът приключи','Timer finished'));if(isOpen&&S.cur==='clk')render()}
+  ACT.ctab=function(el){S.clk.tab=el.getAttribute('data-v');render()};
+  ACT.swgo=function(){var s=S.sw;if(s.run){s.acc+=Date.now()-s.t0;s.run=false}else{s.t0=Date.now();s.run=true}render()};
+  ACT.swlap=function(){if(S.sw.run){S.sw.laps.unshift(swNow());render()}};
+  ACT.swreset=function(){S.sw={run:false,t0:0,acc:0,laps:[]};render()};
+  ACT.tmadj=function(el){var t=S.tm;t.set=Math.max(60,Math.min(5940,t.set+ +el.getAttribute('data-v')));t.left=t.set;render()};
+  ACT.tmset=function(el){S.tm.set=+el.getAttribute('data-v');S.tm.left=S.tm.set;render()};
+  ACT.tmgo=function(){var t=S.tm;if(t.run){t.left=tmLeft();t.run=false}else{if(t.left<=0)t.left=t.set;t.end=Date.now()+t.left*1000;t.run=true}render()};
+  ACT.tmreset=function(){var t=S.tm;t.run=false;t.left=t.set;render()};
+
+  /* ----- Calendar ----- */
+  var HOL={'1-1':['Нова година','New Year’s Day'],'3-3':['Ден на Освобождението','Liberation Day'],'5-1':['Ден на труда','Labour Day'],'5-6':['Гергьовден','St George’s Day'],'5-24':['Ден на българската просвета и култура и на славянската писменост','Day of Bulgarian Education and Culture and of the Slavonic Script'],
+    '9-6':['Съединението','Unification Day'],'9-22':['Ден на Независимостта','Independence Day'],'11-1':['Ден на народните будители','Day of the National Revivalists'],'12-24':['Бъдни вечер','Christmas Eve'],'12-25':['Рождество Христово','Christmas Day'],'12-26':['Рождество Христово','Christmas Day (2nd day)']};
+  VIEWS.cal=function(){
+    var C=S.cal,first=(new Date(C.y,C.m,1).getDay()+6)%7,days=new Date(C.y,C.m+1,0).getDate(),now=new Date(),h='';
+    for(var i=0;i<7;i++)h+='<b>'+cap(fmt({weekday:'short'},new Date(2024,0,1+i)))+'</b>';
+    for(i=0;i<first;i++)h+='<span></span>';
+    for(i=1;i<=days;i++){var td=now.getFullYear()===C.y&&now.getMonth()===C.m&&now.getDate()===i;h+='<button class="'+(td?'td ':'')+(C.sel===i?'sl2 ':'')+(HOL[(C.m+1)+'-'+i]?'hol':'')+'" data-a="cday" data-v="'+i+'" aria-label="'+i+'">'+i+'</button>'}
+    var sel=C.sel>0?C.sel:(now.getFullYear()===C.y&&now.getMonth()===C.m?now.getDate():0),hl=sel&&HOL[(C.m+1)+'-'+sel];
+    return '<div class="hd"><button class="ib2" data-a="cmo" data-v="-1" aria-label="'+L('Предишен месец','Previous month')+'">‹</button><h1 style="text-align:center">'+esc(cap(fmt({month:'long',year:'numeric'},new Date(C.y,C.m,1))))+'</h1><button class="ib2" data-a="cmo" data-v="1" aria-label="'+L('Следващ месец','Next month')+'">›</button></div><div class="cg">'+h+'</div>'+
+      '<div class="card cp" style="margin:10px 12px">'+(sel?'<b>'+esc(cap(fmt({weekday:'long',day:'numeric',month:'long'},new Date(C.y,C.m,sel))))+'</b><br><span style="color:var(--mut)">'+(hl?'🔴 '+esc(hl[lang()==='en'?1:0]):L('Няма събития','No events'))+'</span>':'')+'</div>';
+  };
+  ACT.cmo=function(el){var C=S.cal;C.m+=+el.getAttribute('data-v');if(C.m<0){C.m=11;C.y--}if(C.m>11){C.m=0;C.y++}C.sel=-1;render()};
+  ACT.cday=function(el){S.cal.sel=+el.getAttribute('data-v');render()};
+
+  /* ----- Notes ----- */
+  function ntitle(n){var l=(n.x||'').split('\n')[0].trim();return l||L('Празна бележка','Empty note')}
+  VIEWS.notes=function(){
+    var c=S.notes.cur,N=S.notes.list;
+    if(c>=0&&N[c])return hdr(L('Бележка','Note'),'nback','<button class="ib2" data-a="ndel" aria-label="'+L('Изтрий','Delete')+'">🗑</button>')+'<textarea class="nta" data-i="note" aria-label="'+L('Текст на бележката','Note text')+'" placeholder="'+L('Напишете нещо…','Write something…')+'">'+esc(N[c].x)+'</textarea>';
+    return hdr(L('Бележки','Notes'))+'<div class="sc"><div class="card nl">'+N.map(function(n,i){return '<button class="row" data-a="nopen" data-v="'+i+'"><span class="ri" style="background:#ca8a04">📝</span><span class="rt"><b>'+esc(ntitle(n))+'</b><small>'+esc(((n.x||'').split('\n')[1]||'').slice(0,60))+'</small></span></button>'}).join('')+'</div>'+(N.length?'':'<p style="text-align:center;color:var(--mut);padding:40px">'+L('Няма бележки','No notes')+'</p>')+'</div><button class="fab" data-a="nnew" aria-label="'+L('Нова бележка','New note')+'">+</button>';
+  };
+  MOUNT.notes=function(){var t=$('.nta');if(t&&!t.value)t.focus()};
+  BACK.notes=function(){if(S.notes.cur>=0){ACT.nback();return true}return false};
+  ACT.nopen=function(el){S.notes.cur=+el.getAttribute('data-v');render()};
+  ACT.nnew=function(){S.notes.list.unshift({id:Date.now(),x:''});S.notes.cur=0;saveNotes();render()};
+  ACT.nback=function(){var n=S.notes.list[S.notes.cur];if(n&&!n.x.trim())S.notes.list.splice(S.notes.cur,1);S.notes.cur=-1;saveNotes();render()};
+  ACT.ndel=function(){S.notes.list.splice(S.notes.cur,1);S.notes.cur=-1;saveNotes();render()};
+
+  /* ----- Browser (shows this very site in a frame) ----- */
+  VIEWS.web=function(){
+    S.webOn=online();
+    var bar='<div class="wb"><button class="ib2" data-a="wback" aria-label="'+L('Назад','Back')+'">‹</button><button class="ib2" data-a="wreload" aria-label="'+L('Презареди','Reload')+'">⟳</button><div class="u">'+(S.webOn?'🔒 ':'')+esc(location.host+location.pathname)+'</div></div>';
+    if(!S.webOn)return bar+'<div class="off2"><span>🦖</span><b style="font-size:1.2em;color:var(--fg)">'+L('Няма интернет връзка','No internet connection')+'</b><div>'+L('Включете Wi-Fi или мобилните данни от Настройки или от бързите настройки (плъзнете надолу от горния ръб).','Turn on Wi-Fi or mobile data in Settings or in the quick settings (swipe down from the top edge).')+'</div><button class="pill" data-a="wreload">'+L('Опитай отново','Try again')+'</button></div>';
+    return bar+'<iframe class="wf" src="'+esc(location.pathname+location.search)+'" title="'+L('ПГПТ – Лом (демо сайт)','PGPT – Lom (demo site)')+'"></iframe>';
+  };
+  ACT.wback=function(){var f=$('.wf');if(f){try{f.contentWindow.history.back()}catch(e){}}else goBack()};
+  ACT.wreload=function(){if(S.webOn!==online()||!$('.wf')){render();return}var f=$('.wf');try{f.contentWindow.location.reload()}catch(e){f.src=f.src}};
+
+  /* ----- PGPT info app ----- */
+  VIEWS.pgpt=function(){
+    var lg=logoSrc();
+    return '<div class="sc" style="padding-top:8px"><div class="hero">'+(lg?'<img alt="" src="'+esc(lg)+'">':'<span style="font-size:44px">🎓</span>')+'<div><h2>ПГПТ – Лом</h2><p>'+L('Професионална гимназия по производствени технологии','Vocational High School of Production Technologies')+'</p></div></div>'+
+      '<div class="card"><div class="row" style="cursor:default"><span class="ri" style="background:#2563eb">🏫</span><span class="rt"><b>'+L('Обучение','Education')+'</b><small>'+L('8 – 12 клас · дневна и дуална форма','Grades 8–12 · full-time and dual')+'</small></span></div>'+
+      '<div class="row" style="cursor:default"><span class="ri" style="background:#16a34a">💻</span><span class="rt"><b>STEM</b><small>'+L('Нов център по математика, ИТ и визуални изкуства','New center for mathematics, IT and visual arts')+'</small></span></div>'+
+      '<div class="row" style="cursor:default"><span class="ri" style="background:#f59e0b">🏆</span><span class="rt"><b>'+L('История','History')+'</b><small>'+L('63 години традиции и успехи','63 years of tradition and success')+'</small></span></div>'+
+      '<div class="row" style="cursor:default"><span class="ri" style="background:#0ea5e9">💙</span><span class="rt"><b>'+L('Не си сам','You are not alone')+'</b><small>'+L('Национална телефонна линия за деца: 116 111','National children’s helpline: 116 111')+'</small></span></div></div>'+
+      '<div class="act"><button data-a="pgcall">📞 '+L('Директор','Principal')+'</button><button data-a="pgmsg">💬 '+L('Питай помощника','Ask the assistant')+'</button></div>'+
+      '<p style="text-align:center;color:var(--mut);font-size:.8em">'+L('Демонстрационен проект – не е официалният сайт на училището.','A demo project – not the school’s official website.')+'</p></div>';
+  };
+  ACT.pgcall=function(){S.ph.num='+359 888 98 48 96';S.ph.tab='keys';S.ph.call=null;openApp('phone')};
+  ACT.pgmsg=function(){S.msg.c=0;openApp('msg')};
+  function filterSet(){$$('.sc .row[data-s]').forEach(function(r){r.hidden=S.sq&&r.getAttribute('data-s').indexOf(S.sq)<0})}
+  function saveNotes(){lsSet('pgpt-aph-notes',JSON.stringify(S.notes.list))}
 })();
 </script>
 <style id="ball3d-css">

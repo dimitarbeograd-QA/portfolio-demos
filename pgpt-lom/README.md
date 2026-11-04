@@ -12,6 +12,7 @@ A lightweight website (one `index.html` plus an `img/` folder of optimized pictu
 - Bulgarian and English versions, font size controls and a high-contrast mode;
 - accessibility work in the spirit of WCAG 2.1 / EN 301 549: skip link, visible focus, correct page language, screen-reader announcements of page changes;
 - a back button that returns to the exact place you left (scroll position and open panel);
+- an interactive Android simulator: the small phone next to the laptop (in the STEM article) opens a full-screen phone with lock screen, home screen, quick settings, recent apps and working Settings, Phone, Messages, Camera, Gallery, Calculator, Clock, Calendar, Notes and a Browser (Wi-Fi / airplane mode really switch it offline). It lives in a Shadow DOM block (`aphone-css` / `aphone-js`), loads nothing from outside, and is bilingual (BG / EN);
 - a spinning 3D volleyball in the Sport panel, drawn in real time on a canvas (no libraries, no pictures: 18 panels in 6 sections of 3 strips, built from geometry).
 
 Stack: vanilla HTML, CSS and JavaScript.
