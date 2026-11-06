@@ -14,6 +14,15 @@ BASE_PATH = os.environ.get('BASE_PATH', '/')          # за 404.html, напр.
 OLD = 'https://sudm-lom.bg'
 SCHOOL = 'СУ „Димитър Маринов“'
 
+import hashlib
+def _asset_version():
+    h = hashlib.md5()
+    for f in ('assets/css/style.css', 'assets/js/app.js', 'src/pages.json', 'src/news.json', 'src/projects.json', 'src/build.py'):
+        fp = ROOT_DIR / f
+        if fp.exists(): h.update(fp.read_bytes())
+    return h.hexdigest()[:8]
+ASSET_V = _asset_version()   # версия в адресите на стилове и скриптове: браузърът никога не смесва нов HTML със стар кеш
+
 PAGES = json.load(open(SRC / 'pages.json', encoding='utf-8'))
 NEWS = json.load(open(SRC / 'news.json', encoding='utf-8'))
 NEWS.sort(key=lambda n: n['date'], reverse=True)
@@ -140,7 +149,7 @@ def layout(depth, slug, title, desc, body, og_img='assets/img/school.jpg', extra
 <link rel="icon" href="{root}assets/img/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geologica:wght@500..800&family=Golos+Text:wght@400..700&display=swap">
-<link rel="stylesheet" href="{root}assets/css/style.css">
+<link rel="stylesheet" href="{root}assets/css/style.css?v={ASSET_V}">
 {extra_head}
 </head>
 <body{' class="is-home"' if is_home else ''}>
@@ -225,8 +234,8 @@ def layout(depth, slug, title, desc, body, og_img='assets/img/school.jpg', extra
     <p id="none" hidden>Няма такъв раздел. Опитай с друга дума или виж страницата „Контакти“.</p>
   </div>
 </dialog>
-<script src="{root}assets/js/search-data.js" defer></script>
-<script src="{root}assets/js/app.js" defer></script>
+<script src="{root}assets/js/search-data.js?v={ASSET_V}" defer></script>
+<script src="{root}assets/js/app.js?v={ASSET_V}" defer></script>
 </body>
 </html>
 '''
