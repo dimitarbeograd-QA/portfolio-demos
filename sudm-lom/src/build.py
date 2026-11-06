@@ -33,7 +33,7 @@ TITLES = {
     'iziavi': 'Изяви и постижения', 'priem-1-klas': 'Прием в 1. клас', 'priem-5-klas': 'Прием в 5. клас',
     'priem-8-klas': 'Прием в 8. клас', 'normativni-dokumenti': 'Нормативни документи',
     'uchebni-planove': 'Учебни планове', 'byudzhet': 'Бюджет', 'obrazci': 'Образци на документи',
-    'bdp': 'Безопасни условия на труд (БДП)', 'proekti': 'Проекти', 'nacionalni-programi': 'Национални програми',
+    'bdp': 'Безопасност на движението по пътищата (БДП)', 'proekti': 'Проекти', 'nacionalni-programi': 'Национални програми',
     'kontakti': 'Контакти',
 }
 LEADS = {
@@ -59,7 +59,7 @@ LEADS = {
 
 # ------------------------------------------------------------------ навигация
 NAV = [
-    ('За училището', [('Мисия и визия', 'za-nas'), ('Патрон', 'patron'), ('История', 'istoriya'), ('Екип', 'ekip'), ('Обществен съвет', 'obshtestven-suvet'), ('Защита на личните данни', 'lichni-danni')]),
+    ('За училището', [('Мисия и визия', 'za-nas'), ('Патрон', 'patron'), ('История', 'istoriya'), ('Екип', 'ekip'), ('Обществен съвет', 'obshtestven-suvet'), ('Защита на личните данни', 'lichni-danni'), ('Профил на купувача', 'https://sop.bg/su-lom-1208/')]),
     ('Прием', [('Прием – общо', 'priem'), ('Прием в 1. клас', 'priem-1-klas'), ('Прием в 5. клас', 'priem-5-klas'), ('Прием в 8. клас', 'priem-8-klas')]),
     ('Документи', [('Всички документи', 'dokumenti'), ('Нормативни документи', 'normativni-dokumenti'), ('Учебни планове', 'uchebni-planove'), ('Бюджет', 'byudzhet'), ('Образци на документи', 'obrazci'), ('БДП', 'bdp')]),
     ('Проекти', [('Проекти', 'proekti'), ('Национални програми', 'nacionalni-programi')]),
@@ -68,7 +68,8 @@ NAV = [
 GROUPS = {}   # slug -> (име на групата, [(име, slug)])
 for n in NAV:
     if isinstance(n[1], list):
-        for _, s in n[1]: GROUPS[s] = (n[0], n[1])
+        for _, s in n[1]:
+            if not s.startswith('http'): GROUPS[s] = (n[0], n[1])
 
 SEARCH = []   # [заглавие, раздел, път]
 
@@ -88,7 +89,10 @@ ICONS = '''<svg width="0" height="0" style="position:absolute" aria-hidden="true
 <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
 </svg>'''
 
-MAP = 'https://www.google.com/maps/search/?api=1&amp;query=%D1%83%D0%BB.%20%D0%94%D0%B8%D0%BD%D0%B0%D0%B2%D1%81%D0%BA%D0%B0%2067%20%D0%9B%D0%BE%D0%BC'
+MAP = 'https://www.google.com/maps/search/?api=1&amp;query=%D1%83%D0%BB.%20%D0%94%D1%83%D0%BD%D0%B0%D0%B2%D1%81%D0%BA%D0%B0%2067%20%D0%9B%D0%BE%D0%BC'
+
+def href(root, s):
+    return s if s.startswith('http') else link(root, s)
 
 def nav_html(root, active):
     out = []
@@ -96,7 +100,7 @@ def nav_html(root, active):
         name, tgt = n
         if isinstance(tgt, list):
             cur = any(s == active for _, s in tgt)
-            li = ''.join(f'<li><a href="{link(root, s)}"{" aria-current=\"page\"" if s == active else ""}>{esc(t)}</a></li>' for t, s in tgt)
+            li = ''.join(f'<li><a href="{href(root, s)}"{" aria-current=\"page\"" if s == active else ""}>{esc(t)}</a></li>' for t, s in tgt)
             out.append(f'<li class="has{" end" if i >= len(NAV) - 4 else ""}"><button class="nl" type="button" aria-expanded="false" aria-controls="m{i}">{esc(name)} <svg class="ico chev"><use href="#i-chev"/></svg></button><div class="menu" id="m{i}"><ul>{li}</ul></div></li>')
         else:
             cur = ' aria-current="page"' if tgt == active else ''
@@ -105,19 +109,33 @@ def nav_html(root, active):
     out.append(f'<li class="mob-only"><a class="nl" href="{link(root, "roditeli-i-uchenici")}">За родители и ученици</a></li>')
     return '\n'.join(out)
 
-def layout(depth, slug, title, desc, body, og_img='assets/img/school.jpg', extra_head='', is_home=False):
+def short_title(title):
+    t = title.strip()
+    if len(t) > 52: t = t[:51].rsplit(' ', 1)[0].rstrip(',;:–- ') + '…'
+    return t
+
+def cut_desc(d, n=155):
+    d = re.sub(r'\s+', ' ', d or '').strip()
+    if len(d) <= n: return d
+    return d[:n].rsplit(' ', 1)[0].rstrip(',;:–- ') + '…'
+
+def layout(depth, slug, title, desc, body, og_img='assets/img/school.jpg', extra_head='', is_home=False, canon_slug=None, og_type='website', noindex=False):
     root = '../' * depth
-    full_title = SCHOOL + ' – Лом' if is_home else f'{title} – {SCHOOL} – Лом'
-    canon = f'<link rel="canonical" href="{SITE_URL}/{slug + "/" if slug else ""}">' if SITE_URL else ''
+    full_title = SCHOOL + ' – Лом' if is_home else f'{short_title(title)} – СУ „Д. Маринов“ – Лом'
+    cs = slug if canon_slug is None else canon_slug
+    canon_url = f'{SITE_URL}/{cs + "/" if cs else ""}'
+    canon = f'<link rel="canonical" href="{canon_url}"><meta property="og:url" content="{canon_url}">' if (SITE_URL and not noindex) else ''
     ogu = f'<meta property="og:image" content="{SITE_URL}/{og_img}">' if SITE_URL else ''
+    desc = cut_desc(desc) or f'{title} – {SCHOOL}, град Лом.'
+    robots = '<meta name="robots" content="noindex">' if noindex else ''
     return f'''<!doctype html>
 <html lang="bg" data-root="{root}">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{esc(full_title)}</title>
 <meta name="description" content="{esc(desc)}">
-<meta property="og:type" content="website"><meta property="og:title" content="{esc(full_title)}"><meta property="og:description" content="{esc(desc)}">{ogu}
+<meta property="og:type" content="{og_type}"><meta property="og:site_name" content="{SCHOOL} – Лом"><meta property="og:locale" content="bg_BG"><meta property="og:title" content="{esc(full_title)}"><meta property="og:description" content="{esc(desc)}"><meta name="twitter:card" content="summary_large_image">{ogu}{robots}
 {canon}
 <meta name="theme-color" content="#8a1c4f">
 <link rel="icon" href="{root}assets/img/favicon.png">
@@ -150,7 +168,7 @@ def layout(depth, slug, title, desc, body, og_img='assets/img/school.jpg', extra
     </ul></nav>
   </div>
 </header>
-<main id="main">
+<main id="main" tabindex="-1">
 {body}
 </main>
 <footer>
@@ -159,7 +177,7 @@ def layout(depth, slug, title, desc, body, og_img='assets/img/school.jpg', extra
       <img class="logo" src="{root}assets/img/logo.png" alt="{SCHOOL}" width="240" height="141">
       <h2>{SCHOOL} – Лом</h2>
       <p style="margin:0 0 6px">Ако успееш тук, ще успееш навсякъде!</p>
-      <p style="margin:0">гр. Лом, ул. Динавска №67<br>тел./факс: 0894 472 694<br>info-1209005@edu.mon.bg</p>
+      <p style="margin:0">гр. Лом, ул. Дунавска №67<br>тел./факс: 0894 472 694<br>info-1209005@edu.mon.bg</p>
     </div>
     <div>
       <h2>Раздели</h2>
@@ -167,7 +185,7 @@ def layout(depth, slug, title, desc, body, og_img='assets/img/school.jpg', extra
     </div>
     <div>
       <h2>Връзки</h2>
-      <a href="https://app.shkolo.bg/">Е-дневник</a><a href="https://web.mon.bg/mon/">МОН</a><a href="https://ruo-montana.bg/">РУО Монтана</a><a href="https://www.lom.bg/">Община Лом</a>
+      <a href="https://app.shkolo.bg/">Е-дневник</a><a href="https://sop.bg/su-lom-1208/">Профил на купувача</a><a href="https://web.mon.bg/mon/">МОН</a><a href="https://rsvu.mon.bg/#/">Рейтингова система на висшите училища</a><a href="https://ruo-montana.bg/">РУО Монтана</a><a href="https://www.lom.bg/">Община Лом</a>
       <a href="https://www.facebook.com/people/%D0%A1%D0%A3-%D0%94%D0%B8%D0%BC%D0%B8%D1%82%D1%8A%D1%80-%D0%9C%D0%B0%D1%80%D0%B8%D0%BD%D0%BE%D0%B2/100063863358048/">Facebook</a><a href="https://www.youtube.com/@avstudio_sudm_lom9515">YouTube</a>
     </div>
   </div>
@@ -177,9 +195,9 @@ def layout(depth, slug, title, desc, body, og_img='assets/img/school.jpg', extra
 <dialog id="dlgContact" aria-labelledby="cTitle">
   <div class="dh"><h2 id="cTitle">Бързи контакти</h2><button class="x" type="button" data-close aria-label="Затвори"><svg class="ico"><use href="#i-x"/></svg></button></div>
   <div class="db">
-    <div class="field"><svg class="ico"><use href="#i-pin"/></svg><div><small>Адрес</small><b>гр. Лом, ул. Динавска №67</b></div><a class="copy" style="text-decoration:none" href="{MAP}">Карта</a></div>
+    <div class="field"><svg class="ico"><use href="#i-pin"/></svg><div><small>Адрес</small><b>гр. Лом, ул. Дунавска №67</b></div><a class="copy" style="text-decoration:none" href="{MAP}">Карта</a></div>
     <div class="field"><svg class="ico"><use href="#i-phone"/></svg><div><small>Телефон / факс</small><b>0894 472 694</b></div><button class="copy" type="button" data-copy="0894472694">Копирай</button></div>
-    <div class="field"><svg class="ico"><use href="#i-phone"/></svg><div><small>Администрация</small><b>0971 60011</b></div><button class="copy" type="button" data-copy="097160011">Копирай</button></div>
+    <div class="field"><svg class="ico"><use href="#i-phone"/></svg><div><small>Факс</small><b>0971 60011</b></div><button class="copy" type="button" data-copy="097160011">Копирай</button></div>
     <div class="field"><svg class="ico"><use href="#i-mail"/></svg><div><small>Имейл</small><b>info-1209005@edu.mon.bg</b></div><button class="copy" type="button" data-copy="info-1209005@edu.mon.bg">Копирай</button></div>
     <div class="field"><svg class="ico"><use href="#i-mail"/></svg><div><small>Имейл</small><b>info@sudm-lom.bg</b></div><button class="copy" type="button" data-copy="info@sudm-lom.bg">Копирай</button></div>
     <p style="margin:14px 0 0"><a class="btn ghost" href="{link(root, 'kontakti')}">Работно време и още</a></p>
@@ -190,12 +208,13 @@ def layout(depth, slug, title, desc, body, og_img='assets/img/school.jpg', extra
   <div class="db">
     <label for="q" class="eyebrow" style="display:block;margin-bottom:8px">Какво търсиш? <span class="kbd">Ctrl K</span></label>
     <input class="search-in" id="q" type="search" placeholder="Например: НВО, прием, бюджет…" autocomplete="off">
+    <p class="sr-only" id="sCount" role="status" aria-live="polite"></p>
     <ul id="res"></ul>
     <p id="none" hidden>Няма такъв раздел. Опитай с друга дума или виж страницата „Контакти“.</p>
   </div>
 </dialog>
-<script src="{root}assets/js/search-data.js"></script>
-<script src="{root}assets/js/app.js"></script>
+<script src="{root}assets/js/search-data.js" defer></script>
+<script src="{root}assets/js/app.js" defer></script>
 </body>
 </html>
 '''
@@ -217,23 +236,30 @@ def pagehead(title, lead=''):
 def side(root, slug):
     if slug not in GROUPS: return ''
     gname, items = GROUPS[slug]
-    li = ''.join(f'<li><a href="{link(root, s)}"{" aria-current=\"page\"" if s == slug else ""}>{esc(t)}</a></li>' for t, s in items)
+    li = ''.join(f'<li><a href="{href(root, s)}"{" aria-current=\"page\"" if s == slug else ""}>{esc(t)}</a></li>' for t, s in items)
     return f'<aside class="side" aria-label="В този раздел"><h2>{esc(gname)}</h2><ul>{li}</ul></aside>'
+
+def ext_name(url):
+    m = re.search(r'\.(\w{2,4})(?:\?|$)', url)
+    return (m.group(1).upper() if m else 'файл')
 
 def ext_badge(url):
     m = re.search(r'\.(\w{2,4})(?:\?|$)', url)
     e = (m.group(1).lower() if m else 'file')
     cls = 'doc' if e.startswith('doc') else 'xls' if e.startswith('xls') else 'zip' if e in ('zip', 'rar') else ''
-    return f'<span class="ext {cls}">{esc(e.upper())}</span>'
+    return f'<span class="ext {cls}" aria-hidden="true">{esc(e.upper())}</span>'
 
 def docs_list(docs):
-    items = ''.join(f'<li><a href="{esc(d["url"])}">{ext_badge(d["url"])}<span>{esc(d["text"])}</span></a></li>' for d in docs)
+    items = ''.join(f'<li><a href="{esc(d["url"])}">{ext_badge(d["url"])}<span>{esc(d["text"])}<span class="sr-only"> ({ext_name(d["url"])})</span></span></a></li>' for d in docs)
     return f'<ul class="docs">{items}</ul>'
 
 def blocks_html(blocks, root, filter_ui=True):
     """Превръща блоковете от стария сайт в чист HTML."""
     out = []; i = 0; docs_total = sum(1 for b in blocks if b['t'] == 'doc')
     first_docs = True
+    if filter_ui and docs_total >= 8:
+        out.append('<div class="tools-row"><input class="filter" id="docFilter" type="search" placeholder="Търси в документите…" aria-label="Търси в документите"><span class="count" id="docCount" aria-live="polite"></span></div>')
+        first_docs = False
     while i < len(blocks):
         b = blocks[i]; t = b['t']
         if t == 'doc':
@@ -309,7 +335,26 @@ def page_ekip():
 def page_obshtestven():
     slug = 'obshtestven-suvet'; blocks = PAGES[slug]['blocks']
     docs = [b for b in blocks if b['t'] == 'doc']; rest = [b for b in blocks if b['t'] in ('h', 'p')]
-    main = '<h2 style="margin-top:0">Състав</h2>' + person_cards(rest).replace('person lead', 'person') if rest else ''
+    main = ''
+    if rest:
+        ppl = []; i = 0
+        while i < len(rest):
+            if rest[i]['t'] == 'h':
+                role = rest[i + 1]['text'] if i + 1 < len(rest) and rest[i + 1]['t'] == 'p' else ''
+                ppl.append(rest[i]); ppl[-1] = {'t': 'h', 'text': rest[i]['text'], 'role': role}
+            i += 1
+        # ролята се пази само при първия от групата; наследяваме предишната, ако липсва
+        last = ''
+        for x in ppl:
+            if x['role']: last = x['role']
+            else: x['role'] = last
+        def cards(lst): 
+            blocks = []
+            for x in lst: blocks += [{'t': 'h', 'text': x['text']}, {'t': 'p', 'text': x['role']}]
+            return person_cards(blocks).replace('person lead', 'person')
+        mainm = [x for x in ppl if not x['role'].lower().startswith('резерв')]; res = [x for x in ppl if x['role'].lower().startswith('резерв')]
+        main += '<h2 style="margin-top:0">Основни членове</h2>' + cards(mainm)
+        if res: main += '<h2>Резервни членове</h2>' + cards(res)
     main += '<h2>Документи</h2>' + docs_list(docs)
     body = crumbs(1, [('За училището', None), ('Обществен съвет', None)]) + pagehead('Обществен съвет', LEADS[slug])
     body += f'<div class="wrap layout">{side("../", slug)}<div class="prose">{main}</div></div><div style="height:72px"></div>'
@@ -333,7 +378,7 @@ def page_zanas():
     mission = blocks[mi:] if mi is not None else []
     main = '<div class="cards">' + ''.join(f'<div class="card"><b>{esc(t)}</b><span>{esc(d)}</span></div>' for t, d in feats) + '</div>'
     main += f'<div class="prose checks">{blocks_html(mission, "../", False)}</div>'
-    lead = ps[0]['text'] if ps else LEADS[slug]
+    lead = ' '.join(x['text'] for x in ps) if ps else LEADS[slug]
     body = crumbs(1, [('За училището', None), ('Мисия и визия', None)]) + pagehead('Мисия и визия', lead)
     body += f'<div class="wrap layout">{side("../", slug)}<div>{main}</div></div><div style="height:72px"></div>'
     write(slug, layout(1, slug, 'Мисия и визия', lead, body)); reg('Мисия и визия', 'За училището', slug)
@@ -348,6 +393,27 @@ def page_patron():
 def news_href(root, n): return f'{root}novini/{n["slug"]}/index.html'
 NEWS_BY_TITLE = {n['title'].strip(): n for n in NEWS}
 
+PROJECTS = [x for x in json.load(open(SRC / 'projects.json', encoding='utf-8')) if len(re.sub(r'<[^>]+>', '', x['body'])) >= 100] if (SRC / 'projects.json').exists() else []
+PROJ_BY_TITLE = {x['title'].strip(): x for x in PROJECTS}
+
+def page_project_posts():
+    from PIL import Image
+    for x in PROJECTS:
+        root = '../../'; sec = x['section']; secname = TITLES[sec]
+        gal = ''
+        if x['imgs']:
+            tags = []
+            for i, g in enumerate(x['imgs']):
+                try: w, h = Image.open(ROOT_DIR / 'assets/img/news' / g['f']).size
+                except Exception: w, h = 960, 640
+                tags.append(f'<img src="{root}assets/img/news/{g["f"]}" alt="{esc(g["alt"] or (x["title"] + " – снимка " + str(i + 1)))}" width="{w}" height="{h}" loading="lazy" decoding="async">')
+            gal = '<div class="gal">' + ''.join(tags) + '</div>'
+        src = f'<p style="color:var(--muted);font-size:.9rem">Оригинална публикация: <a href="{esc(x["url"])}">sudm-lom.bg</a></p>'
+        body = crumbs(2, [('Проекти', f'{root}proekti/index.html'), (secname, f'{root}{sec}/index.html'), (x['title'], None)])
+        body += f'<article class="wrap post" style="padding-top:20px"><div class="meta"><time datetime="{x["date"]}">{bg_date(x["date"])}</time></div><h1>{esc(x["title"])}</h1><div class="prose">{x["body"]}</div>{gal}{src}</article><div style="height:72px"></div>'
+        write(f'{sec}/{x["slug"]}', layout(2, sec, x['title'], x['excerpt'], body, canon_slug=f'{sec}/{x["slug"]}', og_type='article'))
+        SEARCH.append([x['title'], secname, f'{sec}/{x["slug"]}/index.html'])
+
 def project_cards(slug):
     blocks = PAGES[slug]['blocks']; cards = []; imgs = [b for b in blocks if b['t'] == 'img' and b.get('file')]
     i = 0
@@ -356,9 +422,11 @@ def project_cards(slug):
         if b['t'] == 'h' and b.get('url'):
             date = blocks[i + 1]['text'] if i + 1 < len(blocks) and blocks[i + 1]['t'] == 'p' else ''
             exc = blocks[i + 2]['text'] if i + 2 < len(blocks) and blocks[i + 2]['t'] == 'p' else ''
+            exc = re.sub(r'\s*\[[a-z_]+[^\]]*\]?.*$', '…', exc) if '[' in exc else exc
             img = next((g for g in imgs if g.get('alt', '').strip() == b['text'].strip()), None)
             n = NEWS_BY_TITLE.get(b['text'].strip())
-            href = news_href('../', n) if n else b['url']
+            pj = PROJ_BY_TITLE.get(b['text'].strip())
+            href = news_href('../', n) if n else (f'../{pj["section"]}/{pj["slug"]}/index.html' if pj else b['url'])
             cards.append((b['text'], date, exc, img, href));
         i += 1
     out = []
@@ -376,15 +444,15 @@ def page_projects(slug):
 def page_kontakti():
     slug = 'kontakti'
     cards = f'''<div class="cards">
-<div class="card"><svg class="ico" style="width:1.5em;height:1.5em;color:var(--plum)"><use href="#i-pin"/></svg><b>Адрес</b><span>гр. Лом, ул. Динавска №67</span><a href="{MAP}" style="color:var(--plum);font-weight:700">Виж на картата</a></div>
-<div class="card"><svg class="ico" style="width:1.5em;height:1.5em;color:var(--plum)"><use href="#i-phone"/></svg><b>Телефон</b><span>тел./факс: 0894 472 694<br>администрация: 0971 60011</span></div>
+<div class="card"><svg class="ico" style="width:1.5em;height:1.5em;color:var(--plum)"><use href="#i-pin"/></svg><b>Адрес</b><span>гр. Лом, ул. Дунавска №67</span><a href="{MAP}" style="color:var(--plum);font-weight:700">Виж адреса на картата</a></div>
+<div class="card"><svg class="ico" style="width:1.5em;height:1.5em;color:var(--plum)"><use href="#i-phone"/></svg><b>Телефон</b><span>тел./факс: 0894 472 694<br>факс: 0971 60011</span></div>
 <div class="card"><svg class="ico" style="width:1.5em;height:1.5em;color:var(--plum)"><use href="#i-mail"/></svg><b>Имейл</b><span>info-1209005@edu.mon.bg<br>info@sudm-lom.bg</span></div>
 </div>
 <div class="two2">
 <div><h2 style="font-size:1.4rem;margin-bottom:6px">Приемно време за родители и граждани</h2>
-<table class="hours"><tbody><tr><th>Вторник</th><td>12:00 – 14:00</td></tr><tr><th>Четвъртък</th><td>12:00 – 14:00</td></tr></tbody></table></div>
+<table class="hours"><caption class="sr-only">Приемно време</caption><tbody><tr><th scope="row">Вторник</th><td>12:00 – 14:00</td></tr><tr><th scope="row">Четвъртък</th><td>12:00 – 14:00</td></tr></tbody></table></div>
 <div><h2 style="font-size:1.4rem;margin-bottom:6px">Работно време на администрацията</h2>
-<table class="hours"><tbody><tr><th>Понеделник – петък</th><td>08:00 – 16:30 ч.</td></tr><tr><th>Почивка</th><td>12:00 – 12:30 ч.</td></tr></tbody></table></div>
+<table class="hours"><caption class="sr-only">Работно време на администрацията</caption><tbody><tr><th scope="row">Понеделник – петък</th><td>08:00 – 16:30 ч.</td></tr><tr><th scope="row">Почивка</th><td>12:00 – 12:30 ч.</td></tr></tbody></table></div>
 </div>'''
     body = crumbs(1, [('Контакти', None)]) + pagehead('Контакти', LEADS[slug])
     body += f'<div class="wrap" style="padding-top:24px">{cards}</div><div style="height:56px"></div>'
@@ -403,6 +471,8 @@ def page_izpiti():
     for s, t in parts:
         bl = PAGES.get(s, {}).get('blocks', [])
         inner = blocks_html(bl, '../', False) or '<p>Информацията ще бъде публикувана тук.</p>'
+        if not any(b['t'] == 'doc' for b in bl) and len(bl) <= 1:
+            inner += '<p>За този изпит на сайта на училището няма публикувана допълнителна информация. Виж <a href="https://web.mon.bg/mon/">сайта на МОН</a>.</p>'
         secs += f'<section id="{s}" style="scroll-margin-top:calc(var(--hdr) + 16px)"><h2>{esc(t)}</h2>{inner}</section>'
     body = crumbs(1, [('Изпити', None)]) + pagehead('Изпити', 'Национално външно оценяване, матури и поправителни изпити.')
     body += f'<div class="wrap" style="padding-top:20px"><div class="chips">{chips}</div><div class="prose checks">{secs}</div></div><div style="height:72px"></div>'
@@ -414,7 +484,7 @@ def page_priem():
     page_hub('priem', 'Прием', 'Всичко за записването в училището.', items, 'Прием')
 
 def page_dokumenti():
-    items = [('Нормативни документи', LEADS['normativni-dokumenti'], 'normativni-dokumenti'), ('Учебни планове', LEADS['uchebni-planove'], 'uchebni-planove'), ('Бюджет', LEADS['byudzhet'], 'byudzhet'), ('Образци на документи', LEADS['obrazci'], 'obrazci'), ('Безопасни условия на труд', LEADS['bdp'], 'bdp'), ('Обществен съвет', LEADS['obshtestven-suvet'], 'obshtestven-suvet'), ('Защита на личните данни', LEADS['lichni-danni'], 'lichni-danni')]
+    items = [('Нормативни документи', LEADS['normativni-dokumenti'], 'normativni-dokumenti'), ('Учебни планове', LEADS['uchebni-planove'], 'uchebni-planove'), ('Бюджет', LEADS['byudzhet'], 'byudzhet'), ('Образци на документи', LEADS['obrazci'], 'obrazci'), ('Безопасност на движението по пътищата', LEADS['bdp'], 'bdp'), ('Обществен съвет', LEADS['obshtestven-suvet'], 'obshtestven-suvet'), ('Защита на личните данни', LEADS['lichni-danni'], 'lichni-danni')]
     page_hub('dokumenti', 'Документи', 'Всички официални документи на едно място.', items, 'Документи')
 
 def page_roditeli():
@@ -427,6 +497,8 @@ def page_roditeli():
 <a class="card" href="{link('../', 'novini')}"><b>Новини</b><span>Какво се случва в училището.</span><em>Отвори →</em></a>
 <a class="card" href="{link('../', 'kontakti')}"><b>Контакти и приемно време</b><span>Кога и как да ни намерите.</span><em>Отвори →</em></a>
 </div>'''
+    pd = [b for b in PAGES['za-roditeli']['blocks'] if b['t'] == 'doc']; ud = [b for b in PAGES['za-uchenici']['blocks'] if b['t'] == 'doc']
+    cards += '<div class="prose"><h2>Документи за родители</h2>' + docs_list(pd) + '<h2>Документи за ученици</h2>' + docs_list(ud) + '</div>'
     body = crumbs(1, [('За родители и ученици', None)]) + pagehead('За родители и ученици', 'Най-важното за семействата, на една страница.')
     body += f'<div class="wrap" style="padding-top:24px">{cards}</div><div style="height:72px"></div>'
     write(slug, layout(1, slug, 'За родители и ученици', 'Е-дневник, прием, изпити и контакти.', body)); reg('За родители и ученици', 'Начало', slug)
@@ -441,14 +513,16 @@ def page_iziavi():
 
 # --------------------------------------------------------------------- новини
 def thumb(root, n):
-    if n['imgs']: return f'<div class="th"><img src="{root}assets/img/news/{n["imgs"][0]["f"]}" alt="" loading="lazy"></div>'
+    if n['imgs']:
+        f = n['imgs'][0]['f']; tw, th_ = (n['imgs'][0].get('tw') or 400, n['imgs'][0].get('th') or 300)
+        return f'<div class="th"><img src="{root}assets/img/news/t-{f}" alt="" width="{tw}" height="{th_}" loading="lazy" decoding="async"></div>'
     return f'<div class="th" style="display:grid;place-items:center"><img src="{root}assets/img/logo.png" alt="" style="width:46%;height:auto;object-fit:contain;opacity:.9"></div>'
 
 def is_full(n): return bool(n['imgs']) or len(re.sub(r'<[^>]+>','',n['body'])) >= 300
 
 def ncard(root, n, small=False):
     cats = '|' + '|'.join(n['cats']) + '|'
-    return f'<a class="ncard{" nsmall" if small else ""}" href="{news_href(root, n)}" data-cats="{esc(cats)}">{"" if small else thumb(root, n)}<div class="nb"><span class="meta"><time datetime="{n["date"]}">{bg_date_s(n["date"])}</time>{"<span>" + esc(n["cats"][0]) + "</span>" if n["cats"] else ""}</span><h3>{esc(n["title"])}</h3><p>{esc(n["excerpt"])}</p></div></a>'
+    return f'<a class="ncard{" nsmall" if small else ""}" href="{news_href(root, n)}" data-cats="{esc(cats)}">{"" if small else thumb(root, n)}<div class="nb"><span class="meta"><time datetime="{n["date"]}">{bg_date_s(n["date"])}</time>{"<span>" + esc(n["cats"][0]) + "</span>" if n["cats"] else ""}</span><h2>{esc(n["title"])}</h2><p>{esc(n["excerpt"])}</p></div></a>'
 
 def page_novini():
     cats = {}
@@ -461,25 +535,36 @@ def page_novini():
 <div class="tools-row"><input class="filter" id="newsFilter" type="search" placeholder="Търси в новините…" aria-label="Търси в новините"><span class="count" id="newsCount" aria-live="polite"></span></div>
 <div class="chips" role="group" aria-label="Категории">{chips}</div>
 <div class="ngrid">{''.join(ncard('../', n) for n in NEWS if is_full(n))}</div>
+<p><button class="btn ghost" id="moreNews" type="button" hidden>Покажи още новини</button></p>
 <h2 class="subhead">Кратки съобщения</h2>
 <div class="ngrid small">{''.join(ncard('../', n, True) for n in NEWS if not is_full(n))}</div>
 <p style="color:var(--muted)">По-старите новини са в <a href="{OLD}/category/novini/" style="color:var(--plum);font-weight:700">архива на стария сайт</a>.</p>
 </div><div style="height:72px"></div>'''
     write('novini', layout(1, 'novini', 'Новини', 'Новини от училищния живот на СУ „Димитър Маринов“ – Лом.', body)); reg('Новини', 'Новини', 'novini')
 
+DUP = {}
+for _n in NEWS: DUP[_n['title'].strip()] = DUP.get(_n['title'].strip(), 0) + 1
+def ptitle(n):
+    return f"{n['title']} ({bg_date_s(n['date'])})" if DUP.get(n['title'].strip(), 0) > 1 else n['title']
+
+def article_ld(n):
+    d = {"@context": "https://schema.org", "@type": "NewsArticle", "headline": n['title'][:110], "datePublished": n['date'], "inLanguage": "bg", "author": {"@type": "Organization", "name": "СУ „Димитър Маринов“"}}
+    if SITE_URL and n['imgs']: d["image"] = f"{SITE_URL}/assets/img/news/{n['imgs'][0]['f']}"
+    return '<script type="application/ld+json">' + json.dumps(d, ensure_ascii=False) + '</script>'
+
 def page_news_posts():
     for k, n in enumerate(NEWS):
         root = '../../'
         prev_n = NEWS[k + 1] if k + 1 < len(NEWS) else None; next_n = NEWS[k - 1] if k > 0 else None
         gal = ''
-        if n['imgs']: gal = '<div class="gal">' + ''.join(f'<img src="{root}assets/img/news/{g["f"]}" alt="{esc(g["alt"])}" loading="lazy">' for g in n['imgs']) + '</div>'
+        if n['imgs']: gal = '<div class="gal">' + ''.join(f'<img src="{root}assets/img/news/{g["f"]}" alt="{esc(g["alt"] or (n["title"] + " – снимка " + str(i + 1)))}" width="{g.get("w") or 960}" height="{g.get("h") or 640}" loading="lazy" decoding="async">' for i, g in enumerate(n['imgs'])) + '</div>'
         cats = ''.join(f'<span class="pill">{esc(c)}</span> ' for c in n['cats'])
         pn = '<div class="pn">' + (f'<a href="{news_href(root, prev_n)}"><small>← По-старa</small>{esc(prev_n["title"])}</a>' if prev_n else '<span></span>') + (f'<a class="nx" href="{news_href(root, next_n)}"><small>По-нова →</small>{esc(next_n["title"])}</a>' if next_n else '<span></span>') + '</div>'
         src = f'<p style="color:var(--muted);font-size:.9rem">Оригинална публикация: <a href="{esc(n["url"])}">sudm-lom.bg</a></p>'
         body = crumbs(2, [('Новини', f'{root}novini/index.html'), (n['title'], None)])
         body += f'<article class="wrap post" style="padding-top:20px"><div class="meta"><time datetime="{n["date"]}">{bg_date(n["date"])}</time></div><h1>{esc(n["title"])}</h1><div class="prose">{n["body"]}</div>{gal}<div>{cats}</div>{src}{pn}</article><div style="height:72px"></div>'
         og = f'assets/img/news/{n["imgs"][0]["f"]}' if n['imgs'] else 'assets/img/school.jpg'
-        write(f'novini/{n["slug"]}', layout(2, 'novini', n['title'], n['excerpt'], body, og_img=og))
+        write(f'novini/{n["slug"]}', layout(2, 'novini', ptitle(n), n['excerpt'], body, og_img=og, canon_slug=f'novini/{n["slug"]}', og_type='article', extra_head=article_ld(n)))
         SEARCH.append([n['title'], 'Новини · ' + bg_date_s(n['date']), f'novini/{n["slug"]}/index.html'])
 
 # ------------------------------------------------------------------- начало
@@ -492,10 +577,10 @@ def page_home():
     prog = next((n for n in NEWS if n['title'].startswith('Програма за')), None)
     body = f'''<div class="wrap" id="top">
   <section class="cover" aria-labelledby="h1">
-    <div class="ph"><img src="assets/img/school.jpg" alt="Сградата на {SCHOOL} в Лом: входът с три арковидни врати и бюст на патрона" width="1200" height="675" fetchpriority="high"></div>
+    <div class="ph"><img src="assets/img/school.jpg" srcset="assets/img/school-640.jpg 640w, assets/img/school.jpg 1200w" sizes="(max-width:700px) 100vw, 1160px" alt="Сградата на {SCHOOL} в Лом: входът с три арковидни врати и бюст на патрона" width="1200" height="675" fetchpriority="high"></div>
     <div class="shade"></div>
     <div class="tx">
-      <span class="eyebrow">Средно училище · град Лом · ул. Динавска №67</span>
+      <span class="eyebrow">Средно училище · град Лом · ул. Дунавска №67</span>
       <h1 id="h1">Училище, което те води от първия до дванайсетия клас</h1>
       <p>Прием, свободни места, дневна програма и новини от училищния живот на едно място.</p>
       <div class="cta"><a class="btn" href="{link(root, 'priem-1-klas')}">Прием в 1. клас</a><a class="btn ghost" href="{news_href(root, free) if free else link(root, 'priem')}">Свободни места</a></div>
@@ -521,13 +606,13 @@ def page_home():
   </dl>
 
   <section class="patron rv" aria-labelledby="pt">
-    <figure class="pp"><img src="assets/img/patron-plaque.jpg" alt="Паметна плоча с бронзов барелеф на Димитър Маринов, 1846–1940" width="560" height="770" loading="lazy"><figcaption>Паметна плоча на Димитър Маринов</figcaption></figure>
+    <figure class="pp"><img src="assets/img/patron-plaque.jpg" alt="Паметна плоча с бронзов барелеф на Димитър Маринов, 1846–1940" width="560" height="770" loading="lazy" decoding="async"><figcaption>Паметна плоча на Димитър Маринов</figcaption></figure>
     <div>
       <span class="eyebrow">Нашият патрон</span>
       <h2 id="pt">Димитър Маринов</h2>
       <p class="yr">1846 – 1940</p>
       <p>Възрожденец, учен-етнограф и историк, пръв председател на Ломския окръжен съд след Освобождението на България (1878) и депутат в Учредителното събрание (1879).</p>
-      <p>Училището носи името му, а 180-годишнината от рождението му отбелязахме на 26 октомври 2026 г. с екскурзии, срещи и творчески занимания във всички класове.</p>
+      <p>Училището носи името му. На 26 октомври 2026 г. отбелязахме 180 години от рождението му с различни дейности, а учениците от първи до седми клас посетиха Исторически музей.</p>
       <div class="track" aria-hidden="true"><i></i><hr><i></i><hr><i></i><hr><i></i></div>
       <div class="years" aria-hidden="true"><span>1846</span><span>1940</span><span>1970</span><span>2026</span></div>
       <div class="cta"><a class="btn ghost" href="{link(root, 'patron')}">За патрона</a><a class="btn ghost" href="{link(root, 'istoriya')}">История на училището</a></div>
@@ -584,20 +669,20 @@ def page_home():
   <section class="block rv" aria-labelledby="ct">
     <div class="head"><div><h2 id="ct">Контакти</h2><p>Приемно време: вторник и четвъртък, 12:00 – 14:00. Администрация: понеделник – петък, 08:00 – 16:30 ч.</p></div><button class="btn" type="button" data-open="dlgContact">Бързи контакти</button></div>
     <div class="contact">
-      <div class="cc"><svg class="ico"><use href="#i-pin"/></svg><h3>Адрес</h3><p>гр. Лом, ул. Динавска №67</p><p style="margin-top:8px"><a href="{MAP}">Виж на картата</a></p></div>
-      <div class="cc"><svg class="ico"><use href="#i-phone"/></svg><h3>Телефон</h3><p>тел./факс: 0894 472 694<br>администрация: 0971 60011</p></div>
+      <div class="cc"><svg class="ico"><use href="#i-pin"/></svg><h3>Адрес</h3><p>гр. Лом, ул. Дунавска №67</p><p style="margin-top:8px"><a href="{MAP}">Виж адреса на картата</a></p></div>
+      <div class="cc"><svg class="ico"><use href="#i-phone"/></svg><h3>Телефон</h3><p>тел./факс: 0894 472 694<br>факс: 0971 60011</p></div>
       <div class="cc"><svg class="ico"><use href="#i-mail"/></svg><h3>Имейл</h3><p>info-1209005@edu.mon.bg<br>info@sudm-lom.bg</p></div>
     </div>
   </section>
 </div>
 <div style="height:8px"></div>
-<script type="application/ld+json">{json.dumps({"@context": "https://schema.org", "@type": "School", "name": "СУ „Димитър Маринов“", "address": {"@type": "PostalAddress", "streetAddress": "ул. Динавска 67", "addressLocality": "Лом", "addressCountry": "BG"}, "telephone": "+359894472694", "email": "info-1209005@edu.mon.bg"}, ensure_ascii=False)}</script>'''
+<script type="application/ld+json">{json.dumps({"@context": "https://schema.org", "@type": "School", "name": "СУ „Димитър Маринов“", "url": SITE_URL + "/" if SITE_URL else None, "logo": (SITE_URL + "/assets/img/logo.png") if SITE_URL else None, "image": (SITE_URL + "/assets/img/school.jpg") if SITE_URL else None, "address": {"@type": "PostalAddress", "streetAddress": "ул. Дунавска 67", "postalCode": "3600", "addressLocality": "Лом", "addressCountry": "BG"}, "sameAs": ["https://www.facebook.com/people/%D0%A1%D0%A3-%D0%94%D0%B8%D0%BC%D0%B8%D1%82%D1%8A%D1%80-%D0%9C%D0%B0%D1%80%D0%B8%D0%BD%D0%BE%D0%B2/100063863358048/", "https://www.youtube.com/@avstudio_sudm_lom9515"], "telephone": "+359894472694", "email": "info-1209005@edu.mon.bg"}, ensure_ascii=False)}</script>'''
     write('', layout(0, '', 'Начало', 'СУ „Димитър Маринов“ – Лом: прием, свободни места, програма, документи и новини на едно място.', body, is_home=True));
 
 def page_404():
     root = BASE_PATH if BASE_PATH.endswith('/') else BASE_PATH + '/'
     body = f'<div class="wrap notfound"><h1>404</h1><p style="font-size:1.2rem">Тази страница не съществува или е преместена.</p><p><a class="btn" href="{root}index.html">Към началото</a></p></div>'
-    page = layout(0, '404', 'Страницата не е намерена', 'Страницата не е намерена.', body)
+    page = layout(0, '404', 'Страницата не е намерена', 'Страницата не е намерена.', body, noindex=True)
     page = page.replace('data-root=""', f'data-root="{root}"').replace('href="assets/', f'href="{root}assets/').replace('src="assets/', f'src="{root}assets/')
     page = re.sub(r'href="((?:[a-z0-9-]+/)*index\.html(?:#[^"]*)?)"', lambda m: f'href="{root}{m.group(1)}"', page)
     (ROOT_DIR / '404.html').write_text(page, encoding='utf-8')
@@ -616,13 +701,12 @@ def main():
     page_priem(); page_dokumenti()
     page_projects('proekti'); page_projects('nacionalni-programi')
     page_izpiti(); page_kontakti(); page_roditeli()
-    page_novini(); page_news_posts(); page_404()
+    page_novini(); page_news_posts(); page_project_posts(); page_404()
     (ROOT_DIR / 'assets/js/search-data.js').write_text('window.SEARCH=' + json.dumps(SEARCH, ensure_ascii=False) + ';\n', encoding='utf-8')
     (ROOT_DIR / '.nojekyll').write_text('')
     if SITE_URL:
-        urls = [''] + sorted({s[2].replace('/index.html', '/').replace('index.html', '').split('#')[0] for s in SEARCH})
+        urls = sorted({''} | {s[2].replace('/index.html', '/').replace('index.html', '').split('#')[0] for s in SEARCH})
         (ROOT_DIR / 'sitemap.xml').write_text('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + ''.join(f'<url><loc>{SITE_URL}/{u}</loc></url>\n' for u in urls) + '</urlset>\n', encoding='utf-8')
-        (ROOT_DIR / 'robots.txt').write_text(f'User-agent: *\nAllow: /\nSitemap: {SITE_URL}/sitemap.xml\n')
     print('Готово:', len(SEARCH), 'записа за търсене')
 
 if __name__ == '__main__':
