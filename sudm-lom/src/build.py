@@ -607,22 +607,19 @@ def page_home():
         im = nimg(n)
         small += f'<a class="tile news-s rv" style="--i:{k}" href="{news_href(root, n)}">{im or ""}<span class="in"><span class="meta"><time datetime="{n["date"]}">{bg_date_s(n["date"])}</time></span><h3>{esc(n["title"])}</h3><span class="more">Прочети {arrow}</span></span></a>'
     fimg = nimg(f, True)
-    body = f'''<section class="hero" id="hero" aria-labelledby="h1">
+    body = f'''<section class="hero" id="hero" aria-label="Сградата на училището">
   <div class="hero-media"><img src="assets/img/school.jpg" srcset="assets/img/school-640.jpg 640w, assets/img/school.jpg 1200w" sizes="(max-width:700px) 100vw, (max-width:1100px) 100vw, calc(100vw - 280px)" alt="Сградата на {SCHOOL} в Лом: входът с три арковидни врати и бюст на патрона" width="1200" height="675" fetchpriority="high"></div>
-  <div class="hero-tint" aria-hidden="true"></div>
-  <div class="hero-body">
-   <div class="hero-panel">
+</section>
+<div class="hero-strip">
+ <div class="hero-copy">
     <div class="hero-top">
       <span class="eyebrow">Средно училище · град Лом · ул. Дунавска №67</span>
     </div>
     <h1 id="h1">Училище, което те води от първия до дванайсетия клас</h1>
     <p class="hero-p">Прием, свободни места, дневна програма и новини от училищния живот на едно място.</p>
     <div class="cta"><a class="btn" href="{link(root, 'priem-1-klas')}">Прием в 1. клас {arrow}</a><a class="btn glassy" href="{free_h}">Свободни места</a></div>
-     </div>
-  </div>
-</section>
-<div class="hero-strip">
-  <ul class="glass-row" aria-label="Най-важното сега">
+ </div>
+ <ul class="glass-row" aria-label="Най-важното сега">
       <li><a class="glass" href="{free_h}"><span class="k">Свободни места</span><b>{bg_date_s(free["date"]) if free else "Прием"}</b><span class="go">Виж {arrow}</span></a></li>
       <li><a class="glass" href="{prog_h}"><span class="k">Програма за деня</span><b>{bg_date_s(prog["date"]) if prog else "Новини"}</b><span class="go">Виж {arrow}</span></a></li>
       <li><a class="glass" href="{link(root, 'kontakti')}"><span class="k">Приемно време</span><b>Вт и Чт, 12:00 – 14:00</b><span class="go">Контакти {arrow}</span></a></li>

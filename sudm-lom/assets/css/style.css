@@ -454,3 +454,16 @@ ul.docs a:hover{border-color:var(--plum);background:var(--rose);transform:transl
 .hero-strip{background:var(--deep2);padding:0 var(--pad) 28px}
 .hero-strip .glass-row{max-width:1480px;margin:0 auto;padding:22px 0 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;list-style:none}
 @media (max-width:700px){.hero{min-height:0}.hero-body{padding-top:clamp(150px,52vw,280px)}.hero-panel{max-width:none}.hero-strip .glass-row{grid-template-columns:1fr}}
+
+/* Текстът е под снимката, не върху нея */
+.hero{min-height:min(62vh,640px);min-height:min(62svh,640px)}
+.hero-tint{display:none}
+.hero-media::after{opacity:.06}
+.hero-strip{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:clamp(24px,4vw,56px);align-items:center;padding:clamp(28px,4.5vw,56px) var(--pad);color:#fff}
+.hero-copy .eyebrow{color:#ffd3e0}
+.hero-copy h1{font-weight:700;font-size:clamp(1.9rem,3.4vw,3.1rem);line-height:1.06;letter-spacing:-.025em;margin:14px 0 16px;max-width:18ch;color:#fff}
+.hero-copy .hero-p{color:#fbeaf1}
+.hero-copy .btn:not(.glassy){background:#fff;color:#3a0d26;box-shadow:0 14px 30px -14px rgba(0,0,0,.6)}
+.hero-copy :focus-visible,.hero-strip :focus-visible{outline-color:#ffd08a}
+.hero-strip .glass-row{grid-template-columns:1fr;max-width:none;margin:0;padding:0}
+@media (max-width:900px){.hero-strip{grid-template-columns:1fr}.hero{min-height:0;aspect-ratio:16/10}}
