@@ -6,11 +6,12 @@ Live demo: https://dimitarbeograd-qa.github.io/portfolio-demos/sudm-lom/
 
 ## What it is
 
-A static multi-page website (48 pages, plain HTML, CSS and JS, no database):
+A static multi-page website (91 pages, plain HTML, CSS and JS, no database):
 
 - home page with the school building, quick links, the patron, latest news, admissions, exams, projects and contacts;
 - about the school (mission and vision, patron, history, team, public council, personal data), admissions for grades 1, 5 and 8, documents with search, projects and national programmes, exams, contacts with opening hours;
-- news with 24 full posts, search and categories;
+- news with 60 full posts (up to 4 photos each, video where the original has one), search, categories and "show more";
+- detail pages of the projects and national programmes, carried over so they no longer depend on the old site;
 - drop-down menus, site search (`Ctrl+K`), contact and search dialogs, light and dark theme (starts light), mobile menu, keyboard focus states, reduced-motion support.
 
 Documents (PDF and others) still link to the original site.
@@ -27,4 +28,6 @@ Set `SITE_URL` and `BASE_PATH` for canonical links when hosting in a sub-folder.
 
 ## Checked
 
-Every page was opened at 1366, 820 and 390 px wide: no horizontal scroll and no console errors; internal links and images resolve. Tested in Chromium only.
+Every page was opened at 1366, 820 and 390 px wide: no horizontal scroll and no console errors; internal links and images resolve. The code was also reviewed for accessibility (WCAG 2.1 AA), cross-browser support, performance/SEO and fidelity against the old site, and the findings were fixed. Tested in Chromium only (not in Firefox or Safari).
+
+Known limits: documents (PDF and others) still link to the original site; news older than the latest 60 posts stay in the old archive; the street name is written as "Дунавска" (the old contact page says "Динавска", the old personal-data page says "Дунавска") and should be confirmed with the school.
