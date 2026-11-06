@@ -5,41 +5,70 @@
   root.classList.add('js');
   function $(s, c) { return (c || document).querySelector(s); }
   function $$(s, c) { return Array.prototype.slice.call((c || document).querySelectorAll(s)); }
+  var reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches);
 
-  /* Хедър: сянка при скрол */
-  var bar = $('#bar');
-  function onScroll() { if (bar) bar.classList.toggle('stuck', window.pageYOffset > 8); }
-  window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
+  /* Лента за напредък и лек паралакс на героя при скрол */
+  var prog = $('#progress'), hero = $('#hero'), heroImg = hero ? $('.hero-media img', hero) : null, ticking = false;
+  function frame() {
+    ticking = false;
+    var y = window.pageYOffset, h = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    if (prog) prog.style.setProperty('--sp', Math.min(1, y / h).toFixed(4));
+    if (heroImg && !reduce && y < window.innerHeight * 1.5) {
+      var p = Math.min(1, y / Math.max(1, hero.offsetHeight));
+      heroImg.style.setProperty('--ty', (p * 70).toFixed(1) + 'px');
+      heroImg.style.setProperty('--zoom', (1.08 + p * 0.05).toFixed(4));
+    }
+  }
+  function onScroll() { if (!ticking) { ticking = true; window.requestAnimationFrame(frame); } }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', onScroll); frame();
 
-  /* Мобилно меню */
-  var mb = $('#menuBtn'), nav = $('#nav');
-  function setMenu(o) { nav.classList.toggle('open', o); mb.setAttribute('aria-expanded', o); mb.textContent = o ? 'Затвори' : 'Меню'; }
-  if (mb && nav) mb.addEventListener('click', function () { setMenu(!nav.classList.contains('open')); });
+  /* Мобилно чекмедже (страничният панел на тесни екрани) */
+  var mb = $('#menuBtn'), rail = $('#rail'), nav = $('#nav'), scrim = $('#scrim'), rc = $('#railClose');
+  var mq = window.matchMedia ? window.matchMedia('(max-width:1099px)') : { matches: false };
+  function setMenu(o) {
+    if (!rail || !mb) return;
+    rail.classList.toggle('open', o); if (nav) nav.classList.toggle('open', o);
+    mb.setAttribute('aria-expanded', o ? 'true' : 'false');
+    mb.lastElementChild.textContent = o ? 'Затвори' : 'Меню';
+    if (scrim) scrim.hidden = !o;
+    if (mq.matches) document.body.style.overflow = o ? 'hidden' : '';
+    if (o && mq.matches) { var f = $('.nl', rail); if (f) f.focus(); }
+  }
+  if (mb && rail) {
+    mb.addEventListener('click', function () { setMenu(!rail.classList.contains('open')); });
+    if (scrim) scrim.addEventListener('click', function () { setMenu(false); mb.focus(); });
+    if (rc) rc.addEventListener('click', function () { setMenu(false); mb.focus(); });
+    if (mq.addEventListener) mq.addEventListener('change', function () { setMenu(false); });
+    $$('a[href]', rail).forEach(function (a) { a.addEventListener('click', function () { if (mq.matches && !a.hasAttribute('data-open')) setMenu(false); }); });
+    /* фокусът не излиза от чекмеджето, докато е отворено */
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Tab' || !mq.matches || !rail.classList.contains('open')) return;
+      var f = $$('a[href],button', rail).filter(function (x) { return x.offsetParent !== null && getComputedStyle(x).visibility !== 'hidden'; });
+      if (!f.length) return;
+      var first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+  }
 
-  /* Падащи менюта */
-  var items = $$('nav.main li.has'), timer;
-  function closeAll(except) { items.forEach(function (li) { if (li !== except) { li.classList.remove('open'); $('.nl', li).setAttribute('aria-expanded', 'false'); } }); }
-  function open(li) { closeAll(li); li.classList.add('open'); $('.nl', li).setAttribute('aria-expanded', 'true'); }
-  function close(li) { li.classList.remove('open'); $('.nl', li).setAttribute('aria-expanded', 'false'); }
-  var hoverOk = window.matchMedia && window.matchMedia('(hover:hover) and (min-width:1181px)');
+  /* Раздели като акордеон: мишка, допир и клавиатура */
+  var items = $$('nav.main li.has');
+  function setOpen(li, o) { li.classList.toggle('open', o); $('.nl', li).setAttribute('aria-expanded', o ? 'true' : 'false'); }
   items.forEach(function (li) {
     var btn = $('.nl', li);
-    btn.addEventListener('click', function (e) {
-      /* мишка при посочване: менюто вече е отворено, затова само го държим отворено; клавиатура и допир превключват */
-      if (hoverOk && hoverOk.matches && e.detail > 0) { clearTimeout(timer); open(li); }
-      else { li.classList.contains('open') ? close(li) : open(li); }
+    btn.addEventListener('click', function () {
+      var o = !li.classList.contains('open');
+      if (o) items.forEach(function (x) { if (x !== li) setOpen(x, false); });
+      setOpen(li, o);
     });
-    li.addEventListener('mouseenter', function () { if (hoverOk && hoverOk.matches) { clearTimeout(timer); open(li); } });
-    li.addEventListener('mouseleave', function () { if (hoverOk && hoverOk.matches) { timer = setTimeout(function () { close(li); }, 160); } });
-    li.addEventListener('focusout', function (e) { if (hoverOk && hoverOk.matches && !li.contains(e.relatedTarget)) close(li); });
   });
-  document.addEventListener('click', function (e) { if (!e.target.closest || !e.target.closest('nav.main')) closeAll(); });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') {
-      var o = items.filter(function (l) { return l.classList.contains('open'); })[0];
-      if (o) { close(o); $('.nl', o).focus(); }
-      else if (nav && nav.classList.contains('open')) { setMenu(false); mb.focus(); }
-    }
+    if (e.key !== 'Escape') return;
+    if ($$('dialog').some(function (d) { return d.open; })) return;
+    if (rail && rail.classList.contains('open') && mq.matches) { setMenu(false); mb.focus(); return; }
+    var o = items.filter(function (l) { return l.classList.contains('open') && l.contains(document.activeElement); })[0];
+    if (o) { setOpen(o, false); $('.nl', o).focus(); }
   });
 
   /* Тема: започва светла */
@@ -57,7 +86,7 @@
   $$('[data-open]').forEach(function (a) {
     a.addEventListener('click', function (e) {
       var d = $('#' + a.getAttribute('data-open')); if (!d) return;
-      e.preventDefault(); if (nav) setMenu(false); openD(d);
+      e.preventDefault(); if (rail && mq.matches) setMenu(false); openD(d);
     });
   });
 
@@ -93,7 +122,7 @@
       a.href = ROOT + p[2]; a.appendChild(document.createTextNode(p[0])); s.textContent = p[1]; a.appendChild(s); li.appendChild(a); res.appendChild(li);
     });
   }
-  function openSearch() { var d = $('#dlgSearch'); if (!d) return; render(); openD(d); q.focus(); }
+  function openSearch() { var d = $('#dlgSearch'); if (!d) return; if (rail && mq.matches) setMenu(false); render(); openD(d); q.focus(); }
   if (q) {
     q.addEventListener('input', render);
     q.addEventListener('keydown', function (e) {
@@ -145,9 +174,19 @@
 
   /* Ефект при показване: само движение, текстът остава видим */
   var rv = $$('.rv');
-  if ('IntersectionObserver' in window) {
-    var io = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }); }, { threshold: 0.08 });
+  if ('IntersectionObserver' in window && !reduce) {
+    var io = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }); }, { threshold: 0.1, rootMargin: '0px 0px -5% 0px' });
     rv.forEach(function (el) { io.observe(el); });
-    setTimeout(function () { rv.forEach(function (el) { el.classList.add('in'); }); }, 2500);
+    setTimeout(function () { rv.forEach(function (el) { el.classList.add('in'); }); }, 8000);
   } else { rv.forEach(function (el) { el.classList.add('in'); }); }
+
+  /* Светлинен лъч, който следва показалеца върху плочките */
+  if (!reduce && window.matchMedia && window.matchMedia('(hover:hover)').matches) {
+    $$('.tile').forEach(function (t) {
+      t.addEventListener('pointermove', function (e) {
+        var r = t.getBoundingClientRect();
+        t.style.setProperty('--mx', (e.clientX - r.left) + 'px'); t.style.setProperty('--my', (e.clientY - r.top) + 'px');
+      });
+    });
+  }
 })();

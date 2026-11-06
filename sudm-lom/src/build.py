@@ -78,6 +78,7 @@ def link(root, slug):
     return f'{root}index.html' if slug == '' else f'{root}{slug}/index.html'
 
 ICONS = '''<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
 <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
 <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
 <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 13a8 8 0 1 1-10-10 6.5 6.5 0 0 0 10 10z"/></symbol>
@@ -100,13 +101,11 @@ def nav_html(root, active):
         name, tgt = n
         if isinstance(tgt, list):
             cur = any(s == active for _, s in tgt)
-            li = ''.join(f'<li><a href="{href(root, s)}"{" aria-current=\"page\"" if s == active else ""}>{esc(t)}</a></li>' for t, s in tgt)
-            out.append(f'<li class="has{" end" if i >= len(NAV) - 4 else ""}"><button class="nl" type="button" aria-expanded="false" aria-controls="m{i}">{esc(name)} <svg class="ico chev"><use href="#i-chev"/></svg></button><div class="menu" id="m{i}"><ul>{li}</ul></div></li>')
+            li = ''.join(f'<li><a href="{href(root, s)}"{" aria-current=\"page\"" if s == active else ""}>{esc(t)}{"<svg class=\"ico ext\" aria-hidden=\"true\"><use href=\"#i-ext\"/></svg>" if s.startswith("http") else ""}</a></li>' for t, s in tgt)
+            out.append(f'<li class="has{" open cur" if cur else ""}"><button class="nl" type="button" aria-expanded="{"true" if cur else "false"}" aria-controls="m{i}"><span class="num" aria-hidden="true">{i + 1:02d}</span><span class="lbl">{esc(name)}</span><svg class="ico chev" aria-hidden="true"><use href="#i-chev"/></svg></button><div class="menu" id="m{i}"><ul>{li}</ul></div></li>')
         else:
             cur = ' aria-current="page"' if tgt == active else ''
-            out.append(f'<li><a class="nl" href="{link(root, tgt)}"{cur}>{esc(name)}</a></li>')
-    out.append(f'<li class="mob-only"><a class="nl" href="https://app.shkolo.bg/">Е-дневник</a></li>')
-    out.append(f'<li class="mob-only"><a class="nl" href="{link(root, "roditeli-i-uchenici")}">За родители и ученици</a></li>')
+            out.append(f'<li><a class="nl" href="{link(root, tgt)}"{cur}><span class="num" aria-hidden="true">{i + 1:02d}</span><span class="lbl">{esc(name)}</span></a></li>')
     return '\n'.join(out)
 
 def short_title(title):
@@ -137,37 +136,49 @@ def layout(depth, slug, title, desc, body, og_img='assets/img/school.jpg', extra
 <meta name="description" content="{esc(desc)}">
 <meta property="og:type" content="{og_type}"><meta property="og:site_name" content="{SCHOOL} – Лом"><meta property="og:locale" content="bg_BG"><meta property="og:title" content="{esc(full_title)}"><meta property="og:description" content="{esc(desc)}"><meta name="twitter:card" content="summary_large_image">{ogu}{robots}
 {canon}
-<meta name="theme-color" content="#8a1c4f">
+<meta name="theme-color" content="#3a0d26">
 <link rel="icon" href="{root}assets/img/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,700&family=Manrope:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geologica:wght@500..800&family=Golos+Text:wght@400..700&display=swap">
 <link rel="stylesheet" href="{root}assets/css/style.css">
 {extra_head}
 </head>
-<body>
+<body{' class="is-home"' if is_home else ''}>
 {ICONS}
 <a class="skip" href="#main">Към съдържанието</a>
-<div class="wrap top">
-  <em>Ако успееш тук, ще успееш навсякъде!</em>
-  <div class="tools">
-    <a class="pill txt" href="https://app.shkolo.bg/">Е-дневник</a>
-    <a class="pill txt" href="{link(root, 'roditeli-i-uchenici')}">За родители и ученици</a>
-    <button class="pill" type="button" data-search aria-label="Търсене в сайта"><svg class="ico"><use href="#i-search"/></svg><span class="txt">Търсене</span></button>
-    <button class="pill" type="button" id="themeBtn" aria-label="Смени светла или тъмна тема"><svg class="ico"><use href="#i-moon"/></svg><span class="txt">Тема</span></button>
-  </div>
-</div>
+<div class="progress" id="progress" aria-hidden="true"></div>
 <header class="bar" id="bar">
-  <div class="wrap">
+  <a class="brand" href="{link(root, '')}" aria-label="{SCHOOL}, начало">
+    <img class="logo" src="{root}assets/img/logo.png" alt="" width="240" height="141">
+    <span><b>{SCHOOL}</b><small>град Лом</small></span>
+  </a>
+  <div class="bar-act">
+    <button class="ibtn" type="button" data-search aria-label="Търсене в сайта"><svg class="ico"><use href="#i-search"/></svg></button>
+    <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="rail"><svg class="ico"><use href="#i-menu"/></svg><span>Меню</span></button>
+  </div>
+</header>
+<div class="scrim" id="scrim" hidden></div>
+<aside class="rail" id="rail" aria-label="Страничен панел">
+  <div class="rail-top">
     <a class="brand" href="{link(root, '')}" aria-label="{SCHOOL}, начало">
       <img class="logo" src="{root}assets/img/logo.png" alt="" width="240" height="141">
       <span><b>{SCHOOL}</b><small>град Лом</small></span>
     </a>
-    <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="nav">Меню</button>
-    <nav class="main" id="nav" aria-label="Основно меню"><ul>
-{nav_html(root, slug)}
-    </ul></nav>
+    <button class="ibtn rail-close" type="button" id="railClose" aria-label="Затвори менюто"><svg class="ico"><use href="#i-x"/></svg></button>
   </div>
-</header>
+  <nav class="main" id="nav" aria-label="Основно меню"><ul>
+{nav_html(root, slug)}
+  </ul></nav>
+  <div class="rail-foot">
+    <button class="rbtn wide" type="button" data-search><svg class="ico"><use href="#i-search"/></svg><span>Търсене</span><kbd>Ctrl K</kbd></button>
+    <div class="rail-row">
+      <button class="rbtn" type="button" id="themeBtn" aria-label="Смени светла или тъмна тема"><svg class="ico"><use href="#i-moon"/></svg><span>Тема</span></button>
+      <button class="rbtn" type="button" data-open="dlgContact"><svg class="ico"><use href="#i-phone"/></svg><span>Контакт</span></button>
+    </div>
+    <div class="rail-links"><a href="https://app.shkolo.bg/">Е-дневник</a><a href="{link(root, 'roditeli-i-uchenici')}">За родители и ученици</a></div>
+  </div>
+</aside>
+<div class="canvas">
 <main id="main" tabindex="-1">
 {body}
 </main>
@@ -191,6 +202,7 @@ def layout(depth, slug, title, desc, body, og_img='assets/img/school.jpg', extra
   </div>
   <div class="wrap"><small>© {SCHOOL}, град Лом. Съдържанието е пренесено от sudm-lom.bg.</small></div>
 </footer>
+</div>
 
 <dialog id="dlgContact" aria-labelledby="cTitle">
   <div class="dh"><h2 id="cTitle">Бързи контакти</h2><button class="x" type="button" data-close aria-label="Затвори"><svg class="ico"><use href="#i-x"/></svg></button></div>
@@ -572,81 +584,90 @@ def page_home():
     root = ''
     latest = NEWS[:5]
     f = latest[0]
-    lst = ''.join(f'<li><a class="nlink" href="{news_href(root, n)}"><span class="meta"><time datetime="{n["date"]}">{bg_date_s(n["date"])}</time></span><h3>{esc(n["title"])}</h3><p>{esc(n["excerpt"])}</p></a></li>' for n in latest[1:])
     free = next((n for n in NEWS if n['title'].startswith('Свободни места')), None)
     prog = next((n for n in NEWS if n['title'].startswith('Програма за')), None)
-    body = f'''<div class="wrap" id="top">
-  <section class="cover" aria-labelledby="h1">
-    <div class="ph"><img src="assets/img/school.jpg" srcset="assets/img/school-640.jpg 640w, assets/img/school.jpg 1200w" sizes="(max-width:700px) 100vw, 1160px" alt="Сградата на {SCHOOL} в Лом: входът с три арковидни врати и бюст на патрона" width="1200" height="675" fetchpriority="high"></div>
-    <div class="shade"></div>
-    <div class="tx">
+    free_h = news_href(root, free) if free else link(root, 'priem')
+    prog_h = news_href(root, prog) if prog else link(root, 'novini')
+    arrow = '<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg>'
+    def nimg(n, full=False):
+        if not n['imgs']: return ''
+        fn = n['imgs'][0]['f']
+        return f'<img class="bg" src="{root}assets/img/news/{"" if full else "t-"}{fn}" alt="" loading="lazy" decoding="async">'
+    small = ''
+    for k, n in enumerate(latest[1:]):
+        im = nimg(n)
+        small += f'<a class="tile news-s rv" style="--i:{k}" href="{news_href(root, n)}">{im or ""}<span class="in"><span class="meta"><time datetime="{n["date"]}">{bg_date_s(n["date"])}</time></span><h3>{esc(n["title"])}</h3><span class="more">Прочети {arrow}</span></span></a>'
+    fimg = nimg(f, True)
+    body = f'''<section class="hero" id="hero" aria-labelledby="h1">
+  <div class="hero-media"><img src="assets/img/school.jpg" srcset="assets/img/school-640.jpg 640w, assets/img/school.jpg 1200w" sizes="(max-width:700px) 100vw, (max-width:1100px) 100vw, calc(100vw - 280px)" alt="Сградата на {SCHOOL} в Лом: входът с три арковидни врати и бюст на патрона" width="1200" height="675" fetchpriority="high"></div>
+  <div class="hero-tint" aria-hidden="true"></div>
+  <div class="hero-body">
+    <div class="hero-top">
       <span class="eyebrow">Средно училище · град Лом · ул. Дунавска №67</span>
-      <h1 id="h1">Училище, което те води от първия до дванайсетия клас</h1>
-      <p>Прием, свободни места, дневна програма и новини от училищния живот на едно място.</p>
-      <div class="cta"><a class="btn" href="{link(root, 'priem-1-klas')}">Прием в 1. клас</a><a class="btn ghost" href="{news_href(root, free) if free else link(root, 'priem')}">Свободни места</a></div>
     </div>
-  </section>
-
-  <aside class="quick rv" aria-labelledby="qh">
-    <h2 id="qh">Най-търсеното</h2>
-    <ul>
-      <li><a href="{news_href(root, free) if free else link(root, 'priem')}">Свободни места<span>{bg_date_s(free["date"]) if free else "прием"}</span></a></li>
-      <li><a href="{news_href(root, prog) if prog else link(root, 'novini')}">Програма за деня<span>{bg_date_s(prog["date"]) if prog else "новини"}</span></a></li>
-      <li><a href="{link(root, 'izpiti')}">Изпити<span>НВО, ДЗИ, ЗДИППК</span></a></li>
-      <li><a href="{link(root, 'dokumenti')}">Документи<span>за изтегляне</span></a></li>
-      <li><a href="{link(root, 'kontakti')}" data-open="dlgContact">Контакти<span>как да ни намерите</span></a></li>
+    <h1 id="h1">Училище, което те води от първия до дванайсетия клас</h1>
+    <p class="hero-p">Прием, свободни места, дневна програма и новини от училищния живот на едно място.</p>
+    <div class="cta"><a class="btn" href="{link(root, 'priem-1-klas')}">Прием в 1. клас {arrow}</a><a class="btn glassy" href="{free_h}">Свободни места</a></div>
+    <ul class="glass-row" aria-label="Най-важното сега">
+      <li><a class="glass" href="{free_h}"><span class="k">Свободни места</span><b>{bg_date_s(free["date"]) if free else "Прием"}</b><span class="go">Виж {arrow}</span></a></li>
+      <li><a class="glass" href="{prog_h}"><span class="k">Програма за деня</span><b>{bg_date_s(prog["date"]) if prog else "Новини"}</b><span class="go">Виж {arrow}</span></a></li>
+      <li><a class="glass" href="{link(root, 'kontakti')}"><span class="k">Приемно време</span><b>Вт и Чт, 12:00 – 14:00</b><span class="go">Контакти {arrow}</span></a></li>
     </ul>
-  </aside>
+  </div>
+</section>
 
-  <dl class="facts rv">
-    <div><dt>1–12</dt><dd>клас в едно училище</dd></div>
-    <div><dt>55+</dt><dd>години история</dd></div>
-    <div><dt>180</dt><dd>години от рождението на патрона</dd></div>
-    <div><dt>1 · 5 · 8</dt><dd>класове с прием</dd></div>
+<div class="home">
+  <dl class="facts">
+    <div class="tile fact rv" style="--i:0"><dt>1–12</dt><dd>клас в едно училище</dd></div>
+    <div class="tile fact rv" style="--i:1"><dt>55+</dt><dd>години история</dd></div>
+    <div class="tile fact rv" style="--i:2"><dt>180</dt><dd>години от рождението на патрона</dd></div>
+    <div class="tile fact rv" style="--i:3"><dt>1 · 5 · 8</dt><dd>класове с прием</dd></div>
   </dl>
 
-  <section class="patron rv" aria-labelledby="pt">
-    <figure class="pp"><img src="assets/img/patron-plaque.jpg" alt="Паметна плоча с бронзов барелеф на Димитър Маринов, 1846–1940" width="560" height="770" loading="lazy" decoding="async"><figcaption>Паметна плоча на Димитър Маринов</figcaption></figure>
-    <div>
-      <span class="eyebrow">Нашият патрон</span>
-      <h2 id="pt">Димитър Маринов</h2>
-      <p class="yr">1846 – 1940</p>
-      <p>Възрожденец, учен-етнограф и историк, пръв председател на Ломския окръжен съд след Освобождението на България (1878) и депутат в Учредителното събрание (1879).</p>
-      <p>Училището носи името му. На 26 октомври 2026 г. отбелязахме 180 години от рождението му с различни дейности, а учениците от първи до седми клас посетиха Исторически музей.</p>
-      <div class="track" aria-hidden="true"><i></i><hr><i></i><hr><i></i><hr><i></i></div>
-      <div class="years" aria-hidden="true"><span>1846</span><span>1940</span><span>1970</span><span>2026</span></div>
-      <div class="cta"><a class="btn ghost" href="{link(root, 'patron')}">За патрона</a><a class="btn ghost" href="{link(root, 'istoriya')}">История на училището</a></div>
-    </div>
-  </section>
-
-  <section class="block rv" aria-labelledby="nh">
-    <div class="head"><div><h2 id="nh">Новини</h2></div><a class="all" href="{link(root, 'novini')}">Всички новини <svg class="ico"><use href="#i-arrow"/></svg></a></div>
-    <div class="news">
-      <a class="feature" href="{news_href(root, f)}" style="text-decoration:none">
-        <span>
-          <span class="meta"><time datetime="{f["date"]}">{bg_date(f["date"])}</time><span>Новини</span></span>
-          <h3 style="margin-top:14px">{esc(f["title"])}</h3>
-          <p>{esc(f["excerpt"])}</p>
-        </span>
-        <span class="more">Прочети <svg class="ico"><use href="#i-arrow"/></svg></span>
-      </a>
-      <ul class="list">{lst}</ul>
-    </div>
-  </section>
-
-  <section class="block rv" aria-labelledby="ah">
-    <div class="two">
-      <div>
-        <div class="head" style="margin-bottom:18px"><div><h2 id="ah">Прием</h2></div><a class="all" href="{link(root, 'priem')}">Условия и срокове <svg class="ico"><use href="#i-arrow"/></svg></a></div>
-        <div class="rows">
-          <a class="row" href="{link(root, 'priem-1-klas')}"><b>1. клас</b><span>Утвърден план и свободни места за първокласници.</span><em>Виж информацията →</em></a>
-          <a class="row" href="{link(root, 'priem-5-klas')}"><b>5. клас</b><span>План-прием и свободни места.</span><em>Виж информацията →</em></a>
-          <a class="row" href="{link(root, 'priem-8-klas')}"><b>8. клас</b><span>График, профили и свободни места.</span><em>Виж информацията →</em></a>
-        </div>
+  <div class="bento">
+    <section class="tile patron rv" aria-labelledby="pt">
+      <figure class="pp"><img src="assets/img/patron-plaque.jpg" alt="Паметна плоча с бронзов барелеф на Димитър Маринов, 1846–1940" width="560" height="770" loading="lazy" decoding="async"><figcaption>Паметна плоча на Димитър Маринов</figcaption></figure>
+      <div class="pt-tx">
+        <span class="eyebrow">Нашият патрон</span>
+        <h2 id="pt">Димитър Маринов</h2>
+        <p class="yr">1846 – 1940</p>
+        <p>Възрожденец, учен-етнограф и историк, пръв председател на Ломския окръжен съд след Освобождението на България (1878) и депутат в Учредителното събрание (1879).</p>
+        <p>Училището носи името му. На 26 октомври 2026 г. отбелязахме 180 години от рождението му с различни дейности, а учениците от първи до седми клас посетиха Исторически музей.</p>
+        <div class="track" aria-hidden="true"><i></i><hr><i></i><hr><i></i><hr><i></i></div>
+        <div class="years" aria-hidden="true"><span>1846</span><span>1940</span><span>1970</span><span>2026</span></div>
+        <div class="cta"><a class="btn glassy" href="{link(root, 'patron')}">За патрона</a><a class="btn glassy" href="{link(root, 'istoriya')}">История на училището</a></div>
       </div>
-      <div>
-        <div class="head" style="margin-bottom:18px"><div><h2>Изпити</h2></div></div>
-        <div class="exams">
+    </section>
+
+    <aside class="tile quick rv" style="--i:1" aria-labelledby="qh">
+      <h2 id="qh">Най-търсеното</h2>
+      <ul>
+        <li><a href="{free_h}"><span class="t">Свободни места</span><span class="s">{bg_date_s(free["date"]) if free else "прием"}</span>{arrow}</a></li>
+        <li><a href="{prog_h}"><span class="t">Програма за деня</span><span class="s">{bg_date_s(prog["date"]) if prog else "новини"}</span>{arrow}</a></li>
+        <li><a href="{link(root, 'izpiti')}"><span class="t">Изпити</span><span class="s">НВО, ДЗИ, ЗДИППК</span>{arrow}</a></li>
+        <li><a href="{link(root, 'dokumenti')}"><span class="t">Документи</span><span class="s">за изтегляне</span>{arrow}</a></li>
+        <li><a href="{link(root, 'kontakti')}" data-open="dlgContact"><span class="t">Контакти</span><span class="s">как да ни намерите</span>{arrow}</a></li>
+      </ul>
+    </aside>
+  </div>
+
+  <section class="sec" aria-labelledby="nh">
+    <div class="head"><div><span class="eyebrow">Училищен живот</span><h2 id="nh">Новини</h2></div><a class="all" href="{link(root, 'novini')}">Всички новини {arrow}</a></div>
+    <div class="bento news">
+      <a class="tile news-f rv" href="{news_href(root, f)}">{fimg}<span class="in"><span class="meta"><time datetime="{f["date"]}">{bg_date(f["date"])}</time><span>Новини</span></span><h3>{esc(f["title"])}</h3><p>{esc(f["excerpt"])}</p><span class="more">Прочети {arrow}</span></span></a>
+      {small}
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="ah">
+    <div class="head"><div><span class="eyebrow">Записване</span><h2 id="ah">Прием и изпити</h2></div><a class="all" href="{link(root, 'priem')}">Условия и срокове {arrow}</a></div>
+    <div class="bento adm">
+      <a class="tile grade rv" style="--i:0" href="{link(root, 'priem-1-klas')}"><b class="big">1</b><span class="t">клас</span><span class="s">Утвърден план и свободни места за първокласници.</span><em>Виж информацията {arrow}</em></a>
+      <a class="tile grade rv" style="--i:1" href="{link(root, 'priem-5-klas')}"><b class="big">5</b><span class="t">клас</span><span class="s">План-прием и свободни места.</span><em>Виж информацията {arrow}</em></a>
+      <a class="tile grade rv" style="--i:2" href="{link(root, 'priem-8-klas')}"><b class="big">8</b><span class="t">клас</span><span class="s">График, профили и свободни места.</span><em>Виж информацията {arrow}</em></a>
+      <div class="tile exams rv" style="--i:3">
+        <h3>Изпити</h3>
+        <div class="chipset">
           <a href="{link(root, 'izpiti')}#nvo-4-klas">НВО 4. клас</a><a href="{link(root, 'izpiti')}#nvo-7-klas">НВО 7. клас</a><a href="{link(root, 'izpiti')}#nvo-10-klas">НВО 10. клас</a>
           <a href="{link(root, 'izpiti')}#dzi">ДЗИ</a><a href="{link(root, 'izpiti')}#zdippk">ЗДИППК</a><a href="{link(root, 'izpiti')}#popravitelni-izpiti">Поправителни</a>
         </div>
@@ -654,30 +675,33 @@ def page_home():
     </div>
   </section>
 
-  <section class="block rv" aria-labelledby="ph2">
-    <div class="head"><div><h2 id="ph2">Проекти и национални програми</h2><p>Какво предлага училището освен учебния план.</p></div><a class="all" href="{link(root, 'proekti')}">Всички проекти <svg class="ico"><use href="#i-arrow"/></svg></a></div>
-    <div class="proj">
-      <a href="{link(root, 'proekti')}"><span class="tag">Проект</span><b>Училищна STEM среда</b></a>
-      <a href="{link(root, 'proekti')}"><span class="tag">Проект</span><b>Модернизиране на професионалното образование и обучение</b></a>
-      <a href="{link(root, 'proekti')}"><span class="tag">Проект</span><b>Живей активно, храни се разумно!</b></a>
-      <a href="{link(root, 'nacionalni-programi')}"><span class="tag">Национална програма</span><b>Без свободен час</b></a>
-      <a href="{link(root, 'nacionalni-programi')}"><span class="tag">Национална програма</span><b>Заедно в изкуствата и в спорта</b></a>
-      <a href="{link(root, 'nacionalni-programi')}"><span class="tag">Национална програма</span><b>Иновации в действие</b></a>
-    </div>
-  </section>
-
-  <section class="block rv" aria-labelledby="ct">
-    <div class="head"><div><h2 id="ct">Контакти</h2><p>Приемно време: вторник и четвъртък, 12:00 – 14:00. Администрация: понеделник – петък, 08:00 – 16:30 ч.</p></div><button class="btn" type="button" data-open="dlgContact">Бързи контакти</button></div>
-    <div class="contact">
-      <div class="cc"><svg class="ico"><use href="#i-pin"/></svg><h3>Адрес</h3><p>гр. Лом, ул. Дунавска №67</p><p style="margin-top:8px"><a href="{MAP}">Виж адреса на картата</a></p></div>
-      <div class="cc"><svg class="ico"><use href="#i-phone"/></svg><h3>Телефон</h3><p>тел./факс: 0894 472 694<br>факс: 0971 60011</p></div>
-      <div class="cc"><svg class="ico"><use href="#i-mail"/></svg><h3>Имейл</h3><p>info-1209005@edu.mon.bg<br>info@sudm-lom.bg</p></div>
+  <section class="sec" aria-labelledby="ph2">
+    <div class="head"><div><span class="eyebrow">Възможности</span><h2 id="ph2">Проекти и национални програми</h2><p>Какво предлага училището освен учебния план.</p></div><a class="all" href="{link(root, 'proekti')}">Всички проекти {arrow}</a></div>
+    <div class="bento proj-b">
+      <div class="tile proj rv">
+        <a href="{link(root, 'proekti')}"><span class="tag">Проект</span><b>Училищна STEM среда</b></a>
+        <a href="{link(root, 'proekti')}"><span class="tag">Проект</span><b>Модернизиране на професионалното образование и обучение</b></a>
+        <a href="{link(root, 'proekti')}"><span class="tag">Проект</span><b>Живей активно, храни се разумно!</b></a>
+        <a href="{link(root, 'nacionalni-programi')}"><span class="tag">Национална програма</span><b>Без свободен час</b></a>
+        <a href="{link(root, 'nacionalni-programi')}"><span class="tag">Национална програма</span><b>Заедно в изкуствата и в спорта</b></a>
+        <a href="{link(root, 'nacionalni-programi')}"><span class="tag">Национална програма</span><b>Иновации в действие</b></a>
+      </div>
+      <section class="tile contact rv" style="--i:1" aria-labelledby="ct">
+        <span class="eyebrow">Свържи се с нас</span>
+        <h2 id="ct">Контакти</h2>
+        <p class="hrs">Приемно време: вторник и четвъртък, 12:00 – 14:00. Администрация: понеделник – петък, 08:00 – 16:30 ч.</p>
+        <ul class="cl">
+          <li><svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg><span>гр. Лом, ул. Дунавска №67<br><a href="{MAP}">Виж адреса на картата</a></span></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-phone"/></svg><span>тел./факс: 0894 472 694<br>факс: 0971 60011</span></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-mail"/></svg><span>info-1209005@edu.mon.bg<br>info@sudm-lom.bg</span></li>
+        </ul>
+        <button class="btn glassy" type="button" data-open="dlgContact">Бързи контакти</button>
+      </section>
     </div>
   </section>
 </div>
-<div style="height:8px"></div>
 <script type="application/ld+json">{json.dumps({"@context": "https://schema.org", "@type": "School", "name": "СУ „Димитър Маринов“", "url": SITE_URL + "/" if SITE_URL else None, "logo": (SITE_URL + "/assets/img/logo.png") if SITE_URL else None, "image": (SITE_URL + "/assets/img/school.jpg") if SITE_URL else None, "address": {"@type": "PostalAddress", "streetAddress": "ул. Дунавска 67", "postalCode": "3600", "addressLocality": "Лом", "addressCountry": "BG"}, "sameAs": ["https://www.facebook.com/people/%D0%A1%D0%A3-%D0%94%D0%B8%D0%BC%D0%B8%D1%82%D1%8A%D1%80-%D0%9C%D0%B0%D1%80%D0%B8%D0%BD%D0%BE%D0%B2/100063863358048/", "https://www.youtube.com/@avstudio_sudm_lom9515"], "telephone": "+359894472694", "email": "info-1209005@edu.mon.bg"}, ensure_ascii=False)}</script>'''
-    write('', layout(0, '', 'Начало', 'СУ „Димитър Маринов“ – Лом: прием, свободни места, програма, документи и новини на едно място.', body, is_home=True));
+    write('', layout(0, '', 'Начало', 'СУ „Димитър Маринов“ – Лом: прием, свободни места, програма, документи и новини на едно място.', body, is_home=True))
 
 def page_404():
     root = BASE_PATH if BASE_PATH.endswith('/') else BASE_PATH + '/'

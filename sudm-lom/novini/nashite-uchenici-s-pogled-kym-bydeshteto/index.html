@@ -7,15 +7,16 @@
 <meta name="description" content="На 7 октомври 2026 г. ученици от Х, ХI и ХII клас на СУ „Димитър Маринов“ – гр. Лом , взеха участие в представянето на университетите в България…">
 <meta property="og:type" content="article"><meta property="og:site_name" content="СУ „Димитър Маринов“ – Лом"><meta property="og:locale" content="bg_BG"><meta property="og:title" content="Нашите ученици – с поглед към бъдещето! – СУ „Д. Маринов“ – Лом"><meta property="og:description" content="На 7 октомври 2026 г. ученици от Х, ХI и ХII клас на СУ „Димитър Маринов“ – гр. Лом , взеха участие в представянето на университетите в България…"><meta name="twitter:card" content="summary_large_image"><meta property="og:image" content="https://dimitarbeograd-qa.github.io/portfolio-demos/sudm-lom/assets/img/news/b08ab9377d.jpg">
 <link rel="canonical" href="https://dimitarbeograd-qa.github.io/portfolio-demos/sudm-lom/novini/nashite-uchenici-s-pogled-kym-bydeshteto/"><meta property="og:url" content="https://dimitarbeograd-qa.github.io/portfolio-demos/sudm-lom/novini/nashite-uchenici-s-pogled-kym-bydeshteto/">
-<meta name="theme-color" content="#8a1c4f">
+<meta name="theme-color" content="#3a0d26">
 <link rel="icon" href="../../assets/img/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,700&family=Manrope:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geologica:wght@500..800&family=Golos+Text:wght@400..700&display=swap">
 <link rel="stylesheet" href="../../assets/css/style.css">
 <script type="application/ld+json">{"@context": "https://schema.org", "@type": "NewsArticle", "headline": "Нашите ученици – с поглед към бъдещето!", "datePublished": "2026-10-09", "inLanguage": "bg", "author": {"@type": "Organization", "name": "СУ „Димитър Маринов“"}, "image": "https://dimitarbeograd-qa.github.io/portfolio-demos/sudm-lom/assets/img/news/b08ab9377d.jpg"}</script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
 <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
 <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
 <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 13a8 8 0 1 1-10-10 6.5 6.5 0 0 0 10 10z"/></symbol>
@@ -27,36 +28,46 @@
 <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
 </svg>
 <a class="skip" href="#main">Към съдържанието</a>
-<div class="wrap top">
-  <em>Ако успееш тук, ще успееш навсякъде!</em>
-  <div class="tools">
-    <a class="pill txt" href="https://app.shkolo.bg/">Е-дневник</a>
-    <a class="pill txt" href="../../roditeli-i-uchenici/index.html">За родители и ученици</a>
-    <button class="pill" type="button" data-search aria-label="Търсене в сайта"><svg class="ico"><use href="#i-search"/></svg><span class="txt">Търсене</span></button>
-    <button class="pill" type="button" id="themeBtn" aria-label="Смени светла или тъмна тема"><svg class="ico"><use href="#i-moon"/></svg><span class="txt">Тема</span></button>
-  </div>
-</div>
+<div class="progress" id="progress" aria-hidden="true"></div>
 <header class="bar" id="bar">
-  <div class="wrap">
+  <a class="brand" href="../../index.html" aria-label="СУ „Димитър Маринов“, начало">
+    <img class="logo" src="../../assets/img/logo.png" alt="" width="240" height="141">
+    <span><b>СУ „Димитър Маринов“</b><small>град Лом</small></span>
+  </a>
+  <div class="bar-act">
+    <button class="ibtn" type="button" data-search aria-label="Търсене в сайта"><svg class="ico"><use href="#i-search"/></svg></button>
+    <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="rail"><svg class="ico"><use href="#i-menu"/></svg><span>Меню</span></button>
+  </div>
+</header>
+<div class="scrim" id="scrim" hidden></div>
+<aside class="rail" id="rail" aria-label="Страничен панел">
+  <div class="rail-top">
     <a class="brand" href="../../index.html" aria-label="СУ „Димитър Маринов“, начало">
       <img class="logo" src="../../assets/img/logo.png" alt="" width="240" height="141">
       <span><b>СУ „Димитър Маринов“</b><small>град Лом</small></span>
     </a>
-    <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="nav">Меню</button>
-    <nav class="main" id="nav" aria-label="Основно меню"><ul>
-<li class="has"><button class="nl" type="button" aria-expanded="false" aria-controls="m0">За училището <svg class="ico chev"><use href="#i-chev"/></svg></button><div class="menu" id="m0"><ul><li><a href="../../za-nas/index.html">Мисия и визия</a></li><li><a href="../../patron/index.html">Патрон</a></li><li><a href="../../istoriya/index.html">История</a></li><li><a href="../../ekip/index.html">Екип</a></li><li><a href="../../obshtestven-suvet/index.html">Обществен съвет</a></li><li><a href="../../lichni-danni/index.html">Защита на личните данни</a></li><li><a href="https://sop.bg/su-lom-1208/">Профил на купувача</a></li></ul></div></li>
-<li class="has"><button class="nl" type="button" aria-expanded="false" aria-controls="m1">Прием <svg class="ico chev"><use href="#i-chev"/></svg></button><div class="menu" id="m1"><ul><li><a href="../../priem/index.html">Прием – общо</a></li><li><a href="../../priem-1-klas/index.html">Прием в 1. клас</a></li><li><a href="../../priem-5-klas/index.html">Прием в 5. клас</a></li><li><a href="../../priem-8-klas/index.html">Прием в 8. клас</a></li></ul></div></li>
-<li class="has"><button class="nl" type="button" aria-expanded="false" aria-controls="m2">Документи <svg class="ico chev"><use href="#i-chev"/></svg></button><div class="menu" id="m2"><ul><li><a href="../../dokumenti/index.html">Всички документи</a></li><li><a href="../../normativni-dokumenti/index.html">Нормативни документи</a></li><li><a href="../../uchebni-planove/index.html">Учебни планове</a></li><li><a href="../../byudzhet/index.html">Бюджет</a></li><li><a href="../../obrazci/index.html">Образци на документи</a></li><li><a href="../../bdp/index.html">БДП</a></li></ul></div></li>
-<li class="has"><button class="nl" type="button" aria-expanded="false" aria-controls="m3">Проекти <svg class="ico chev"><use href="#i-chev"/></svg></button><div class="menu" id="m3"><ul><li><a href="../../proekti/index.html">Проекти</a></li><li><a href="../../nacionalni-programi/index.html">Национални програми</a></li></ul></div></li>
-<li><a class="nl" href="../../iziavi/index.html">Изяви</a></li>
-<li><a class="nl" href="../../izpiti/index.html">Изпити</a></li>
-<li><a class="nl" href="../../novini/index.html" aria-current="page">Новини</a></li>
-<li><a class="nl" href="../../kontakti/index.html">Контакти</a></li>
-<li class="mob-only"><a class="nl" href="https://app.shkolo.bg/">Е-дневник</a></li>
-<li class="mob-only"><a class="nl" href="../../roditeli-i-uchenici/index.html">За родители и ученици</a></li>
-    </ul></nav>
+    <button class="ibtn rail-close" type="button" id="railClose" aria-label="Затвори менюто"><svg class="ico"><use href="#i-x"/></svg></button>
   </div>
-</header>
+  <nav class="main" id="nav" aria-label="Основно меню"><ul>
+<li class="has"><button class="nl" type="button" aria-expanded="false" aria-controls="m0"><span class="num" aria-hidden="true">01</span><span class="lbl">За училището</span><svg class="ico chev" aria-hidden="true"><use href="#i-chev"/></svg></button><div class="menu" id="m0"><ul><li><a href="../../za-nas/index.html">Мисия и визия</a></li><li><a href="../../patron/index.html">Патрон</a></li><li><a href="../../istoriya/index.html">История</a></li><li><a href="../../ekip/index.html">Екип</a></li><li><a href="../../obshtestven-suvet/index.html">Обществен съвет</a></li><li><a href="../../lichni-danni/index.html">Защита на личните данни</a></li><li><a href="https://sop.bg/su-lom-1208/">Профил на купувача<svg class="ico ext" aria-hidden="true"><use href="#i-ext"/></svg></a></li></ul></div></li>
+<li class="has"><button class="nl" type="button" aria-expanded="false" aria-controls="m1"><span class="num" aria-hidden="true">02</span><span class="lbl">Прием</span><svg class="ico chev" aria-hidden="true"><use href="#i-chev"/></svg></button><div class="menu" id="m1"><ul><li><a href="../../priem/index.html">Прием – общо</a></li><li><a href="../../priem-1-klas/index.html">Прием в 1. клас</a></li><li><a href="../../priem-5-klas/index.html">Прием в 5. клас</a></li><li><a href="../../priem-8-klas/index.html">Прием в 8. клас</a></li></ul></div></li>
+<li class="has"><button class="nl" type="button" aria-expanded="false" aria-controls="m2"><span class="num" aria-hidden="true">03</span><span class="lbl">Документи</span><svg class="ico chev" aria-hidden="true"><use href="#i-chev"/></svg></button><div class="menu" id="m2"><ul><li><a href="../../dokumenti/index.html">Всички документи</a></li><li><a href="../../normativni-dokumenti/index.html">Нормативни документи</a></li><li><a href="../../uchebni-planove/index.html">Учебни планове</a></li><li><a href="../../byudzhet/index.html">Бюджет</a></li><li><a href="../../obrazci/index.html">Образци на документи</a></li><li><a href="../../bdp/index.html">БДП</a></li></ul></div></li>
+<li class="has"><button class="nl" type="button" aria-expanded="false" aria-controls="m3"><span class="num" aria-hidden="true">04</span><span class="lbl">Проекти</span><svg class="ico chev" aria-hidden="true"><use href="#i-chev"/></svg></button><div class="menu" id="m3"><ul><li><a href="../../proekti/index.html">Проекти</a></li><li><a href="../../nacionalni-programi/index.html">Национални програми</a></li></ul></div></li>
+<li><a class="nl" href="../../iziavi/index.html"><span class="num" aria-hidden="true">05</span><span class="lbl">Изяви</span></a></li>
+<li><a class="nl" href="../../izpiti/index.html"><span class="num" aria-hidden="true">06</span><span class="lbl">Изпити</span></a></li>
+<li><a class="nl" href="../../novini/index.html" aria-current="page"><span class="num" aria-hidden="true">07</span><span class="lbl">Новини</span></a></li>
+<li><a class="nl" href="../../kontakti/index.html"><span class="num" aria-hidden="true">08</span><span class="lbl">Контакти</span></a></li>
+  </ul></nav>
+  <div class="rail-foot">
+    <button class="rbtn wide" type="button" data-search><svg class="ico"><use href="#i-search"/></svg><span>Търсене</span><kbd>Ctrl K</kbd></button>
+    <div class="rail-row">
+      <button class="rbtn" type="button" id="themeBtn" aria-label="Смени светла или тъмна тема"><svg class="ico"><use href="#i-moon"/></svg><span>Тема</span></button>
+      <button class="rbtn" type="button" data-open="dlgContact"><svg class="ico"><use href="#i-phone"/></svg><span>Контакт</span></button>
+    </div>
+    <div class="rail-links"><a href="https://app.shkolo.bg/">Е-дневник</a><a href="../../roditeli-i-uchenici/index.html">За родители и ученици</a></div>
+  </div>
+</aside>
+<div class="canvas">
 <main id="main" tabindex="-1">
 <nav class="crumbs wrap" aria-label="Пътека"><ol><li><a href="../../index.html">Начало</a></li><li><a href="../../novini/index.html">Новини</a></li><li aria-current="page">Нашите ученици – с поглед към бъдещето!</li></ol></nav><article class="wrap post" style="padding-top:20px"><div class="meta"><time datetime="2026-10-09">9 октомври 2026</time></div><h1>Нашите ученици – с поглед към бъдещето!</h1><div class="prose"><p>На 7 октомври 2026 г. ученици от <strong>Х, ХI и ХII клас на СУ „Димитър Маринов“ – гр. Лом</strong>, взеха участие в представянето на университетите в България, проведено в <strong>Младежки център – гр. Монтана.</strong></p>
 <p>Събитието предостави възможност на младите хора да се запознаят с разнообразието от специалности, възможностите за обучение и перспективите за професионална реализация във висшите учебни заведения в страната.</p>
@@ -83,6 +94,7 @@
   </div>
   <div class="wrap"><small>© СУ „Димитър Маринов“, град Лом. Съдържанието е пренесено от sudm-lom.bg.</small></div>
 </footer>
+</div>
 
 <dialog id="dlgContact" aria-labelledby="cTitle">
   <div class="dh"><h2 id="cTitle">Бързи контакти</h2><button class="x" type="button" data-close aria-label="Затвори"><svg class="ico"><use href="#i-x"/></svg></button></div>

@@ -12,7 +12,8 @@ A static multi-page website (91 pages, plain HTML, CSS and JS, no database):
 - about the school (mission and vision, patron, history, team, public council, personal data), admissions for grades 1, 5 and 8, documents with search, projects and national programmes, exams, contacts with opening hours;
 - news with 60 full posts (up to 4 photos each, video where the original has one), search, categories and "show more";
 - detail pages of the projects and national programmes, carried over so they no longer depend on the old site;
-- drop-down menus, site search (`Ctrl+K`), contact and search dialogs, light and dark theme (starts light), mobile menu, keyboard focus states, reduced-motion support.
+- design: fixed left sidebar with an accordion menu (a slide-in drawer on phones), a full-height duotone photo hero with frosted-glass cards, a bento grid of mixed-size tiles, Geologica + Golos Text, light theme first with a plum-black dark theme;
+- site search (`Ctrl+K`), contact and search dialogs, keyboard focus states, reduced-motion support.
 
 Documents (PDF and others) still link to the original site.
 
