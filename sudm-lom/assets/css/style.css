@@ -439,3 +439,18 @@ ul.docs a:hover{border-color:var(--plum);background:var(--rose);transform:transl
 
 /* Българските форми на Geologica (т като m) се изключват за по-ясно четене */
 .brand b,.brand small,.btn,.rbtn,.quick a .t,.proj b,.card b,.person b,.person.lead b,.glass b,.glass .k,.eyebrow,.num,.meta,.fact dt,.big,.t,.ext,.tag,.av,.dh h2,.side h2,.ncard h2,.ncard h3,.news-s h3,.news-f h3,.pagehead h1,.post h1,.head h2,.tile h2,.tile h3,.hero h1,.pp,footer h2,.patron .yr,.crumbs,.hours th,h1,h2,h3{font-feature-settings:'locl' 0}
+
+/* Заглавна част: снимката се вижда, текстът е в панел */
+.hero{min-height:min(82vh,800px);min-height:min(82svh,800px)}
+.hero-media img{filter:none}
+.hero-media::after{opacity:.08}
+.hero-tint{background:linear-gradient(0deg,rgba(28,5,18,.5) 0,rgba(28,5,18,0) 38%)}
+.hero-body{padding-top:clamp(220px,42vh,420px);padding-bottom:clamp(24px,4vh,44px)}
+.hero-panel{max-width:640px;padding:clamp(20px,2.4vw,32px);border-radius:26px;background:rgba(36,7,24,.9);border:1px solid rgba(255,255,255,.18);box-shadow:0 30px 60px -30px rgba(0,0,0,.7)}
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.hero-panel{background:rgba(36,7,24,.78);-webkit-backdrop-filter:blur(16px) saturate(1.3);backdrop-filter:blur(16px) saturate(1.3)}}
+.hero h1{font-size:clamp(1.8rem,3vw,2.8rem);margin:12px 0 14px;max-width:none;text-shadow:none}
+.hero-p{font-size:1.05rem;margin:0 0 20px;max-width:none;text-shadow:none}
+.hero .eyebrow{text-shadow:none}
+.hero-strip{background:var(--deep2);padding:0 var(--pad) 28px}
+.hero-strip .glass-row{max-width:1480px;margin:0 auto;padding:22px 0 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;list-style:none}
+@media (max-width:700px){.hero{min-height:0}.hero-body{padding-top:clamp(150px,52vw,280px)}.hero-panel{max-width:none}.hero-strip .glass-row{grid-template-columns:1fr}}
