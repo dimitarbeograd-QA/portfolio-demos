@@ -109,6 +109,17 @@ db.exec(`
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- Лични стикери и икони (качени от телефона или нарисувани). При изпращане файлът се копира като прикачен файл.
+  CREATE TABLE IF NOT EXISTS stickers (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL CHECK (kind IN ('sticker','icon')),
+    mime       TEXT NOT NULL,
+    stored     TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_stickers_owner ON stickers(owner_id, kind);
+
   CREATE TABLE IF NOT EXISTS blocks (
     blocker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     blocked_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -292,6 +303,9 @@ for (const [col, ddl] of [
     // Съществуващите акаунти (без имейл) се водят потвърдени, за да не бъдат заключени.
     if (col === 'email_verified_at') db.exec("UPDATE users SET email_verified_at = created_at WHERE email_verified_at IS NULL");
   }
+}
+if (!db.prepare('PRAGMA table_info(attachments)').all().some(c => c.name === 'variant')) {
+  db.exec("ALTER TABLE attachments ADD COLUMN variant TEXT NOT NULL DEFAULT ''"); // '', 'sticker' или 'icon'
 }
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email_key) WHERE email_key IS NOT NULL');
 if (!db.prepare('PRAGMA table_info(reports)').all().some(c => c.name === 'dossier_id')) db.exec('ALTER TABLE reports ADD COLUMN dossier_id INTEGER REFERENCES dossiers(id) ON DELETE SET NULL');

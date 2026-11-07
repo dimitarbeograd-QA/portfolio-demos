@@ -539,3 +539,19 @@ button[aria-pressed=true].btn:not(.ghost) { animation: likepop .35s var(--ease);
 .locbox { display: grid; gap: .4rem; justify-items: start; margin: .5rem 0; padding: .7rem; border: var(--bw) dashed var(--border); border-radius: 12px; }
 .locbox p { margin: 0; }
 [hidden] { display: none !important; }
+
+/* Лични стикери и икони */
+.stkpane { padding: .2rem .5rem .6rem; } .stkbar { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-bottom: .5rem; }
+.stkgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: .4rem; } .stkgrid .hint { grid-column: 1 / -1; margin: .3rem 0; }
+.stkitem { position: relative; } .stkbtn { all: unset; cursor: pointer; display: block; width: 100%; aspect-ratio: 1; border-radius: 10px; background: var(--faint); transition: transform .12s; } .stkbtn:hover, .stkbtn:focus-visible { transform: scale(1.06); outline: 2px solid var(--accent); }
+.stkbtn img { width: 100%; height: 100%; object-fit: contain; display: block; } .stkitem.icon .stkbtn img { padding: 22%; }
+.stkdel { position: absolute; top: -4px; right: -4px; width: 1.4rem; height: 1.4rem; border-radius: 50%; border: 0; background: #e0245e; color: #fff; font-size: .75rem; cursor: pointer; }
+.att-stk { all: unset; cursor: zoom-in; display: block; } .att-stk img { display: block; object-fit: contain; } .att-stk.sticker img { width: 150px; height: 150px; } .att-stk.icon img { width: 52px; height: 52px; }
+.bubble.stkmsg { background: transparent !important; box-shadow: none !important; border-color: transparent !important; padding: .1rem .2rem; } .bubble.stkmsg time { color: var(--muted); }
+.stk-editor { display: grid; gap: .6rem; } .stk-stage { display: grid; place-items: center; } .stk-canvas { width: 100%; max-width: 320px; aspect-ratio: 1; border-radius: 14px; border: var(--bw) solid var(--border); touch-action: none; cursor: crosshair; }
+.stk-canvas.checker { background: repeating-conic-gradient(#8884 0 25%, #8882 0 50%) 0 0 / 20px 20px; }
+.swatches { display: flex; flex-wrap: wrap; gap: .4rem; } .swatch { width: 2rem; height: 2rem; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; padding: 0; } .swatch[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: 2px; }
+.rng { display: flex; align-items: center; gap: .6rem; } .rng input { flex: 1; }
+.stamprow { display: flex; gap: .2rem; overflow-x: auto; padding-bottom: .2rem; } .stamprow .emobtn[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.stk-save { display: flex; flex-wrap: wrap; gap: .5rem; }
+@media (max-width: 700px) { .emopop { max-height: 60vh; } .att-stk.sticker img { width: 128px; height: 128px; } }

@@ -322,7 +322,7 @@
   const dkey = (a, b) => (a < b ? a + ':' + b : b + ':' + a);
   const msgsOf = c => db.messages.filter(m => m.cid === c.id && visibleMsg(m)).sort((x, y) => x.id - y.id);
   const lastId = c => db.messages.reduce((n, m) => (m.cid === c.id ? Math.max(n, m.id) : n), 0);
-  const attView = id => { const f = files[id]; return f ? { id: f.id, name: f.name, size: f.size, kind: f.kind, url: f.url } : null; };
+  const attView = id => { const f = files[id]; return f ? { id: f.id, name: f.name, size: f.size, kind: f.kind, variant: f.variant || '', url: f.url } : null; };
   const msgView = (m, me) => ({ id: m.id, kind: m.kind, senderId: m.from || null, senderNick: m.from ? nickOf(m.from) : '', mine: m.from === me.id, body: m.body, at: iso(m.at), attachment: attView(m.att) });
   const peerUser = (c, me) => { const o = c.members.find(m => m.id !== me.id); const u = o && people().find(x => x.id === o.id); return u && !blocked(me.id, u.id) ? u : null; };
   const addSystem = (c, actor, text, at = Date.now()) => { const m = { id: ++db.seq, cid: c.id, from: actor, kind: 'system', body: text, att: null, at }; db.messages.push(m); return m.id; };
@@ -415,7 +415,7 @@
     for (const c of db.convs.filter(x => memberOf(x, me.id))) {
       const mm = memberOf(c, me.id), ms = msgsOf(c).filter(m => m.id >= mm.from); if (!ms.length) continue;
       const last = ms[ms.length - 1];
-      const lp = { body: last.body || (attView(last.att) || {}).kind === 'image' ? (last.body || '📷 Снимка') : (last.body || '📎 Файл'), mine: last.from === me.id, senderNick: last.from ? nickOf(last.from) : '', system: last.kind === 'system', at: iso(last.at) };
+      const lp = { body: last.body || (attView(last.att) || {}).kind === 'image' ? (last.body || ((attView(last.att) || {}).variant ? '🏷️ Стикер' : '📷 Снимка')) : (last.body || '📎 Файл'), mine: last.from === me.id, senderNick: last.from ? nickOf(last.from) : '', system: last.kind === 'system', at: iso(last.at) };
       if (c.kind === 'direct') { const pr = peerUser(c, me); if (!pr) continue; chats.push({ id: c.id, kind: 'direct', title: pr.nickname, peer: pub(pr, me.id), unread: unreadOf(c, me.id), last: lp, _t: last.id }); }
       else chats.push({ id: c.id, kind: 'group', title: c.title, members: c.members.length, preview: c.members.slice(0, 3).map(m => ({ id: m.id, nickname: nickOf(m.id) })), unread: unreadOf(c, me.id), last: lp, _t: last.id });
     }
@@ -462,6 +462,11 @@
     const text = String(b.body || '').trim(); if (text.length > 1000) return bad('Съобщението може да е до 1000 символа.');
     let att = null;
     if (b.attachmentId) { att = files[b.attachmentId]; if (!att || att.uploader !== me.id || att.mid) return bad('Файлът не е наличен. Качи го отново.'); }
+    if (b.stickerId && !att) {
+      const st = (stk[me.id] || []).find(x => x.id === Number(b.stickerId)); if (!st) return bad('Стикерът не е намерен.', 404);
+      if (!canSend(me)) return bad('Изпращате твърде бързо. Изчакайте малко.', 429);
+      att = { id: ++db.seq, name: st.kind === 'icon' ? 'икона' : 'стикер', size: st.url.length, kind: 'image', variant: st.kind, url: st.url, uploader: me.id, mid: null }; files[att.id] = att;
+    }
     if (!text && !att) return bad('Съобщението е празно.');
     if (!canSend(me)) return bad('Изпращате твърде бързо. Изчакайте малко.', 429);
     const msg = addMsg(c, me.id, text, att && att.id);
@@ -471,6 +476,23 @@
     if (bots.length) { const bot = bots[db.messages.length % bots.length]; addMsg(c, bot.id, CANNED[db.messages.length % CANNED.length], null, Date.now() + 2500); }
     save(); return ok({ message: msgView(msg, me) }, 201);
   }));
+  // ── Лични стикери и икони (в демото – в браузъра) ──
+  const SKEY = 'spark.preview.stickers.v1'; let stk = {};
+  try { stk = JSON.parse(localStorage.getItem(SKEY) || '{}'); } catch { stk = {}; }
+  const saveStk = () => { try { localStorage.setItem(SKEY, JSON.stringify(stk)); } catch { /* квотата е пълна */ } };
+  const MAXSTK = { sticker: 40, icon: 60 };
+  route('GET', /^\/api\/stickers$/, authed(({ me }) => { const l = stk[me.id] || []; return ok({ stickers: l.filter(x => x.kind === 'sticker').map(x => ({ id: x.id, kind: x.kind, url: x.url })).reverse(), icons: l.filter(x => x.kind === 'icon').map(x => ({ id: x.id, kind: x.kind, url: x.url })).reverse(), max: MAXSTK }); }));
+  route('POST', /^\/api\/stickers$/, active(async ({ blob, headers, me }) => {
+    const kind = headers['X-Kind']; if (!MAXSTK[kind]) return bad('Невалиден вид (стикер или икона).');
+    if (!blob || !blob.size) return bad('Празен файл.');
+    if (blob.size > 400 * 1024) return bad('Изображението е твърде голямо (макс. 400 KB след смаляване).', 413);
+    const url = await readBlob(blob); if (!/^data:image\/(jpeg|png|webp|gif);/.test(url)) return bad('Позволени са само снимки: JPG, PNG, WebP или GIF.');
+    const l = stk[me.id] = stk[me.id] || [];
+    if (l.filter(x => x.kind === kind).length >= MAXSTK[kind]) return bad(`Достигнат е лимитът от ${MAXSTK[kind]} ${kind === 'icon' ? 'икони' : 'стикера'}. Изтрий някой.`, 409);
+    const st = { id: ++db.seq, kind, url }; l.push(st); saveStk(); save();
+    return ok({ sticker: { id: st.id, kind, url } }, 201);
+  }));
+  route('DELETE', /^\/api\/stickers\/(\d+)$/, authed(({ m, me }) => { const l = stk[me.id] || [], i = l.findIndex(x => x.id === Number(m[1])); if (i < 0) return bad('Не е намерен.', 404); l.splice(i, 1); saveStk(); return ok({ ok: true }); }));
   const BLOCKED_EXT = new Set(['exe', 'bat', 'cmd', 'com', 'scr', 'msi', 'ps1', 'vbs', 'js', 'mjs', 'jar', 'sh', 'app', 'apk', 'dll', 'lnk', 'html', 'htm', 'xhtml', 'svg', 'hta', 'reg']);
   const readBlob = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
   route('POST', /^\/api\/chats\/(\d+)\/attachments$/, active(async ({ m, blob, headers, me }) => {

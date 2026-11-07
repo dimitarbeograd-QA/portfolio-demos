@@ -1222,3 +1222,32 @@ test('местоположение: проверка с GPS и ограниче�
   dbx.prepare("UPDATE users SET place_changed_at = datetime('now', '-8 days') WHERE id = ?").run(u.id);
   assert.equal((await c('PUT', '/api/me', { placeId: pid('Бургас') })).status, 200);
 });
+
+test('лични стикери и икони: качване, изпращане, изолация', async () => {
+  const { a, b, ua, ub } = await two();
+  const up = (c, kind, bytes) => fetch(`${base}/api/stickers`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Kind': kind, cookie: c.cookie() }, body: bytes }).then(async r => ({ status: r.status, data: await r.json().catch(() => ({})) }));
+  assert.equal((await up(a, 'bad', PNG_BYTES)).status, 400);
+  assert.equal((await up(a, 'sticker', Buffer.from('not an image at all, really'))).status, 400);
+  assert.equal((await up(a, 'sticker', Buffer.alloc(500 * 1024, 1))).status, 413);
+  const s1 = await up(a, 'sticker', PNG_BYTES), i1 = await up(a, 'icon', PNG_BYTES);
+  assert.equal(s1.status, 201); assert.equal(i1.status, 201);
+  const list = (await a('GET', '/api/stickers')).data;
+  assert.equal(list.stickers.length, 1); assert.equal(list.icons.length, 1);
+  assert.equal((await b('GET', '/api/stickers')).data.stickers.length, 0, 'чужд профил не вижда моите');
+  assert.equal((await fetch(base + s1.data.sticker.url, { headers: { cookie: b.cookie() } })).status, 404);
+  assert.equal((await fetch(base + s1.data.sticker.url, { headers: { cookie: a.cookie() } })).status, 200);
+  // изпращане
+  const { cid } = await say(a, ub.id, 'здрасти');
+  assert.equal((await b('POST', `/api/chats/${cid}/messages`, { stickerId: s1.data.sticker.id })).status, 404, 'чужд стикер не може да се ползва');
+  const sent = await a('POST', `/api/chats/${cid}/messages`, { stickerId: s1.data.sticker.id });
+  assert.equal(sent.status, 201);
+  assert.equal(sent.data.message.attachment.variant, 'sticker');
+  const sent2 = await a('POST', `/api/chats/${cid}/messages`, { stickerId: i1.data.sticker.id });
+  assert.equal(sent2.data.message.attachment.variant, 'icon');
+  // получателят вижда файла; изтриването на оригинала не чупи чата
+  assert.equal((await fetch(base + sent.data.message.attachment.url, { headers: { cookie: b.cookie() } })).status, 200);
+  assert.equal((await b('DELETE', `/api/stickers/${s1.data.sticker.id}`)).status, 404);
+  assert.equal((await a('DELETE', `/api/stickers/${s1.data.sticker.id}`)).status, 200);
+  assert.equal((await fetch(base + sent.data.message.attachment.url, { headers: { cookie: b.cookie() } })).status, 200);
+  assert.equal((await a('GET', '/api/stickers')).data.stickers.length, 0);
+});

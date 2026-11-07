@@ -791,7 +791,7 @@ const cleanName = raw => {
   n = n.replace(/[\\/]/g, '_').replace(/[\u0000-\u001f\u007f<>:"|?*]/g, '').trim().slice(-120);
   return n || 'файл';
 };
-const attView = a => a && { id: a.id, name: a.name, size: a.size, kind: a.kind, url: '/api/files/' + a.id };
+const attView = a => a && { id: a.id, name: a.name, size: a.size, kind: a.kind, variant: a.variant || '', url: '/api/files/' + a.id };
 const attById = id => (id ? db.prepare('SELECT * FROM attachments WHERE id = ?').get(id) : null);
 const dropFile = stored => fs.rm(path.join(db.UPLOAD_DIR, stored), { force: true }, () => {});
 
@@ -820,6 +820,7 @@ function cleanupBeforeUserDelete(uid) {
   }
   files.push(...db.prepare('SELECT * FROM attachments WHERE uploader_id = ? AND message_id IS NULL').all(uid));
   dropUnreferencedFiles(files);
+  db.prepare('SELECT stored FROM stickers WHERE owner_id = ?').all(uid).forEach(r => dropFile(r.stored));
 }
 
 // След изтриване на акаунт: групи без собственик получават нов (най-стария член), празните групи се трият.
@@ -853,6 +854,44 @@ app.post('/api/chats/:id/attachments', requireActive, express.raw({ type: () => 
   const r = db.prepare('INSERT INTO attachments (uploader_id, name, mime, size, stored, kind) VALUES (?, ?, ?, ?, ?, ?)')
     .run(me, name, imgType ? IMG_MIME[imgType] : 'application/octet-stream', buf.length, stored, imgType ? 'image' : 'file');
   res.status(201).json({ attachment: attView(attById(r.lastInsertRowid)) });
+}));
+
+// ── Лични стикери и икони ──
+const MAX_STICKER = 400 * 1024, MAX_STICKERS = { sticker: 40, icon: 60 };
+const stickerView = r => ({ id: r.id, kind: r.kind, url: '/api/stickers/' + r.id + '/img' });
+app.get('/api/stickers', requireAuth, wrap((req, res) => {
+  const rows = db.prepare('SELECT * FROM stickers WHERE owner_id = ? ORDER BY id DESC').all(req.session.userId);
+  res.json({ stickers: rows.filter(r => r.kind === 'sticker').map(stickerView), icons: rows.filter(r => r.kind === 'icon').map(stickerView), max: MAX_STICKERS });
+}));
+app.post('/api/stickers', requireActive, express.raw({ type: () => true, limit: MAX_STICKER + 1024 }), wrap((req, res) => {
+  const me = req.session.userId, kind = req.get('x-kind');
+  if (!MAX_STICKERS[kind]) return bad(res, 'Невалиден вид (стикер или икона).');
+  const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+  if (!buf.length) return bad(res, 'Празен файл.');
+  if (buf.length > MAX_STICKER) return bad(res, 'Изображението е твърде голямо (макс. 400 KB след смаляване).', 413);
+  const type = sniffAny(buf);
+  if (!type) return bad(res, 'Позволени са само снимки: JPG, PNG, WebP или GIF.');
+  if (db.prepare('SELECT COUNT(*) c FROM stickers WHERE owner_id = ? AND kind = ?').get(me, kind).c >= MAX_STICKERS[kind])
+    return bad(res, `Достигнат е лимитът от ${MAX_STICKERS[kind]} ${kind === 'icon' ? 'икони' : 'стикера'}. Изтрий някой.`, 409);
+  const stored = crypto.randomBytes(16).toString('hex') + '.' + type;
+  fs.writeFileSync(path.join(db.UPLOAD_DIR, stored), buf, { flag: 'wx' });
+  const r = db.prepare('INSERT INTO stickers (owner_id, kind, mime, stored) VALUES (?, ?, ?, ?)').run(me, kind, IMG_MIME[type], stored);
+  res.status(201).json({ sticker: stickerView(db.prepare('SELECT * FROM stickers WHERE id = ?').get(r.lastInsertRowid)) });
+}));
+app.get('/api/stickers/:id/img', requireAuth, wrap((req, res) => {
+  const r = db.prepare('SELECT * FROM stickers WHERE id = ? AND owner_id = ?').get(Number(req.params.id), req.session.userId);
+  if (!r) return bad(res, 'Не е намерен.', 404);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'; img-src 'self'");
+  res.type(r.mime);
+  fs.createReadStream(path.join(db.UPLOAD_DIR, r.stored)).on('error', () => res.destroy()).pipe(res);
+}));
+app.delete('/api/stickers/:id', requireAuth, wrap((req, res) => {
+  const r = db.prepare('SELECT * FROM stickers WHERE id = ? AND owner_id = ?').get(Number(req.params.id), req.session.userId);
+  if (!r) return bad(res, 'Не е намерен.', 404);
+  db.prepare('DELETE FROM stickers WHERE id = ?').run(r.id); dropFile(r.stored);
+  res.json({ ok: true });
 }));
 
 // Достъп до файл: качилият го, членовете на разговора, а администратор – само ако е доказателство в доклад.
@@ -909,7 +948,7 @@ function messageView(m, me, names) {
 }
 function lastPreview(c, me, names) {
   const m = db.prepare('SELECT * FROM messages WHERE id = ?').get(c.last_id);
-  const text = m.body || (m.attachment_id ? (attById(m.attachment_id) || {}).kind === 'image' ? '📷 Снимка' : '📎 Файл' : '');
+  const text = m.body || (m.attachment_id ? (attById(m.attachment_id) || {}).variant ? '🏷️ Стикер' : (attById(m.attachment_id) || {}).kind === 'image' ? '📷 Снимка' : '📎 Файл' : '');
   return { body: text, mine: m.sender_id === me, senderNick: m.sender_id ? names.get(m.sender_id) || '' : '', system: m.kind === 'system', at: iso(m.created_at) };
 }
 
@@ -1014,6 +1053,18 @@ app.post('/api/chats/:id/messages', requireActive, wrap((req, res) => {
   if (b.attachmentId) {
     att = attById(Number(b.attachmentId));
     if (!att || att.uploader_id !== me || att.message_id) return bad(res, 'Файлът не е наличен. Качи го отново.');
+  }
+  if (b.stickerId && !att) {
+    // Изпращане на личен стикер/икона: файлът се копира, за да остане в чата дори собственикът да го изтрие.
+    const st = db.prepare('SELECT * FROM stickers WHERE id = ? AND owner_id = ?').get(Number(b.stickerId), me);
+    if (!st) return bad(res, 'Стикерът не е намерен.', 404);
+    if (!canSend(me)) return bad(res, 'Изпращате твърде бързо. Изчакайте малко.', 429);
+    const ext = st.stored.split('.').pop(), stored = crypto.randomBytes(16).toString('hex') + '.' + ext;
+    try { fs.copyFileSync(path.join(db.UPLOAD_DIR, st.stored), path.join(db.UPLOAD_DIR, stored), fs.constants.COPYFILE_EXCL); } catch { return bad(res, 'Стикерът не е наличен.', 404); }
+    const size = fs.statSync(path.join(db.UPLOAD_DIR, stored)).size;
+    const ar = db.prepare("INSERT INTO attachments (uploader_id, name, mime, size, stored, kind, variant) VALUES (?, ?, ?, ?, ?, 'image', ?)")
+      .run(me, st.kind === 'icon' ? 'икона' : 'стикер', st.mime, size, stored, st.kind);
+    att = attById(ar.lastInsertRowid);
   }
   if (!body && !att) return bad(res, 'Съобщението е празно.');
   if (!canSend(me)) return bad(res, 'Изпращате твърде бързо. Изчакайте малко.', 429);

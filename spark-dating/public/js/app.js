@@ -1019,20 +1019,124 @@ function openViewer(items, start = 0) {
 
 function openLightbox(att) { openViewer([{ url: att.url, alt: att.name, caption: `${att.name} · ${fmtSize(att.size)}`, download: att.name }]); }
 function attachmentNode(a) {
+  if (a.variant) return h('button', { class: 'att-stk ' + a.variant, type: 'button', 'aria-label': a.variant === 'icon' ? 'Икона' : 'Стикер', onclick: () => openLightbox(a) }, h('img', { src: a.url, alt: a.variant === 'icon' ? 'икона' : 'стикер', loading: 'lazy', draggable: 'false' }));
   if (a.kind === 'image') return h('button', { class: 'att-img', type: 'button', 'aria-label': `Отвори снимка ${a.name}`, onclick: () => openLightbox(a) }, h('img', { src: a.url, alt: a.name, loading: 'lazy' }));
   return h('a', { class: 'att-file', href: a.url, download: a.name, title: 'Свали' }, h('span', { class: 'ficon', 'aria-hidden': 'true', text: fileIcon(a.name) }),
     h('span', { class: 'finfo' }, h('b', { text: a.name }), h('small', { text: fmtSize(a.size) })), h('span', { class: 'fdl', 'aria-hidden': 'true', text: '⬇' }));
 }
 
+/* ═══════════ Лични стикери и икони ═══════════ */
+const stickerCache = { data: null };
+async function loadStickers(force) {
+  if (!stickerCache.data || force) stickerCache.data = await api('GET', '/api/stickers');
+  return stickerCache.data;
+}
+const loadImage = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('img')); i.src = src; });
+// Смалява до квадрат/рамка (стикер до 512 px, икона до 128 px), запазва прозрачността; ≤ 400 KB.
+async function stickerBlob(src, kind) {
+  let img, url = null;
+  if (src instanceof HTMLCanvasElement) img = src; else { url = URL.createObjectURL(src); img = await loadImage(url); }
+  try {
+    const w = img.width, hh = img.height, max = kind === 'icon' ? 128 : 512, k = Math.min(1, max / Math.max(w, hh));
+    const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(hh * k));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    for (const [type, q] of [['image/png'], ['image/webp', .9], ['image/webp', .7]]) {
+      const b = await new Promise(r => c.toBlob(r, type, q));
+      if (b && b.size <= 390 * 1024) return b;
+    }
+    throw new Error('Изображението е твърде сложно. Опитай с по-малко.');
+  } finally { if (url) URL.revokeObjectURL(url); }
+}
+async function saveSticker(src, kind) {
+  const body = await stickerBlob(src, kind);
+  const res = await fetch('/api/stickers', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/octet-stream', 'X-Kind': kind }, body });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error || 'Не беше запазено.');
+  await loadStickers(true);
+  return j.sticker;
+}
+
+// Редактор: рисуване, гумичка, печати с емотиконки и текст. Резултатът е PNG с прозрачен фон (или избран цвят).
+function openStickerEditor(kind, onSaved) {
+  const N = 320;
+  const art = h('canvas', { width: String(N), height: String(N), class: 'stk-canvas', 'aria-label': 'Платно за стикер' });
+  const ctx = art.getContext('2d');
+  const COLORS = ['#111111', '#ffffff', '#ff4f7b', '#ff9f1c', '#ffd23f', '#2ec27e', '#33b5ff', '#8a5cff'];
+  const st = { tool: 'pen', color: '#ff4f7b', size: 8, bg: '', stamp: SparkEmo.names[0], text: '', down: false, last: null };
+  const undo = [];
+  const push = () => { undo.push(ctx.getImageData(0, 0, N, N)); if (undo.length > 25) undo.shift(); };
+  const stampCache = new Map();
+  const stampImg = async n => { if (!stampCache.has(n)) stampCache.set(n, await loadImage(SparkEmo.url(n))); return stampCache.get(n); };
+  const pt = e => { const r = art.getBoundingClientRect(); return [(e.clientX - r.left) * N / r.width, (e.clientY - r.top) * N / r.height]; };
+  const line = (a, b) => {
+    ctx.globalCompositeOperation = st.tool === 'erase' ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = st.color; ctx.fillStyle = st.color; ctx.lineWidth = st.size; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    if (a[0] === b[0] && a[1] === b[1]) { ctx.beginPath(); ctx.arc(a[0], a[1], st.size / 2, 0, 7); ctx.fill(); }
+  };
+  art.addEventListener('pointerdown', async e => {
+    e.preventDefault(); const p = pt(e); push();
+    if (st.tool === 'stamp') { const im = await stampImg(st.stamp), z = st.size * 6 + 24; ctx.globalCompositeOperation = 'source-over'; ctx.drawImage(im, p[0] - z / 2, p[1] - z / 2, z, z); return; }
+    if (st.tool === 'text') {
+      const t = (st.text || '').trim(); if (!t) { undo.pop(); toast('Напиши текст най-отдолу.', true); return; }
+      const z = st.size * 4 + 18; ctx.globalCompositeOperation = 'source-over'; ctx.font = `800 ${z}px system-ui, "Segoe UI", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(4, z / 7); ctx.strokeStyle = st.color === '#ffffff' ? '#222' : '#fff'; ctx.strokeText(t, p[0], p[1]); ctx.fillStyle = st.color; ctx.fillText(t, p[0], p[1]); return;
+    }
+    st.down = true; st.last = p; art.setPointerCapture(e.pointerId); line(p, p);
+  });
+  art.addEventListener('pointermove', e => { if (!st.down) return; const p = pt(e); line(st.last, p); st.last = p; });
+  const up = () => { st.down = false; }; art.addEventListener('pointerup', up); art.addEventListener('pointercancel', up);
+
+  const tools = [['pen', '✏️', 'Молив'], ['erase', '🧽', 'Гумичка'], ['stamp', '😀', 'Печат с емотиконка'], ['text', '🔤', 'Текст']];
+  const toolBtns = tools.map(([k, ic, t]) => h('button', { class: 'chip', type: 'button', title: t, 'aria-label': t, 'aria-pressed': String(st.tool === k), text: ic, onclick: () => { st.tool = k; paintCtl(); } }));
+  const sw = COLORS.map(c => h('button', { class: 'swatch', type: 'button', 'aria-label': 'Цвят ' + c, 'aria-pressed': String(st.color === c), style: `background:${c}`, onclick: () => { st.color = c; if (st.tool === 'erase') st.tool = 'pen'; paintCtl(); } }));
+  const bgs = [['', 'Прозрачен'], ['#ffffff', 'Бял'], ['#111827', 'Тъмен'], ['#ffd23f', 'Жълт'], ['#ff9ec0', 'Розов'], ['#9be8ff', 'Син']].map(([c, t]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(st.bg === c), text: t, onclick: () => { st.bg = c; paintCtl(); } }));
+  const size = h('input', { type: 'range', min: '2', max: '40', value: String(st.size), 'aria-label': 'Размер', oninput: e => { st.size = Number(e.target.value); } });
+  const stampRow = h('div', { class: 'stamprow' }, SparkEmo.names.map(n => h('button', { class: 'emobtn', type: 'button', 'aria-label': SparkEmo.labels[n], 'aria-pressed': String(st.stamp === n), onclick: () => { st.stamp = n; st.tool = 'stamp'; paintCtl(); } }, h('img', { src: SparkEmo.url(n), alt: '', width: '30', height: '30' }))));
+  const textIn = h('input', { type: 'text', maxlength: '30', placeholder: 'Текст за стикера (после докосни платното)', 'aria-label': 'Текст', oninput: e => { st.text = e.target.value; } });
+  function paintCtl() {
+    toolBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(st.tool === tools[i][0])));
+    sw.forEach((b, i) => b.setAttribute('aria-pressed', String(st.color === COLORS[i])));
+    bgs.forEach(b => b.setAttribute('aria-pressed', String(b.textContent === ({ '': 'Прозрачен', '#ffffff': 'Бял', '#111827': 'Тъмен', '#ffd23f': 'Жълт', '#ff9ec0': 'Розов', '#9be8ff': 'Син' })[st.bg])));
+    [...stampRow.children].forEach((b, i) => b.setAttribute('aria-pressed', String(st.stamp === SparkEmo.names[i])));
+    art.style.background = st.bg || '';
+    art.classList.toggle('checker', !st.bg);
+    stampRow.hidden = st.tool !== 'stamp'; textIn.hidden = st.tool !== 'text';
+  }
+  async function save(k) {
+    const out = document.createElement('canvas'); out.width = N; out.height = N;
+    const o = out.getContext('2d');
+    if (st.bg) { o.fillStyle = st.bg; o.fillRect(0, 0, N, N); }
+    o.drawImage(art, 0, 0);
+    if (!undo.length && !st.bg) { toast('Първо нарисувай нещо.', true); return; }
+    btns.forEach(b => { b.disabled = true; });
+    try { await saveSticker(out, k); toast(k === 'icon' ? 'Иконата е запазена ✓' : 'Стикерът е запазен ✓'); closeModal(); onSaved && onSaved(k); }
+    catch (x) { toast(x.message, true); btns.forEach(b => { b.disabled = false; }); }
+  }
+  const btns = [h('button', { class: 'btn sm', type: 'button', text: '💾 Запази като стикер', onclick: () => save('sticker') }), h('button', { class: 'btn ghost sm', type: 'button', text: '💾 Като икона', onclick: () => save('icon') })];
+  openModal(h('div', { class: 'stk-editor' },
+    h('div', { class: 'stk-stage' }, art),
+    h('div', { class: 'chips' }, toolBtns, h('button', { class: 'chip', type: 'button', text: '↩️', title: 'Отмяна', 'aria-label': 'Отмяна', onclick: () => { const im = undo.pop(); if (im) ctx.putImageData(im, 0, 0); } }),
+      h('button', { class: 'chip', type: 'button', text: '🗑️', title: 'Изчисти', 'aria-label': 'Изчисти', onclick: () => { push(); ctx.clearRect(0, 0, N, N); } })),
+    h('div', { class: 'swatches' }, sw), h('label', { class: 'rng' }, h('span', { text: 'Размер' }), size),
+    stampRow, textIn,
+    h('div', { class: 'fgroup' }, h('label', { text: 'Фон' }), h('div', { class: 'chips' }, bgs)),
+    h('div', { class: 'stk-save' }, btns)), { title: kind === 'icon' ? 'Нова икона' : 'Нов стикер' });
+  paintCtl();
+}
+
 // Прозорче с емотиконки: „Spark“ (наши) и „Емоджи“ (системни).
-function emojiPopover(onPick, onClose) {
-  let tab = 'spark';
+function emojiPopover(onPick, onClose, onSticker) {
+  let tab = 'spark', manage = false;
   const box = h('div', { class: 'emopop', role: 'dialog', 'aria-label': 'Емотиконки' });
   function paint() {
     clear(box);
     const tabs = h('div', { class: 'tabs', role: 'tablist', style: 'margin:.4rem' },
       h('button', { type: 'button', role: 'tab', 'aria-selected': String(tab === 'spark'), text: '✨ Spark', onclick: () => { tab = 'spark'; paint(); } }),
-      h('button', { type: 'button', role: 'tab', 'aria-selected': String(tab === 'uni'), text: '😊 Емоджи', onclick: () => { tab = 'uni'; paint(); } }));
+      h('button', { type: 'button', role: 'tab', 'aria-selected': String(tab === 'uni'), text: '😊 Емоджи', onclick: () => { tab = 'uni'; paint(); } }),
+      h('button', { type: 'button', role: 'tab', 'aria-selected': String(tab === 'stk'), text: '🏷️ Стикери', onclick: () => { tab = 'stk'; paint(); } }),
+      h('button', { type: 'button', role: 'tab', 'aria-selected': String(tab === 'icon'), text: '🖼️ Икони', onclick: () => { tab = 'icon'; paint(); } }));
+    if (tab === 'stk' || tab === 'icon') { box.append(tabs, stickerPane(tab === 'icon' ? 'icon' : 'sticker')); return; }
     const grid = h('div', { class: 'emogrid' });
     if (tab === 'spark') {
       SparkEmo.names.forEach(n => grid.append(h('button', { class: 'emobtn', type: 'button', title: SparkEmo.labels[n], 'aria-label': SparkEmo.labels[n], onclick: () => onPick(` :${n}: `) }, h('img', { src: SparkEmo.url(n), alt: '', width: '34', height: '34' }))));
@@ -1040,6 +1144,28 @@ function emojiPopover(onPick, onClose) {
       SparkEmo.unicode.forEach(g => { grid.append(h('div', { class: 'emogrp', text: g.title })); g.items.forEach(c => grid.append(h('button', { class: 'emobtn uni', type: 'button', 'aria-label': c, text: c, onclick: () => onPick(c) }))); });
     }
     box.append(tabs, grid);
+  }
+  function stickerPane(kind) {
+    const pane = h('div', { class: 'stkpane' });
+    const fileIn = h('input', { type: 'file', accept: 'image/*', class: 'sr', 'aria-label': 'Качи от телефона', onchange: async e => {
+      const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+      try { if (!f.type.startsWith('image/')) throw new Error('Избери снимка.'); await saveSticker(f, kind); toast(kind === 'icon' ? 'Иконата е добавена ✓' : 'Стикерът е добавен ✓'); } catch (x) { toast(x.message || 'Не беше качено.', true); }
+      paint();
+    } });
+    const list = h('div', { class: 'stkgrid' }, h('p', { class: 'hint', text: 'Зареждане…' }));
+    pane.append(h('div', { class: 'stkbar' },
+      h('button', { class: 'btn sm', type: 'button', text: '⬆ Качи от телефона', onclick: () => fileIn.click() }),
+      h('button', { class: 'btn ghost sm', type: 'button', text: '✏️ Нарисувай', onclick: () => { onClose(); openStickerEditor(kind); } }),
+      h('button', { class: 'chip', type: 'button', 'aria-pressed': String(manage), text: '🗑️', title: 'Изтриване', 'aria-label': 'Режим на изтриване', onclick: () => { manage = !manage; paint(); } }), fileIn), list);
+    loadStickers().then(d => {
+      const items = kind === 'icon' ? d.icons : d.stickers;
+      clear(list);
+      if (!items.length) { list.append(h('p', { class: 'hint', text: kind === 'icon' ? 'Още нямаш икони. Качи малка снимка или нарисувай такава – може да е лого, символ, лице…' : 'Още нямаш стикери. Качи снимка от телефона или нарисувай свой стикер.' })); return; }
+      items.forEach(it => list.append(h('div', { class: 'stkitem ' + kind },
+        h('button', { type: 'button', class: 'stkbtn', 'aria-label': 'Изпрати', onclick: () => { if (manage) return; onSticker(it.id); } }, h('img', { src: it.url, alt: '', loading: 'lazy' })),
+        manage ? h('button', { type: 'button', class: 'stkdel', 'aria-label': 'Изтрий', text: '✕', onclick: async () => { try { await api('DELETE', '/api/stickers/' + it.id); await loadStickers(true); paint(); } catch (x) { toast(x.message, true); } } }) : null)));
+    }).catch(x => { clear(list); list.append(h('p', { class: 'hint', text: x.message })); });
+    return pane;
   }
   paint();
   const off = e => { if (!box.contains(e.target) && !e.target.closest('[data-emotoggle]')) { onClose(); } };
@@ -1070,7 +1196,7 @@ function createChatPane({ compact, onBack, onFull, onCollapse, onChanged }) {
 
   function togglePop() {
     if (pop) { closePop(); return; }
-    pop = emojiPopover(txt => { insertAtCursor(txt); }, closePop);
+    pop = emojiPopover(txt => { insertAtCursor(txt); }, closePop, sendSticker);
     composer.append(pop);
   }
   function closePop() { if (pop) { pop.close(); pop.remove(); pop = null; } }
@@ -1111,6 +1237,14 @@ function createChatPane({ compact, onBack, onFull, onCollapse, onChanged }) {
     finally { uploading = false; sendBtn.disabled = false; }
   }
 
+  async function sendSticker(id) {
+    if (!convId || uploading) return;
+    try {
+      const r = await api('POST', `/api/chats/${convId}/messages`, { stickerId: id });
+      data.messages.push(r.message); closePop(); renderList(true); onChanged && onChanged();
+    } catch (x) { toast(x.message, true); }
+  }
+
   async function send() {
     const body = input.value.trim();
     if ((!body && !(pending && pending.id)) || uploading || !convId) return;
@@ -1125,7 +1259,7 @@ function createChatPane({ compact, onBack, onFull, onCollapse, onChanged }) {
   function bubble(m) {
     if (m.kind === 'system') return h('div', { class: 'sysmsg', text: m.body });
     const group = conv().kind === 'group', r = m.body ? SparkEmo.render(m.body) : null;
-    const el = h('div', { class: 'bubble ' + (m.mine ? 'mine' : 'theirs') + (r && r.big && !m.attachment ? ' emobig' : '') });
+    const el = h('div', { class: 'bubble ' + (m.mine ? 'mine' : 'theirs') + (r && r.big && !m.attachment ? ' emobig' : '') + (m.attachment && m.attachment.variant && !m.body ? ' stkmsg' : '') });
     if (group && !m.mine) el.append(h('small', { class: 'from', style: `color:${nickColor(m.senderNick || '?')}`, text: m.senderNick || 'Изтрит профил' }));
     if (m.attachment) el.append(attachmentNode(m.attachment));
     if (r) el.append(h('span', { class: 'txt' }, ...r.nodes));
