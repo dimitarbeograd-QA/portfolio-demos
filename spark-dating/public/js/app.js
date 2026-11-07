@@ -229,7 +229,7 @@ const badge = n => (n > 0 ? h('span', { class: 'badge', 'aria-label': `${n} но
 const disc = {
   region: '', place: '', placeLabel: '', stage: 'region', q: '', gender: '', ageMin: '', ageMax: '', interests: new Set(), withPhoto: false,
   online: false, lookingForMe: false, goal: '', sort: 'active', profiles: [], total: 0, loading: false,
-  pickerOpen: true, filtersOpen: false, token: 0,
+  pickerOpen: true, filtersOpen: (() => { try { const v = localStorage.getItem('spark.filtersOpen'); if (v !== null) return v === '1'; } catch { /* ignore */ } return window.innerWidth > 900; })(), token: 0,
 };
 
 /* ═══════════ Горна лента ═══════════ */
@@ -422,14 +422,28 @@ function viewDiscover() {
 
   const citiesWin = h('section', { class: 'win enter', id: 'citiesWin', 'aria-label': 'Избор на област и населено място' });
   const results = h('section', { 'aria-label': 'Резултати' });
-  const sidebar = h('aside', { class: 'sidebar win enter' + (disc.filtersOpen ? '' : ' closed'), style: '--i:1', 'aria-label': 'Филтри' });
+  const sidebar = h('aside', { class: 'sidebar win enter', id: 'filtersPanel', style: '--i:1', 'aria-label': 'Филтри' });
 
   if (state.me.role !== 'admin' && state.me.completeness && state.me.completeness.pct < 80) {
     v.append(h('div', { class: 'nudge' }, h('span', { text: `Профилът ти е ${state.me.completeness.pct}% попълнен – допълни го, за да те забелязват повече хора.` }), h('a', { class: 'btn sm', href: '#/profile', text: 'Допълни' })));
   }
-  v.append(
-    h('button', { class: 'btn ghost sm filter-toggle', type: 'button', text: '🎛️ Филтри', onclick: () => { disc.filtersOpen = !disc.filtersOpen; sidebar.classList.toggle('closed', !disc.filtersOpen); } }),
-    h('div', { class: 'layout' }, sidebar, h('div', { class: 'stack' }, citiesWin, results)));
+  const toggle = h('button', { class: 'btn ghost sm filter-toggle', type: 'button', 'aria-controls': 'filtersPanel', onclick: () => {
+    disc.filtersOpen = !disc.filtersOpen;
+    try { localStorage.setItem('spark.filtersOpen', disc.filtersOpen ? '1' : '0'); } catch { /* ignore */ }
+    syncFilters();
+  } });
+  const layout = h('div', { class: 'layout' }, sidebar, h('div', { class: 'stack' }, citiesWin, results));
+  v.append(h('div', { class: 'filterbar' }, toggle), layout);
+  // Колко филтъра са включени (показва се на бутона, когато панелът е скрит, за да не се забравят).
+  const activeFilters = () => [disc.q.trim(), disc.gender, disc.goal, disc.ageMin, disc.ageMax, disc.withPhoto, disc.online, disc.lookingForMe].filter(Boolean).length + (disc.interests.size ? 1 : 0);
+  function syncFilters() {
+    const n = activeFilters();
+    sidebar.classList.toggle('closed', !disc.filtersOpen);
+    layout.classList.toggle('nofilters', !disc.filtersOpen);
+    toggle.setAttribute('aria-expanded', String(disc.filtersOpen));
+    clear(toggle).append(...[disc.filtersOpen ? '◀ Скрий филтрите' : '🎛️ Покажи филтрите', !disc.filtersOpen && n ? h('span', { class: 'badge', 'aria-label': `${n} активни филтъра`, text: String(n) }) : null].filter(Boolean)); // native append(null) би написало „null“
+  }
+  syncFilters();
 
   const regionName = () => (state.meta.regions.find(r => r.code === disc.region) || {}).name || '';
   const placeTitle = () => disc.place ? `${disc.placeLabel}, обл. ${regionName()}` : disc.region ? `област ${regionName()}` : '';
@@ -438,8 +452,8 @@ function viewDiscover() {
   function renderCities() {
     clear(citiesWin);
     const head = h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')),
-      h('h2', { text: disc.place ? `📍 ${disc.placeLabel}` : disc.region ? `📍 Област ${regionName()}` : '📍 Избери област' }));
-    if (disc.region || disc.place) head.append(h('button', { class: 'btn ghost sm', style: 'margin-left:auto', type: 'button', text: disc.pickerOpen ? 'Скрий' : 'Смени',
+      h('h2', { text: disc.place ? `📍 ${disc.placeLabel}` : disc.region ? `📍 Област ${regionName()}` : disc.pickerOpen ? '📍 Избери област' : '📍 Цяла България' }));
+    head.append(h('button', { class: 'btn ghost sm', style: 'margin-left:auto', type: 'button', text: disc.pickerOpen ? 'Скрий' : (disc.region || disc.place ? 'Смени' : 'Избери област'),
       'aria-expanded': String(disc.pickerOpen), onclick: () => { disc.pickerOpen = !disc.pickerOpen; disc.stage = disc.region ? 'place' : 'region'; renderCities(); } }));
     citiesWin.append(head);
     if (disc.place) citiesWin.append(h('div', { class: 'crumbs' }, `обл. ${regionName()}`));
@@ -542,6 +556,7 @@ function viewDiscover() {
   }
 
   async function load(reset) {
+    syncFilters();
     const token = ++disc.token;
     disc.loading = true;
     if (reset) { disc.profiles = []; }

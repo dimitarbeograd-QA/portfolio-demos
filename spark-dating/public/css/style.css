@@ -186,10 +186,13 @@ input[type=color] { padding: 2px; height: 2.4rem; width: 3.4rem; cursor: pointer
 .agepair { display: flex; align-items: center; gap: .5rem; } .agepair input { text-align: center; }
 .checkline { display: flex; gap: .5rem; align-items: center; margin: .35rem 0; font-weight: 500; }
 .checkline label { margin: 0; font-weight: 500; color: var(--text); }
-.filter-toggle { display: none; }
+.filterbar { margin-bottom: .8rem; } .filter-toggle .badge { margin-left: .4rem; }
+.sidebar.closed { display: none; }
+/* Без панел с филтри резултатите заемат цялата ширина и се събират повече карти. */
+.layout.nofilters { grid-template-columns: 1fr; }
+.layout.nofilters .grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; } .sidebar { position: static; max-height: none; }
-  .filter-toggle { display: inline-block; margin-bottom: .8rem; } .sidebar.closed { display: none; }
 }
 
 /* ── Модален прозорец ── */
