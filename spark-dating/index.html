@@ -1,3 +1,10 @@
+<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#070b14">
 <title>Spark — запознанства</title>
 <style>
 /* ═════════ Spark — тъмна тема със светлосин текст ═════════ */
@@ -365,6 +372,27 @@ input[type=color] { padding: 2px; height: 2.4rem; width: 3.4rem; cursor: pointer
 .tlhead { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; margin-bottom: .3rem; }
 .tl .bio { margin: .2rem 0; } .appeal { margin-top: .5rem; padding: .6rem .8rem; border-radius: 10px; border: 1px dashed var(--alert); } .appeal input { margin: .4rem 0; }
 
+/* ── Обаждания ── */
+.callui { position: fixed; inset: 0; z-index: 150; display: grid; place-items: center; padding: 1rem; background: rgba(2, 5, 12, .82); backdrop-filter: blur(8px); animation: fade .25s both; }
+.callwin { width: min(760px, 100%); max-height: 100%; display: grid; gap: 1rem; justify-items: center; padding: 1.2rem; border-radius: calc(var(--radius) * 1.4); border: var(--bw) solid var(--accent); background: color-mix(in srgb, var(--surface) 94%, transparent); box-shadow: var(--glow-shadow), 0 20px 60px rgba(0,0,0,.6); animation: pop .35s var(--ease) both; }
+.cstage { position: relative; width: 100%; aspect-ratio: 16 / 10; max-height: 56vh; border-radius: var(--radius); overflow: hidden; display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--accent) 24%, var(--bg)), var(--bg)); }
+.cstage:not(.video) { aspect-ratio: auto; height: 190px; background: transparent; }
+.cremote { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; opacity: 0; } .cstage.video.live .cremote { opacity: 1; } .cstage:not(.video) .cremote { display: none; }
+.cstage.live .cavatar { opacity: 0; pointer-events: none; } .cstage:not(.video).live .cavatar { opacity: 1; }
+.cavatar { position: relative; z-index: 1; transition: opacity .4s; } .cavatar img { width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid var(--accent); box-shadow: var(--glow-shadow); position: relative; z-index: 1; }
+.cavatar::before, .cavatar::after { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--accent); animation: ringout 2.2s ease-out infinite; opacity: 0; } .cavatar::after { animation-delay: 1.1s; }
+.cstage.live .cavatar::before, .cstage.live .cavatar::after { animation-duration: 3.4s; }
+@keyframes ringout { from { transform: scale(1); opacity: .7; } to { transform: scale(1.9); opacity: 0; } }
+.clocal { position: absolute; right: .7rem; bottom: .7rem; width: 28%; max-width: 170px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 12px; border: 2px solid var(--accent); background: #000; z-index: 3; transform: scaleX(-1); } .clocal[hidden] { display: none; }
+.cinfo { text-align: center; } .cname { margin: 0; font-size: 1.5rem; } .cstatus { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; min-height: 1.5em; }
+.cdemo { margin: .4rem 0 0; font-size: .82rem; color: var(--muted); } .cdemo[hidden] { display: none; } .chint { margin: 0; font-size: .76rem; color: var(--muted); text-align: center; }
+.cctl { display: flex; gap: 1.2rem; justify-content: center; flex-wrap: wrap; }
+.cbtn { all: unset; cursor: pointer; display: grid; justify-items: center; gap: .3rem; color: var(--text); font-size: .74rem; } .cbtn span { display: grid; place-items: center; width: 3.6rem; height: 3.6rem; border-radius: 50%; font-size: 1.5rem; background: var(--faint); border: var(--bw) solid var(--border); transition: transform .15s, background .2s; }
+.cbtn:hover span { transform: scale(1.08); } .cbtn:focus-visible span { outline: 2px solid var(--accent); outline-offset: 2px; } .cbtn[aria-pressed=true] span { background: color-mix(in srgb, var(--alert) 40%, var(--surface)); border-color: var(--alert); }
+.cbtn.good span { background: #1e9e62; border-color: #1e9e62; color: #fff; box-shadow: 0 0 22px #1e9e62; animation: pulse 1.4s infinite; } .cbtn.bad span { background: #d6304f; border-color: #d6304f; color: #fff; }
+.cbtn.bad span:has(+ small) { } .callbtn { font-size: 1.15rem; }
+body.in-call { overflow: hidden; }
+
 /* ── Доклади ── */
 .replist { display: grid; gap: .6rem; }
 .rep { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; padding: .65rem .8rem; border: var(--bw) solid var(--border); border-radius: calc(var(--radius) * .6); background: var(--faint); }
@@ -398,8 +426,109 @@ input[type=color] { padding: 2px; height: 2.4rem; width: 3.4rem; cursor: pointer
 .no-anim *, .no-anim *::before, .no-anim *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
 
+
+/* ═════════ Визуални подобрения ═════════ */
+.skel .ph, .skel .meta p { background: linear-gradient(100deg, var(--faint) 30%, color-mix(in srgb, var(--accent) 16%, transparent) 50%, var(--faint) 70%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+.skel .meta p { height: .8rem; border-radius: 6px; margin: .4rem 0; } .skel .meta p + p { width: 60%; } .skel { pointer-events: none; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+.match { position: relative; text-align: center; overflow: hidden; padding: .5rem 0; }
+.matchpics { display: flex; justify-content: center; align-items: center; margin: .6rem 0 1rem; }
+.matchpics img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; border: 3px solid var(--accent); box-shadow: var(--glow-shadow); } .matchpics img:first-child { animation: slideL .6s var(--ease) both; } .matchpics img:last-child { animation: slideR .6s var(--ease) both; }
+.matchheart { font-size: 2.4rem; margin: 0 -.6rem; z-index: 1; animation: heartbeat 1s .5s var(--ease) infinite both; }
+@keyframes slideL { from { transform: translateX(-60px); opacity: 0; } } @keyframes slideR { from { transform: translateX(60px); opacity: 0; } } @keyframes heartbeat { 0%, 100% { transform: scale(1); } 20% { transform: scale(1.35); } 40% { transform: scale(1.1); } }
+.confetti { position: absolute; inset: 0; pointer-events: none; } .confetti i { position: absolute; top: -10px; left: var(--x); width: 8px; height: 14px; border-radius: 2px; background: hsl(var(--h) 90% 65%); animation: confall 2.6s var(--d) ease-in both; }
+@keyframes confall { to { transform: translateY(340px) rotate(540deg); opacity: 0; } }
+button[aria-pressed=true].btn:not(.ghost) { animation: likepop .35s var(--ease); } @keyframes likepop { 50% { transform: scale(1.12); } }
+
+/* ═════════ Мобилен вид (≤700px): компактен, с долна лента за навигация. Функциите са същите. ═════════ */
+.tabbar, .menubtn, .sheetclose { display: none; }
+@media (max-width: 700px) {
+  html { font-size: calc(15px * var(--font-scale)); }
+  .bg-orbs i { opacity: .2; filter: blur(70px); }
+
+  /* Горна лента: само марка + меню */
+  .topbar { flex-wrap: nowrap; gap: .5rem; padding: .4rem .75rem; }
+  .brand { font-size: 1.15rem; } .brand svg { width: 24px; height: 24px; }
+  .topbar .nav, .topbar .fontctl { display: none !important; }
+  .tools { margin-left: auto; width: auto; flex-wrap: nowrap; }
+  .userbox .who, .userbox > .btn { display: none; }
+  .menubtn { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 50%; font-size: 1.15rem; cursor: pointer; color: var(--heading); background: var(--faint); border: var(--bw) solid var(--border); }
+  .userbox > a.btn { padding: .35rem .8rem; font-size: .85rem; }
+  .foot { display: none; }
+  main { padding: .75rem .7rem 1rem; }
+  body.has-tabbar main { padding-bottom: calc(4.8rem + env(safe-area-inset-bottom, 0px)); }
+  h1 { font-size: 1.45rem; margin-bottom: .4rem; } h2 { font-size: 1.2rem; }
+
+  /* Долна лента */
+  .tabbar { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; padding: .25rem .25rem calc(.25rem + env(safe-area-inset-bottom, 0px));
+    background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4); border-top: var(--bw) solid var(--border); }
+  body:not(.has-tabbar) .tabbar { display: none; }
+  .tab { all: unset; box-sizing: border-box; position: relative; display: grid; justify-items: center; align-content: center; gap: .1rem; padding: .35rem .1rem; border-radius: 12px; color: var(--muted); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .tab .ti { font-size: 1.3rem; line-height: 1.2; filter: grayscale(.6); transition: transform .2s var(--ease), filter .2s; } .tab .tl2 { font-size: .66rem; font-weight: 600; letter-spacing: .02em; }
+  .tab.on { color: var(--heading); } .tab.on .ti { filter: none; transform: translateY(-2px) scale(1.12); } .tab.on::before { content: ''; position: absolute; top: -.25rem; width: 1.6rem; height: 3px; border-radius: 0 0 3px 3px; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .tab .badge { position: absolute; top: .1rem; left: calc(50% + .35rem); margin: 0; font-size: .62rem; min-width: 1.05rem; line-height: 1.05rem; }
+  body.thread-open .tabbar { display: none; }
+  .dock { display: none !important; }
+  #toasts { bottom: calc(5rem + env(safe-area-inset-bottom, 0px)); } body.thread-open #toasts { bottom: 5rem; }
+
+  /* По-малко „рамки“: прозорците стават леки карти */
+  .dots { display: none; }
+  .win-head { padding: .55rem .8rem; } .win-body { padding: .8rem; } .win { box-shadow: 0 6px 20px rgba(0,0,0,.3); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .two, .layout, .hero { gap: .8rem; }
+  .banners { padding: 0 .7rem; } .banner { padding: .55rem .75rem; font-size: .9rem; } .banner .bico { font-size: 1.2rem; }
+  .nudge { padding: .5rem .75rem; font-size: .9rem; }
+
+  /* Начална страница: първо вход/регистрация, после кратко описание */
+  .hero { grid-template-columns: 1fr; padding: .2rem 0 .8rem; } .hero > .win { order: -1; } .hero h1 { font-size: 1.8rem; } .hero .lead { font-size: 1rem; } .stats { gap: 1rem; margin: .8rem 0; } .stat b { font-size: 1.3rem; } .cityline { display: none; }
+  .feat { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: .7rem; padding-bottom: .3rem; margin-inline: -.7rem; padding-inline: .7rem; } .feat > .win { flex: 0 0 72%; scroll-snap-align: start; }
+
+  /* Открий хора */
+  .filterbar { display: flex; gap: .5rem; margin-bottom: .6rem; } .filter-toggle { flex: 1; }
+  .sidebar:not(.closed) { position: fixed; inset: 0; z-index: 90; max-height: none; border-radius: 0; margin: 0; overflow-y: auto; background: var(--bg); padding-bottom: 2rem; animation: slideUp .3s var(--ease) both; }
+  .sidebar .sheetclose { display: inline-block; margin-left: auto; } .sidebar > .win-head { position: sticky; top: 0; z-index: 2; background: var(--bg); }
+  .citybar { margin-bottom: .6rem; gap: .4rem; } .citybar h2 { font-size: 1.05rem; min-width: 0; } .citybar select { font-size: .85rem; padding: .35rem .5rem; }
+  .cities { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; } .city { padding: .4rem .55rem; font-size: .88rem; }
+  .grid, .layout.nofilters .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
+  .card { border-radius: calc(var(--radius) * .8); } .card:hover { transform: none; }
+  .card .ph { aspect-ratio: 3 / 4; } .card .over { left: .5rem; right: .5rem; bottom: .4rem; } .card .over b { font-size: .98rem; } .card .over span { font-size: .72rem; display: block; line-height: 1.25; }
+  .card .meta { padding: .45rem .55rem .2rem; } .card .meta > p:not(.extra), .card .meta .chips .tag:not(.goal) { display: none; } .card .meta .chips { gap: .25rem; } .card .meta .tag { font-size: .68rem; padding: .05rem .4rem; }
+  .cardact { padding: 0 .5rem .5rem; } .cardact .tag { display: none; } .cardact .btn { width: 100%; padding: .35rem .5rem; font-size: .8rem; } .badge-tr { top: .35rem; right: .35rem; font-size: .66rem; }
+
+  /* Прозорци → долни „листове“ */
+  .overlay { align-items: flex-end; padding: 0; } .modal, .modal.narrow { width: 100%; max-height: 92dvh; border-radius: var(--radius) var(--radius) 0 0; animation: slideUp .32s var(--ease) both; }
+  .modal > .win-head { position: sticky; top: 0; z-index: 3; background: var(--surface); border-radius: var(--radius) var(--radius) 0 0; } .modal .win-body { padding: .9rem; padding-bottom: calc(.9rem + env(safe-area-inset-bottom, 0px)); }
+  .pview { gap: .8rem; } .gallery .main { aspect-ratio: 1 / 1; }
+  .menulist { display: grid; gap: .4rem; } .menuhead { display: flex; line-height: 1.35; align-items: center; gap: .7rem; padding-bottom: .5rem; border-bottom: var(--bw) solid var(--border); } .menuhead > div { display: grid; } .menuhead img { border-radius: 50%; object-fit: cover; }
+  .menuitem { display: flex; align-items: center; gap: .7rem; padding: .7rem .6rem; border-radius: 12px; color: var(--heading); font-weight: 600; } .menuitem:hover { text-decoration: none; background: var(--faint); } .fontrow { display: flex; justify-content: space-between; align-items: center; padding: .4rem .6rem; }
+  .match .matchpics img { width: 80px; height: 80px; }
+
+  /* Съобщения: на цял екран, списък → разговор */
+  main.msgview > h1 { display: none; }
+  .chatlayout { height: calc(100dvh - 6.2rem - env(safe-area-inset-bottom, 0px)); min-height: 0; } body.thread-open .chatlayout { height: calc(100dvh - 4.2rem); }
+  .chatlayout.open .chatside, .chatlayout:not(.open) .chatthread { display: none; } .backbtn { display: inline-block !important; }
+  .chatpane .win-head { padding: .45rem .6rem; } .chatpane .composer { padding: .5rem; } .bubble { max-width: 86%; }
+  .callbtn { display: inline-grid; }
+  .chatpane .win-head h2 small { display: none; } .chatpane .notice { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: .25rem .6rem; }
+  .pview .actions { position: sticky; bottom: calc(-.9rem - env(safe-area-inset-bottom, 0px)); margin: .8rem -.9rem calc(-.9rem - env(safe-area-inset-bottom, 0px)); padding: .7rem .9rem calc(.7rem + env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: var(--bw) solid var(--border); z-index: 2; }
+  .nudge { flex-wrap: nowrap; gap: .5rem; } .nudge span { font-size: .85rem; } .nudge .btn { flex: none; }
+
+  /* Профил, настройки, админ */
+  .completeness .win-body { padding: .7rem; } .photos { grid-template-columns: repeat(3, 1fr); gap: .45rem; }
+  .tiles { grid-template-columns: repeat(2, 1fr); gap: .5rem; } .tile { padding: .6rem .7rem; } .tile b { font-size: 1.35rem; }
+  .rep { gap: .4rem .6rem; padding: .55rem .65rem; } .swatches { grid-template-columns: 1fr; }
+  .verifywrap { margin: .8rem auto; }
+
+  /* Обаждане на цял екран */
+  .callui { padding: 0; } .callwin { width: 100%; height: 100%; max-height: none; border-radius: 0; border: 0; align-content: space-between; padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px)); grid-template-rows: 1fr auto auto auto; }
+  .cstage { max-height: none; height: 100%; aspect-ratio: auto; } .cstage:not(.video) { height: 100%; } .cbtn span { width: 4rem; height: 4rem; }
+}
+@keyframes slideUp { from { transform: translateY(40px); opacity: 0; } }
+@media (max-width: 380px) { .grid { gap: .4rem; } .card .over b { font-size: .9rem; } .tab .tl2 { font-size: .6rem; } }
+
 html, body { height: auto; }
 </style>
+</head>
+<body>
 <div class="bg-orbs" aria-hidden="true"><i></i><i></i><i></i></div>
 <header class="topbar" id="topbar">
   <a class="brand" href="#" aria-label="Spark — начало">
@@ -444,11 +573,11 @@ html, body { height: auto; }
     const a = [], b = []; for (const p of list) { const i = p.key.indexOf(term); if (i === 0) a.push(p); else if (i > 0) b.push(p); }
     return a.concat(b).slice(0, limit);
   }
-  let db = { users: [], likes: [], seq: 1000, session: null, convs: [], messages: [], blocks: [], reports: null, rseq: 0, dossiers: [], penalties: [], notes: [], visits: [], banned: [], dereg: [], verif: {} };
+  let db = { users: [], likes: [], seq: 1000, session: null, convs: [], messages: [], blocks: [], calls: [], reports: null, rseq: 0, dossiers: [], penalties: [], notes: [], visits: [], banned: [], dereg: [], verif: {} };
   let files = {}; // id -> { id, name, size, kind, url (data URL) } – пазят се отделно, защото са големи
   try { const raw = localStorage.getItem(KEY); if (raw) db = JSON.parse(raw); } catch { /* без storage */ }
   db.messages = db.messages || []; db.blocks = db.blocks || []; db.convs = db.convs || [];
-  for (const k of ['dossiers', 'penalties', 'notes', 'visits', 'banned', 'dereg']) db[k] = db[k] || []; db.verif = db.verif || {};
+  for (const k of ['dossiers', 'penalties', 'notes', 'visits', 'banned', 'dereg', 'calls']) db[k] = db[k] || []; db.verif = db.verif || {};
   try { files = JSON.parse(localStorage.getItem(FKEY) || '{}'); } catch { files = {}; }
   const saveFiles = () => { try { localStorage.setItem(FKEY, JSON.stringify(files)); } catch { /* квотата е пълна – файловете остават само в тази сесия */ } };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* ignore */ } };
@@ -511,7 +640,7 @@ html, body { height: auto; }
 
   route('GET', /^\/api\/meta$/, () => ok({
     regions: REGIONS.map(r => ({ code: r.code, name: r.name, count: people().filter(u => visible(u) && u.placeId && BY_ID.get(u.placeId).region === r.code).length })),
-    interests: D.interests, minAge: MIN_AGE, maxPhotos: MAX_PHOTOS, total: people().filter(visible).length, demoAdmin: true, goals: GOALS, mailDev: true, reportReasons: D.reportReasons,
+    interests: D.interests, minAge: MIN_AGE, maxPhotos: MAX_PHOTOS, total: people().filter(visible).length, demoAdmin: true, goals: GOALS, mailDev: true, callsDemo: true, iceServers: [], reportReasons: D.reportReasons,
   }));
   route('GET', /^\/api\/places$/, ({ q }) => {
     const region = q.get('region') || ''; if (!REGION_NAME.has(region)) return bad('Изберете област.');
@@ -913,6 +1042,57 @@ html, body { height: auto; }
     save(); return ok({ ok: true });
   }));
 
+  // ── Обаждания (демо: профилите „вдигат“ и няма реален събеседник) ──
+  const lbl = c => (c.kind === 'video' ? 'видео' : 'гласово');
+  const openCall = uid => db.calls.find(c => ['ringing', 'active'].includes(c.status) && (c.caller === uid || c.callee === uid));
+  const callLog = (c, text) => { const conv = convById(c.cid); if (conv) addSystem(conv, c.caller, text); };
+  const callEnd = (c, status) => {
+    c.status = status; c.ended = Date.now();
+    if (status === 'ended' && c.answered) { const sec = Math.round((c.ended - c.answered) / 1000); callLog(c, `📞 ${lbl(c)[0].toUpperCase() + lbl(c).slice(1)} обаждане · ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`); }
+    else if (status === 'canceled' || status === 'missed') callLog(c, `📞 Пропуснато ${lbl(c)} обаждане`);
+    else if (status === 'declined') callLog(c, `📞 Отказано ${lbl(c)} обаждане`);
+  };
+  const callTick = () => {
+    for (const c of db.calls) {
+      if (c.status !== 'ringing') continue;
+      const demoCallee = demo.some(d => d.id === c.callee), age = Date.now() - c.created;
+      if (demoCallee && age > 2500) { c.status = 'active'; c.answered = Date.now(); }          // демо профилът вдига след малко
+      else if (age > 45000) callEnd(c, 'missed');
+    }
+  };
+  const callView = (c, me) => { const otherId = c.caller === me.id ? c.callee : c.caller; const o = all().find(u => u.id === otherId);
+    return { id: c.id, kind: c.kind, status: c.status, conversationId: c.cid, incoming: c.callee === me.id, peer: o ? pub(o, me.id) : null, answeredAt: c.answered ? iso(c.answered) : null, createdAt: iso(c.created), demo: true }; };
+  route('POST', /^\/api\/calls$/, active(({ body: b, me }) => {
+    if (!['audio', 'video'].includes(b.kind)) return bad('Невалиден вид обаждане.');
+    const conv = convById(Number(b.conversationId)); if (!conv || conv.kind !== 'direct' || !memberOf(conv, me.id)) return bad('Обаждания има само в лични разговори.', 404);
+    const peer = peerUser(conv, me); if (!peer) return bad('Не можете да се обадите на този профил.', 403);
+    callTick(); if (openCall(me.id)) return errc('Вече си в обаждане.', 409, 'busy_self');
+    if (openCall(peer.id)) return errc(`${peer.nickname} е в друго обаждане. Опитай по-късно.`, 409, 'busy');
+    const c = { id: ++db.seq, cid: conv.id, caller: me.id, callee: peer.id, kind: b.kind, status: 'ringing', created: Date.now(), answered: null, ended: null }; db.calls.push(c); save();
+    return ok({ call: callView(c, me) }, 201);
+  }));
+  route('GET', /^\/api\/calls\/poll$/, authed(({ q, me }) => {
+    // Демо: след ~20 сек. „Теди“ се обажда на тестовия потребител (веднъж), за да се види входящо обаждане.
+    if (me.id === 998 && !db.demoRang) {
+      db.firstPoll = db.firstPoll || Date.now();
+      const teddy = demo.find(d => d.nickname === 'Теди'), conv = teddy && db.convs.find(c => c.kind === 'direct' && memberOf(c, me.id) && memberOf(c, teddy.id));
+      if (conv && Date.now() - db.firstPoll > 20000 && !openCall(me.id)) { db.calls.push({ id: ++db.seq, cid: conv.id, caller: teddy.id, callee: me.id, kind: 'video', status: 'ringing', created: Date.now(), answered: null, ended: null }); db.demoRang = true; }
+      save();
+    }
+    callTick();
+    const id = Number(q.get('callId')) || 0;
+    const c = id ? db.calls.find(x => x.id === id && (x.caller === me.id || x.callee === me.id)) : openCall(me.id);
+    return ok({ call: c ? callView(c, me) : null, signals: [] });
+  }));
+  const myCall = (m, me) => db.calls.find(x => x.id === Number(m[1]) && (x.caller === me.id || x.callee === me.id));
+  route('POST', /^\/api\/calls\/(\d+)\/signal$/, authed(({ m, me }) => (myCall(m, me) ? ok({ id: 0 }, 201) : bad('Обаждането не е намерено.', 404))));
+  route('POST', /^\/api\/calls\/(\d+)\/answer$/, authed(({ m, me }) => { const c = myCall(m, me); if (!c) return bad('Обаждането не е намерено.', 404);
+    if (c.callee !== me.id || c.status !== 'ringing') return bad('Не можеш да вдигнеш това обаждане.', 403); c.status = 'active'; c.answered = Date.now(); save(); return ok({ call: callView(c, me) }); }));
+  route('POST', /^\/api\/calls\/(\d+)\/decline$/, authed(({ m, me }) => { const c = myCall(m, me); if (!c) return bad('Обаждането не е намерено.', 404);
+    if (c.callee !== me.id || c.status !== 'ringing') return bad('Не можеш да откажеш това обаждане.', 403); callEnd(c, 'declined'); save(); return ok({ ok: true }); }));
+  route('POST', /^\/api\/calls\/(\d+)\/end$/, authed(({ m, me }) => { const c = myCall(m, me); if (!c) return bad('Обаждането не е намерено.', 404);
+    if (['ringing', 'active'].includes(c.status)) callEnd(c, c.status === 'ringing' ? (c.caller === me.id ? 'canceled' : 'declined') : 'ended'); save(); return ok({ ok: true }); }));
+
   // ── Доклади ──
   route('POST', /^\/api\/profiles\/(\d+)\/report$/, active(({ m, body: b, me }) => {
     const id = Number(m[1]);
@@ -1221,6 +1401,9 @@ function h(tag, props, ...kids) {
   }
   return el;
 }
+// Мобилен вид (≤700px): долна лента за навигация, цял екран за чата, компактни карти. Функционалността е същата.
+const mobileQuery = window.matchMedia('(max-width: 700px)');
+const isMobile = () => mobileQuery.matches;
 const clear = el => { while (el.firstChild) el.removeChild(el.firstChild); return el; };
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
@@ -1421,7 +1604,7 @@ const badge = n => (n > 0 ? h('span', { class: 'badge', 'aria-label': `${n} но
 const disc = {
   region: '', place: '', placeLabel: '', stage: 'region', q: '', gender: '', ageMin: '', ageMax: '', interests: new Set(), withPhoto: false,
   online: false, lookingForMe: false, goal: '', sort: 'active', profiles: [], total: 0, loading: false,
-  pickerOpen: true, filtersOpen: (() => { try { const v = localStorage.getItem('spark.filtersOpen'); if (v !== null) return v === '1'; } catch { /* ignore */ } return window.innerWidth > 900; })(), token: 0,
+  pickerOpen: !window.matchMedia('(max-width: 700px)').matches, filtersOpen: (() => { if (window.innerWidth <= 700) return false; try { const v = localStorage.getItem('spark.filtersOpen'); if (v !== null) return v === '1'; } catch { /* ignore */ } return window.innerWidth > 900; })(), token: 0,
 };
 
 /* ═══════════ Горна лента ═══════════ */
@@ -1442,23 +1625,67 @@ function renderChrome() {
     box.append(
       h('span', { class: 'who', text: state.me.nickname, title: state.me.nickname }),
       h('button', { class: 'btn ghost sm', type: 'button', text: 'Изход', onclick: logout }),
+      h('button', { class: 'menubtn', type: 'button', 'aria-label': 'Меню', title: 'Меню', text: '☰', onclick: openMenuSheet }),
     );
   } else {
     box.append(h('a', { class: 'btn sm', href: '#', text: 'Вход / Регистрация' }));
   }
   renderBanners();
+  renderTabbar(route);
   syncDock();
 }
+
+// Празнуване при взаимно харесване (като в Bumble и Boo): силен момент и ясно следващо действие.
+function matchDialog(p) {
+  const confetti = Array.from({ length: 16 }, (_, i) => { const c = h('i', { 'aria-hidden': 'true' }); c.style.setProperty('--x', `${(i * 37) % 100}%`); c.style.setProperty('--d', `${(i % 5) * 0.12}s`); c.style.setProperty('--h', `${(i * 47) % 360}`); return c; });
+  openModal(h('div', { class: 'match' }, h('div', { class: 'confetti' }, ...confetti),
+    h('div', { class: 'matchpics' }, h('img', { src: mainPhoto(state.me), alt: '', width: '96', height: '96' }), h('span', { class: 'matchheart', 'aria-hidden': 'true', text: '💙' }), h('img', { src: mainPhoto(p), alt: '', width: '96', height: '96' })),
+    h('h2', { text: 'Взаимно харесване!' }), h('p', { class: 'dim', text: `Ти и ${p.nickname} се харесахте. Кажи здравей!` }),
+    h('div', { class: 'actions', style: 'justify-content:center' }, h('button', { class: 'btn', type: 'button', text: `💬 Пиши на ${p.nickname}`, onclick: () => openChat(p.id) }), h('button', { class: 'btn ghost', type: 'button', text: 'Продължи', onclick: closeModal }))),
+  { narrow: true, title: 'Съвпадение' });
+}
+
+// Долна лента за навигация (само на телефон; на компютър навигацията е горе).
+function renderTabbar(routeKey) {
+  let bar = $('#tabbar');
+  if (!bar) { bar = h('nav', { id: 'tabbar', class: 'tabbar', 'aria-label': 'Навигация' }); document.body.append(bar); }
+  clear(bar);
+  const show = !!(state.me && state.me.emailVerified);
+  document.body.classList.toggle('has-tabbar', show);
+  if (!show) return;
+  const admin = state.me.role === 'admin';
+  const tabs = admin
+    ? [['#discover', '🧭', 'Открий', 'discover', 0], ['#/admin', '🛡️', 'Админ', 'admin', state.openReports + state.openAppeals], ['#profile', '👤', 'Профил', 'profile', 0]]
+    : [['#discover', '🧭', 'Открий', 'discover', 0], ['#/activity', '💙', 'Активност', 'activity', 0], ['#/messages', '💬', 'Чат', 'messages', state.unread], ['#profile', '👤', 'Профил', 'profile', 0]];
+  tabs.forEach(([href, ico, label, key, n]) => bar.append(h('a', { href, class: 'tab' + (routeKey === key ? ' on' : ''), 'aria-current': routeKey === key ? 'page' : null },
+    h('span', { class: 'ti', 'aria-hidden': 'true', text: ico }), h('span', { class: 'tl2', text: label }), badge(n))));
+  bar.append(h('button', { class: 'tab', type: 'button', onclick: openMenuSheet }, h('span', { class: 'ti', 'aria-hidden': 'true', text: '☰' }), h('span', { class: 'tl2', text: 'Още' })));
+}
+function openMenuSheet() {
+  const me = state.me; if (!me) return;
+  const admin = me.role === 'admin';
+  const link = (href, ico, text) => h('a', { class: 'menuitem', href, onclick: closeModal }, h('span', { 'aria-hidden': 'true', text: ico }), text);
+  openModal(h('div', { class: 'menulist' },
+    h('div', { class: 'menuhead' }, h('img', { src: mainPhoto(me), alt: '', width: '48', height: '48' }), h('div', {}, h('b', { text: me.nickname }), h('small', { class: 'dim', text: admin ? 'Администратор' : me.city }))),
+    link('#settings', '🎨', 'Дизайн и настройки'), admin ? link('#/admin', '🛡️', 'Админ панел') : link('#/activity', '💙', 'Активност'),
+    h('div', { class: 'fontrow' }, h('span', { text: 'Размер на шрифта' }), h('div', { class: 'fontctl' },
+      h('button', { class: 'chip-btn', type: 'button', 'aria-label': 'По-малък шрифт', text: 'A−', onclick: () => changeTheme({ fontScale: Math.max(80, theme.fontScale - 10) }) }),
+      h('button', { class: 'chip-btn', type: 'button', 'aria-label': 'Нормален шрифт', text: 'A', onclick: () => changeTheme({ fontScale: 100 }) }),
+      h('button', { class: 'chip-btn', type: 'button', 'aria-label': 'По-голям шрифт', text: 'A+', onclick: () => changeTheme({ fontScale: Math.min(150, theme.fontScale + 10) }) }))),
+    h('button', { class: 'btn danger block', type: 'button', text: 'Изход', onclick: () => { closeModal(); logout(); } })), { title: 'Меню' });
+}
+mobileQuery.addEventListener('change', () => { if (state.meta) route(); });
 
 // Филтрите на „Открий хора“ не трябва да „преминават“ към следващия акаунт в същия таб.
 function resetDisc() {
   Object.assign(disc, { region: '', place: '', placeLabel: '', stage: 'region', q: '', gender: '', goal: '', ageMin: '', ageMax: '', withPhoto: false, online: false, lookingForMe: false,
-    sort: 'active', profiles: [], total: 0, loading: false, pickerOpen: true, token: disc.token + 1 });
+    sort: 'active', profiles: [], total: 0, loading: false, pickerOpen: !isMobile(), token: disc.token + 1 });
   disc.interests.clear();
 }
 async function logout() {
   try { await api('POST', '/api/logout'); } catch { /* ignore */ }
-  state.me = null; resetDisc(); chatWith = null; stopBadges();
+  if (callRt.call) await hangup();
+  state.me = null; resetDisc(); chatWith = null; stopBadges(); stopCallWatch();
   location.hash = '#';
   route();
   toast('Излязохте от профила си.');
@@ -1621,7 +1848,7 @@ function viewDiscover() {
   }
   const toggle = h('button', { class: 'btn ghost sm filter-toggle', type: 'button', 'aria-controls': 'filtersPanel', onclick: () => {
     disc.filtersOpen = !disc.filtersOpen;
-    try { localStorage.setItem('spark.filtersOpen', disc.filtersOpen ? '1' : '0'); } catch { /* ignore */ }
+    if (!isMobile()) { try { localStorage.setItem('spark.filtersOpen', disc.filtersOpen ? '1' : '0'); } catch { /* ignore */ } }
     syncFilters();
   } });
   const layout = h('div', { class: 'layout' }, sidebar, h('div', { class: 'stack' }, citiesWin, results));
@@ -1716,7 +1943,7 @@ function viewDiscover() {
     const genderChips = [['', 'Всички'], ...Object.entries(GENDER)].map(([k, t]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(disc.gender === k), text: t, onclick: () => { disc.gender = k; renderFilters(); load(true); } }));
 
     sidebar.append(
-      h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h3', { text: '🎛️ Филтри' })),
+      h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h3', { text: '🎛️ Филтри' }), h('button', { class: 'btn sm sheetclose', type: 'button', text: 'Готово ✓', onclick: () => { disc.filtersOpen = false; syncFilters(); window.scrollTo(0, 0); } })),
       h('div', { class: 'win-body' },
         h('div', { class: 'fgroup' }, h('label', { for: 'f-q', text: 'Търси по никнейм' }), h('input', { id: 'f-q', value: disc.q, maxlength: '30', placeholder: 'напр. Мила', oninput: e => { disc.q = e.target.value; upd(); } })),
         h('div', { class: 'fgroup' }, h('label', { text: 'Пол' }), h('div', { class: 'chips' }, genderChips)),
@@ -1736,7 +1963,7 @@ function viewDiscover() {
       [['active', 'Последно активни'], ['new', 'Най-нови'], ['young', 'Най-млади'], ['old', 'Най-възрастни']].map(([k, t]) => h('option', { value: k, text: t, selected: disc.sort === k })));
     results.append(h('div', { class: 'citybar' },
       h('h2', { text: disc.loading && !disc.profiles.length ? 'Зареждане…' : `${disc.total} ${disc.total === 1 ? 'човек' : 'души'}${placeTitle() ? ' в ' + placeTitle() : ''}` }), sort));
-    if (disc.loading && !disc.profiles.length) { results.append(h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Зареждане' })); return; }
+    if (disc.loading && !disc.profiles.length) { results.append(h('div', { class: 'grid', role: 'progressbar', 'aria-label': 'Зареждане' }, Array.from({ length: 8 }, () => h('div', { class: 'win card skel' }, h('div', { class: 'ph' }), h('div', { class: 'meta' }, h('p'), h('p')))))); return; }
     if (!disc.profiles.length) {
       results.append(h('div', { class: 'win' }, h('div', { class: 'empty-state' }, h('div', { class: 'big', text: '🔍' }), h('h3', { text: 'Няма намерени профили' }), h('p', { text: 'Опитай с друг град или махни някои филтри.' }))));
       return;
@@ -1809,7 +2036,7 @@ function openProfile(p) {
     const thumbs = photos.length > 1 ? h('div', { class: 'thumbs' }, photos.map((u, n) => h('button', { type: 'button', 'aria-label': `Снимка ${n + 1}`, 'aria-current': String(n === idx), onclick: () => { idx = n; render(); } }, h('img', { src: u, alt: '' })))) : null;
     const likeBtn = cur.isMe ? null : h('button', { class: cur.liked ? 'btn' : 'btn ghost', type: 'button', 'aria-pressed': String(cur.liked), text: cur.liked ? '💙 Харесан' : '🤍 Харесай', onclick: async e => {
       const likeEl = e.currentTarget; likeEl.disabled = true;
-      try { cur = (await api('POST', `/api/profiles/${cur.id}/like`)).profile; const i = disc.profiles.findIndex(x => x.id === cur.id); if (i >= 0) disc.profiles[i] = cur; if (cur.liked && cur.likedMe) toast(`Взаимно харесване с ${cur.nickname}! 🎉`); render(); }
+      try { cur = (await api('POST', `/api/profiles/${cur.id}/like`)).profile; const i = disc.profiles.findIndex(x => x.id === cur.id); if (i >= 0) disc.profiles[i] = cur; if (cur.liked && cur.likedMe) { render(); matchDialog(cur); return; } render(); }
       catch (x) { toast(x.message, true); likeEl.disabled = false; }
     } });
     body.append(h('div', { class: 'pview' },
@@ -2214,16 +2441,18 @@ function createChatPane({ compact, onBack, onFull, onCollapse, onChanged }) {
     if (!c) { headEl.append(h('h2', { text: 'Зареждане…' })); return; }
     const group = c.kind === 'group';
     const peer = c.peer;
-    headEl.append(
+    headEl.append(...[
       onBack ? h('button', { class: 'xbtn' + (compact ? '' : ' backbtn'), type: 'button', 'aria-label': 'Към разговорите', title: 'Към списъка', text: '←', onclick: onBack }) : null,
       group ? groupAvatar(c.title, 32) : h('img', { class: 'mini', src: peer ? mainPhoto(peer) : avatar('?', ''), alt: '', width: '32', height: '32' }),
       h('h2', {}, group
         ? [h('button', { class: 'linkbtn', type: 'button', text: c.title, title: 'Информация за групата', onclick: () => groupInfoDialog(c, reload) }), h('small', { class: 'dim', text: ` · ${c.members.length} души` })]
         : [peer ? h('a', { href: '#discover', text: peer.nickname, onclick: e => { e.preventDefault(); openProfile(peer); } }) : c.title, peer ? h('small', { class: 'dim', text: ` · ${peer.city}` }) : null]),
-      group ? h('button', { class: 'xbtn', style: 'margin-left:auto', type: 'button', 'aria-label': 'Информация за групата', title: 'Група', text: '👥', onclick: () => groupInfoDialog(c, reload) })
-            : (peer ? h('button', { class: 'xbtn', style: 'margin-left:auto', type: 'button', 'aria-label': 'Докладвай', title: 'Докладвай', text: '🚩', onclick: () => reportDialog(peer, c.id) }) : null),
+      ...(group ? [h('button', { class: 'xbtn', style: 'margin-left:auto', type: 'button', 'aria-label': 'Информация за групата', title: 'Група', text: '👥', onclick: () => groupInfoDialog(c, reload) })]
+            : peer ? [h('button', { class: 'xbtn callbtn', style: 'margin-left:auto', type: 'button', 'aria-label': 'Гласово обаждане', title: 'Гласово обаждане', text: '📞', onclick: () => startCall(c, 'audio') }),
+                      h('button', { class: 'xbtn callbtn', type: 'button', 'aria-label': 'Видео обаждане', title: 'Видео обаждане', text: '🎥', onclick: () => startCall(c, 'video') }),
+                      h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Докладвай', title: 'Докладвай', text: '🚩', onclick: () => reportDialog(peer, c.id) })] : []),
       onFull ? h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Отвори на цял екран', title: 'Цял екран', text: '⤢', onclick: onFull }) : null,
-      onCollapse ? h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Скрий', title: 'Скрий (Esc)', text: '▾', onclick: onCollapse }) : null);
+      onCollapse ? h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Скрий', title: 'Скрий (Esc)', text: '▾', onclick: onCollapse }) : null].filter(Boolean)); // native append(null) би написало „null“
     noteEl.textContent = group
       ? '🔒 Лична група. При доклад администратор вижда последните съобщения и файлове в нея.'
       : '🔒 Личен разговор. При доклад администратор може да прегледа размяната ви и файловете.';
@@ -2345,6 +2574,179 @@ async function groupInfoDialog(c, changed) {
 
 async function newGroupFlow() { await groupCreateDialog(id => openConversation(id)); }
 
+/* ═══════════ Гласови и видео обаждания ═══════════ */
+// Сървърът само предава сигналите (offer/answer/ICE) чрез кратки заявки; звукът и образът вървят директно между двамата (WebRTC).
+const callRt = { call: null, pc: null, local: null, remote: null, after: 0, poll: null, watch: null, ui: null, els: {}, muted: false, camOff: false, ice: [], remoteSet: false, demo: false,
+  tick: null, startedAt: 0, ringer: null, ac: null, sendQ: Promise.resolve(), busyPoll: false, savedTitle: '' };
+const callTimer = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+
+async function getMedia(kind, optional) {
+  const md = navigator.mediaDevices;
+  if (!md || !md.getUserMedia) { if (optional) return null; throw new Error('Този браузър не поддържа обаждания.'); }
+  try { return await md.getUserMedia({ audio: true, video: kind === 'video' ? { facingMode: 'user' } : false }); }
+  catch (e) {
+    if (optional) return null;
+    throw new Error(e && e.name === 'NotAllowedError' ? `Разреши достъп до микрофона${kind === 'video' ? ' и камерата' : ''} от настройките на браузъра.`
+      : e && e.name === 'NotFoundError' ? `Не е намерен микрофон${kind === 'video' ? ' или камера' : ''}.` : 'Микрофонът или камерата не могат да бъдат стартирани.');
+  }
+}
+function ringtone(on) {
+  if (!on) { clearInterval(callRt.ringer); callRt.ringer = null; return; }
+  try {
+    const ac = callRt.ac || (callRt.ac = new (window.AudioContext || window.webkitAudioContext)());
+    const tone = (f, at) => { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = f; g.gain.value = 0.04; o.connect(g); g.connect(ac.destination); o.start(ac.currentTime + at); o.stop(ac.currentTime + at + 0.3); };
+    const ring = () => { tone(520, 0); tone(660, 0.4); };
+    ring(); callRt.ringer = setInterval(ring, 2400);
+  } catch { /* браузърът може да блокира звука преди първо докосване */ }
+}
+
+function makePc() {
+  const pc = new RTCPeerConnection({ iceServers: (state.meta && state.meta.iceServers) || [] });
+  callRt.pc = pc; callRt.remote = new MediaStream(); callRt.remoteSet = false; callRt.ice = [];
+  pc.ontrack = e => { e.track && !callRt.remote.getTracks().includes(e.track) && callRt.remote.addTrack(e.track); attachMedia(); };
+  pc.onicecandidate = e => { if (e.candidate) sendSignal('ice', JSON.stringify(e.candidate)); };
+  pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') { toast('Връзката се разпадна. Опитай пак.', true); hangup(); } else updateCallUI(); };
+  if (callRt.local) callRt.local.getTracks().forEach(t => pc.addTrack(t, callRt.local));
+  return pc;
+}
+function sendSignal(type, payload) {
+  const c = callRt.call; if (!c || callRt.demo) return;
+  callRt.sendQ = callRt.sendQ.then(() => api('POST', `/api/calls/${c.id}/signal`, { type, payload }).catch(() => {}));
+}
+async function flushIce() { for (const c of callRt.ice.splice(0)) { try { await callRt.pc.addIceCandidate(c); } catch { /* ignore */ } } }
+async function handleSignal(sg) {
+  const pc = callRt.pc; if (!pc) return;
+  try {
+    if (sg.type === 'offer') {
+      await pc.setRemoteDescription(JSON.parse(sg.payload)); callRt.remoteSet = true; await flushIce();
+      const ans = await pc.createAnswer(); await pc.setLocalDescription(ans); sendSignal('answer', JSON.stringify(pc.localDescription));
+    } else if (sg.type === 'answer') { await pc.setRemoteDescription(JSON.parse(sg.payload)); callRt.remoteSet = true; await flushIce(); }
+    else if (sg.type === 'ice') { const c = JSON.parse(sg.payload); if (callRt.remoteSet) await pc.addIceCandidate(c).catch(() => {}); else callRt.ice.push(c); }
+  } catch { /* отделен кандидат може да не е валиден */ }
+}
+
+// Звънене от чата (само личен разговор).
+async function startCall(conv, kind) {
+  if (callRt.call) { toast('Вече си в обаждане.', true); return; }
+  if (!conv || !conv.peer) return;
+  const demo = !!(state.meta && state.meta.callsDemo);
+  try {
+    callRt.local = await getMedia(kind, demo);
+    const r = await api('POST', '/api/calls', { conversationId: conv.id, kind });
+    Object.assign(callRt, { call: r.call, demo, after: 0, muted: false, camOff: false, startedAt: 0 });
+    if (!demo) { const pc = makePc(); const offer = await pc.createOffer(); await pc.setLocalDescription(offer); sendSignal('offer', JSON.stringify(pc.localDescription)); }
+    renderCallUI(); startCallPoll();
+  } catch (x) { cleanupCall(); toast(x.message || 'Обаждането не започна.', true); }
+}
+async function acceptCall() {
+  const c = callRt.call; if (!c) return;
+  try {
+    callRt.local = await getMedia(c.kind, callRt.demo);
+    const r = await api('POST', `/api/calls/${c.id}/answer`);
+    callRt.call = { ...c, ...r.call };
+    if (!callRt.demo) makePc();
+    ringtone(false); onActive(); startCallPoll(); updateCallUI();
+  } catch (x) { toast(x.message, true); declineCall(); }
+}
+async function declineCall() {
+  const c = callRt.call; ringtone(false);
+  if (c) { try { await api('POST', `/api/calls/${c.id}/decline`); } catch { /* ignore */ } }
+  cleanupCall();
+}
+async function hangup() {
+  const c = callRt.call;
+  if (c) { try { await api('POST', `/api/calls/${c.id}/end`); } catch { /* ignore */ } }
+  cleanupCall();
+}
+function onActive() { if (!callRt.startedAt) { callRt.startedAt = Date.now(); ringtone(false); clearInterval(callRt.tick); callRt.tick = setInterval(updateCallUI, 1000); } }
+function startCallPoll() { clearInterval(callRt.poll); callRt.poll = setInterval(pollCall, 800); pollCall(); }
+async function pollCall() {
+  const c = callRt.call; if (!c || callRt.busyPoll) return;
+  callRt.busyPoll = true;
+  try {
+    const r = await api('GET', `/api/calls/poll?callId=${c.id}&after=${callRt.after}`);
+    if (!callRt.call || callRt.call.id !== c.id) return;
+    // Сигналите се приемат чак когато има връзка (pc): докато входящото звъни, offer-ът трябва да остане непрочетен.
+    if (callRt.pc) for (const sg of r.signals) { callRt.after = Math.max(callRt.after, sg.id); await handleSignal(sg); }
+    if (r.call) {
+      const was = callRt.call.status; callRt.demo = callRt.demo || !!r.call.demo;
+      callRt.call = { ...callRt.call, ...r.call };
+      if (r.call.status === 'active' && was !== 'active') onActive();
+      if (!['ringing', 'active'].includes(r.call.status)) { finishCall(r.call.status); return; }
+      updateCallUI();
+    }
+  } catch { /* временна грешка в мрежата */ } finally { callRt.busyPoll = false; }
+}
+function finishCall(status) {
+  const c = callRt.call, name = c && c.peer ? c.peer.nickname : 'Събеседникът', mine = c && !c.incoming;
+  const msg = { declined: `${name} отказа обаждането.`, canceled: 'Обаждането е отменено.', missed: mine ? `${name} не вдигна.` : 'Пропуснато обаждане.', ended: callRt.startedAt ? `Обаждането приключи · ${callTimer(Date.now() - callRt.startedAt)}` : 'Обаждането приключи.' }[status];
+  cleanupCall(); if (msg) toast(msg);
+}
+function cleanupCall() {
+  ringtone(false);
+  clearInterval(callRt.poll); clearInterval(callRt.tick);
+  if (callRt.local) callRt.local.getTracks().forEach(t => t.stop());
+  if (callRt.pc) { try { callRt.pc.close(); } catch { /* ignore */ } }
+  if (callRt.ui) { callRt.ui.remove(); }
+  if (callRt.savedTitle) { document.title = callRt.savedTitle; callRt.savedTitle = ''; }
+  Object.assign(callRt, { call: null, pc: null, local: null, remote: null, poll: null, tick: null, ui: null, els: {}, after: 0, startedAt: 0, demo: false, busyPoll: false, ice: [], remoteSet: false, sendQ: Promise.resolve() });
+  document.body.classList.remove('in-call');
+}
+
+// Входящи обаждания: проверяваме на всеки 3 сек., докато няма текущо.
+function startCallWatch() {
+  if (callRt.watch) return;
+  callRt.watch = setInterval(async () => {
+    if (callRt.call || !state.me || !state.me.emailVerified || state.me.role === 'admin' || document.hidden) return;
+    try {
+      const r = await api('GET', '/api/calls/poll');
+      if (callRt.call || !r.call || !r.call.incoming || r.call.status !== 'ringing') return;
+      Object.assign(callRt, { call: r.call, demo: !!r.call.demo, after: 0, muted: false, camOff: false, startedAt: 0 });
+      callRt.savedTitle = document.title; document.title = '📞 Входящо обаждане · Spark';
+      renderCallUI(); ringtone(true); startCallPoll();
+    } catch { /* ignore */ }
+  }, 3000);
+}
+function stopCallWatch() { if (callRt.watch) { clearInterval(callRt.watch); callRt.watch = null; } if (callRt.call) cleanupCall(); }
+
+function attachMedia() {
+  const e = callRt.els; if (!e.remote) return;
+  if (callRt.remote && e.remote.srcObject !== callRt.remote) e.remote.srcObject = callRt.remote;
+  if (callRt.local && e.local && e.local.srcObject !== callRt.local) e.local.srcObject = callRt.local;
+}
+function renderCallUI() {
+  if (callRt.ui) return;
+  const c = callRt.call, video = c.kind === 'video';
+  const remote = h('video', { class: 'cremote', autoplay: true, playsinline: true }), local = h('video', { class: 'clocal', autoplay: true, playsinline: true, muted: true });
+  local.muted = true;
+  const status = h('div', { class: 'cstatus', 'aria-live': 'polite' }), name = h('h2', { class: 'cname', text: c.peer ? c.peer.nickname : 'Обаждане' });
+  const ctl = h('div', { class: 'cctl' }), demoNote = h('p', { class: 'cdemo', hidden: true, text: 'Демо: няма реален събеседник. Връзката е симулирана.' });
+  const stage = h('div', { class: 'cstage' + (video ? ' video' : '') }, remote, h('div', { class: 'cavatar' }, h('img', { src: c.peer ? mainPhoto(c.peer) : '', alt: '', width: '120', height: '120' })), local);
+  callRt.ui = h('div', { class: 'callui', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Обаждане' }, h('div', { class: 'callwin' }, stage, h('div', { class: 'cinfo' }, name, status, demoNote), ctl,
+    h('p', { class: 'chint', text: '🔒 Директна връзка между вас двамата. Събеседникът вижда IP адреса ти.' })));
+  callRt.els = { remote, local, status, ctl, stage, demoNote };
+  document.body.append(callRt.ui); document.body.classList.add('in-call');
+  attachMedia(); updateCallUI();
+}
+function updateCallUI() {
+  const c = callRt.call, e = callRt.els; if (!c || !callRt.ui) return;
+  const incoming = c.incoming && c.status === 'ringing', live = c.status === 'active';
+  const connected = callRt.demo || (callRt.pc && ['connected', 'completed'].includes(callRt.pc.connectionState)) || (callRt.pc && callRt.pc.iceConnectionState === 'connected');
+  e.status.textContent = incoming ? `Входящо ${c.kind === 'video' ? 'видео' : 'гласово'} обаждане…` : !live ? 'Звъни…' : !connected ? 'Свързване…' : callTimer(Date.now() - callRt.startedAt);
+  e.stage.classList.toggle('live', live && connected);
+  e.stage.classList.toggle('ringing', !live);
+  e.demoNote.hidden = !callRt.demo;
+  e.local.hidden = c.kind !== 'video' || !callRt.local || callRt.camOff;
+  clear(e.ctl);
+  const btn = (cls, label, text, fn, pressed) => h('button', { class: `cbtn ${cls}`, type: 'button', 'aria-label': label, title: label, 'aria-pressed': pressed === undefined ? null : String(pressed), onclick: fn }, h('span', { 'aria-hidden': 'true', text }), h('small', { text: label }));
+  if (incoming) e.ctl.append(btn('bad', 'Откажи', '✕', declineCall), btn('good', 'Приеми', c.kind === 'video' ? '🎥' : '📞', acceptCall));
+  else {
+    e.ctl.append(btn('', callRt.muted ? 'Включи микрофона' : 'Заглуши', callRt.muted ? '🔇' : '🎙️', () => { callRt.muted = !callRt.muted; if (callRt.local) callRt.local.getAudioTracks().forEach(t => { t.enabled = !callRt.muted; }); updateCallUI(); }, callRt.muted));
+    if (c.kind === 'video') e.ctl.append(btn('', callRt.camOff ? 'Включи камерата' : 'Изключи камерата', callRt.camOff ? '🚫' : '📷', () => { callRt.camOff = !callRt.camOff; if (callRt.local) callRt.local.getVideoTracks().forEach(t => { t.enabled = !callRt.camOff; }); updateCallUI(); }, callRt.camOff));
+    e.ctl.append(btn('bad', live ? 'Затвори' : 'Откажи', '📞', hangup));
+  }
+}
+
 /* ═══════════ Плаващо кръгче със съобщения ═══════════ */
 const SVG_NS = 'http://www.w3.org/2000/svg';
 function chatIcon() {
@@ -2356,7 +2758,7 @@ function chatIcon() {
   svg.append(path);
   return svg;
 }
-const dockVisible = () => !!state.me && state.me.emailVerified && state.me.role !== 'admin' && currentRoute() !== 'messages';
+const dockVisible = () => !!state.me && state.me.emailVerified && state.me.role !== 'admin' && currentRoute() !== 'messages' && !isMobile();
 
 function syncDock() {
   if (!dockVisible()) {
@@ -2435,6 +2837,7 @@ async function openChat(userId) {
 }
 function openConversation(id) {
   if (currentRoute() === 'messages') { chatWith = id; route(); return; }
+  if (isMobile()) { chatWith = id; location.hash = '#/messages'; return; }   // на телефон разговорът е на цял екран
   syncDock(); dockOpenWith(id);
 }
 
@@ -2468,11 +2871,13 @@ function reportDialog(p, convId) {
 
 function viewMessages() {
   const v = clear($('#view'));
+  v.classList.add('msgview');
+  const thread = on => document.body.classList.toggle('thread-open', !!on);
   const listBox = h('div', { class: 'chatlist', role: 'list' });
   let chats = [];
   const pane = createChatPane({ compact: false,
-    onBack: () => { chatWith = null; layout.classList.remove('open'); renderList(); showEmpty(); },
-    onChanged: (grew, gone) => { if (gone) { chatWith = null; layout.classList.remove('open'); showEmpty(); } loadList(); } });
+    onBack: () => { chatWith = null; layout.classList.remove('open'); thread(false); renderList(); showEmpty(); },
+    onChanged: (grew, gone) => { if (gone) { chatWith = null; layout.classList.remove('open'); thread(false); showEmpty(); } loadList(); } });
   const threadBox = h('section', { class: 'win chatthread', 'aria-label': 'Разговор' });
   const layout = h('div', { class: 'chatlayout' + (chatWith ? ' open' : '') },
     h('aside', { class: 'win chatside', 'aria-label': 'Разговори' },
@@ -2486,7 +2891,7 @@ function viewMessages() {
     clear(threadBox).append(h('div', { class: 'empty-state' }, h('div', { class: 'big', text: '💬' }), h('h3', { text: 'Избери разговор' }), h('p', { text: 'Или започни нов: избери човек и натисни „Пиши“, или създай група.' }),
       h('div', { class: 'actions', style: 'justify-content:center' }, h('a', { class: 'btn', href: '#discover', text: '＋ Нов чат' }), h('button', { class: 'btn ghost', type: 'button', text: '👥 Нова група', onclick: () => newGroupFlow() }))));
   }
-  function select(id) { chatWith = id; layout.classList.add('open'); clear(threadBox).append(pane.el); pane.open(id); renderList(); }
+  function select(id) { chatWith = id; layout.classList.add('open'); thread(true); clear(threadBox).append(pane.el); pane.open(id); renderList(); }
   function renderList() {
     clear(listBox);
     if (!chats.length) { listBox.append(h('div', { class: 'empty-state', style: 'padding:1.5rem 1rem' }, h('p', { text: 'Още нямаш разговори.' }), h('p', { class: 'dim', text: 'Намери човек в „Открий хора“ и натисни „💬 Пиши“ на неговата карта.' }), h('a', { class: 'btn', href: '#discover', text: 'Открий хора' }))); return; }
@@ -2494,7 +2899,7 @@ function viewMessages() {
   }
   async function loadList() { try { chats = (await api('GET', '/api/chats')).chats; renderList(); } catch (x) { if (x.status) toast(x.message, true); } }
 
-  if (chatWith) { clear(threadBox).append(pane.el); pane.open(chatWith); } else showEmpty();
+  if (chatWith) { thread(true); clear(threadBox).append(pane.el); pane.open(chatWith); } else showEmpty();
   loadList();
   viewTimer = setInterval(() => { loadList(); if (chatWith) pane.reload(false); }, 5000);
 }
@@ -2915,14 +3320,16 @@ function currentRoute() {
 function route() {
   closeModal();
   stopViewTimer();
+  document.body.classList.remove('thread-open');
+  { const vEl = $('#view'); if (vEl) vEl.className = ''; }
   let r = currentRoute();
   if (!state.me && r !== 'settings') r = '';
   if (r === 'admin' && !(state.me && state.me.role === 'admin')) r = state.me ? 'discover' : '';
   if (r === 'messages' && !(state.me && state.me.role !== 'admin')) r = state.me ? 'discover' : '';
   if (r === 'activity' && !(state.me && state.me.role !== 'admin')) r = state.me ? 'discover' : '';
   // Непотвърден имейл → само екранът за потвърждение (и изход).
-  if (state.me && !state.me.emailVerified) { stopBadges(); renderChrome(); if (state.meta) { viewVerify(); document.title = 'Потвърди имейла · Spark'; } return; }
-  if (state.me) startBadges(); else stopBadges();
+  if (state.me && !state.me.emailVerified) { stopBadges(); stopCallWatch(); renderChrome(); if (state.meta) { viewVerify(); document.title = 'Потвърди имейла · Spark'; } return; }
+  if (state.me) { startBadges(); startCallWatch(); } else { stopBadges(); stopCallWatch(); }
   if (state.me && r === '') { r = 'discover'; history.replaceState(null, '', '#discover'); }
   renderChrome();
   if (!state.meta) return;
@@ -2955,3 +3362,5 @@ init();
 })();
 
 </script>
+</body>
+</html>

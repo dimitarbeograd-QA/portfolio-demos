@@ -1068,3 +1068,101 @@ test('примерното досие е заредено: Сашо има пр�
   assert.equal(det.penalties.map(p => p.kind).sort().join(), 'suspension,warning');
   assert.ok(det.penalties.find(p => p.kind === 'warning').appealText.length > 10);
 });
+
+// ───────── Гласови и видео обаждания ─────────
+async function callPair() {
+  const { a, b, ua, ub } = await two();
+  const { cid } = await say(a, ub.id, 'ще се чуем ли?');
+  return { a, b, ua, ub, cid };
+}
+const ring = (a, cid, kind = 'audio') => a('POST', '/api/calls', { conversationId: cid, kind });
+
+test('обаждане: звънене, входящо, отговор, сигнали, край и запис в чата', async () => {
+  const { a, b, ua, ub, cid } = await callPair();
+  const r = await ring(a, cid, 'video');
+  assert.equal(r.status, 201); assert.equal(r.data.call.status, 'ringing'); assert.equal(r.data.call.kind, 'video'); assert.equal(r.data.call.peer.id, ub.id);
+  const id = r.data.call.id;
+  // входящото се вижда само на получателя
+  const inc = await b('GET', '/api/calls/poll');
+  assert.equal(inc.data.call.id, id); assert.equal(inc.data.call.incoming, true); assert.equal(inc.data.call.peer.id, ua.id);
+  // сигнал offer от звънящия; получателят го вижда, звънящият – не
+  assert.equal((await a('POST', `/api/calls/${id}/signal`, { type: 'offer', payload: '{"sdp":"X"}' })).status, 201);
+  const got = (await b('GET', `/api/calls/poll?callId=${id}`)).data.signals;
+  assert.deepEqual(got.map(s => [s.type, s.payload]), [['offer', '{"sdp":"X"}']]);
+  assert.equal((await a('GET', `/api/calls/poll?callId=${id}&after=0`)).data.signals.length, 0);
+  // отговор → активно
+  const ans = await b('POST', `/api/calls/${id}/answer`);
+  assert.equal(ans.status, 200); assert.equal(ans.data.call.status, 'active');
+  await b('POST', `/api/calls/${id}/signal`, { type: 'answer', payload: 'A' });
+  await a('POST', `/api/calls/${id}/signal`, { type: 'ice', payload: 'C1' });
+  assert.deepEqual((await a('GET', `/api/calls/poll?callId=${id}`)).data.signals.map(s => s.type), ['answer']);
+  assert.deepEqual((await b('GET', `/api/calls/poll?callId=${id}&after=${got[0].id}`)).data.signals.map(s => s.type), ['ice']);
+  // край → запис в разговора, повторно приключване е безвредно
+  dbx.prepare("UPDATE calls SET answered_at = datetime('now', '-75 seconds') WHERE id = ?").run(id);
+  assert.equal((await a('POST', `/api/calls/${id}/end`)).status, 200);
+  assert.equal((await b('GET', `/api/calls/poll?callId=${id}`)).data.call.status, 'ended');
+  const log = (await a('GET', `/api/chats/${cid}`)).data.messages.filter(m => m.kind === 'system').map(m => m.body);
+  assert.ok(log.some(t => /Видео обаждане · 1:1\d/.test(t)), log.join('|'));
+  assert.equal((await a('POST', `/api/calls/${id}/signal`, { type: 'ice', payload: 'късно' })).status, 409);   // след края няма сигнали
+  assert.equal((await a('POST', `/api/calls/${id}/end`)).status, 200);
+});
+
+test('обаждане: отказ, отмяна и неотговорено', async () => {
+  const { a, b, cid } = await callPair();
+  const d1 = (await ring(a, cid)).data.call.id;
+  assert.equal((await a('POST', `/api/calls/${d1}/decline`)).status, 403);                    // звънящият не може да „откаже“
+  assert.equal((await b('POST', `/api/calls/${d1}/decline`)).status, 200);
+  assert.equal((await a('GET', `/api/calls/poll?callId=${d1}`)).data.call.status, 'declined');
+  const d2 = (await ring(a, cid)).data.call.id;
+  assert.equal((await a('POST', `/api/calls/${d2}/end`)).status, 200);                         // звънящият отменя
+  assert.equal((await b('GET', `/api/calls/poll?callId=${d2}`)).data.call.status, 'canceled');
+  const d3 = (await ring(a, cid)).data.call.id;
+  dbx.prepare("UPDATE calls SET created_at = datetime('now', '-60 seconds') WHERE id = ?").run(d3);
+  assert.equal((await b('GET', '/api/calls/poll')).data.call, null);                           // изтекло звънене → няма входящо
+  assert.equal((await a('GET', `/api/calls/poll?callId=${d3}`)).data.call.status, 'missed');
+  const log = (await b('GET', `/api/chats/${cid}`)).data.messages.filter(m => m.kind === 'system').map(m => m.body);
+  assert.ok(log.some(t => /Отказано/.test(t)) && log.filter(t => /Пропуснато/.test(t)).length === 2, log.join('|'));
+});
+
+test('обаждане: заети линии, валидации и права', async () => {
+  const { a, b, ub, cid } = await callPair();
+  const stranger = client(); await stranger('POST', '/api/register', reg());
+  assert.equal((await ring(a, cid, 'сегашно')).status, 400);
+  assert.equal((await ring(stranger, cid)).status, 404);                                       // не е член на разговора
+  assert.equal((await client()('POST', '/api/calls', { conversationId: cid, kind: 'audio' })).status, 401);
+  const id = (await ring(a, cid)).data.call.id;
+  assert.equal((await ring(a, cid)).data.code, 'busy_self');                                   // вече звъни
+  const c3 = client(); const u3 = (await c3('POST', '/api/register', reg())).data.user;
+  const { cid: cid3 } = await say(c3, ub.id, 'и аз искам да звънна');
+  const busy = await ring(c3, cid3); assert.equal(busy.status, 409); assert.equal(busy.data.code, 'busy');   // ub е зает
+  // външен човек не може да чете, подава сигнал или вдига
+  assert.equal((await stranger('GET', `/api/calls/poll?callId=${id}`)).data.call, null);
+  assert.equal((await stranger('POST', `/api/calls/${id}/signal`, { type: 'ice', payload: 'x' })).status, 404);
+  assert.equal((await stranger('POST', `/api/calls/${id}/answer`)).status, 404);
+  assert.equal((await a('POST', `/api/calls/${id}/answer`)).status, 403);                       // звънящият не може да вдига
+  assert.equal((await b('POST', `/api/calls/${id}/signal`, { type: 'нещо', payload: 'x' })).status, 400);
+  assert.equal((await b('POST', `/api/calls/${id}/signal`, { type: 'ice', payload: 'x'.repeat(20001) })).status, 413);
+  await b('POST', `/api/calls/${id}/end`);
+  // след края линията е свободна
+  assert.equal((await ring(c3, cid3)).status, 201);
+  // групи – не; блокиран – не
+  const g = client(); const ug = (await g('POST', '/api/register', reg())).data.user;
+  await say(a, ug.id, 'х'); const gid = (await a('POST', '/api/chats/groups', { title: 'Група', memberIds: [ug.id] })).data.id;
+  assert.equal((await ring(a, gid)).status, 404);
+  await b('POST', `/api/profiles/${(await a('GET', '/api/me')).data.user.id}/report`, { reason: 'spam', block: true });
+  assert.equal((await ring(a, cid)).status, 403);
+});
+
+test('обаждане: суспендиран не може да звъни, но може да вдигне; зависнало обаждане се затваря; ICE в meta', async () => {
+  const { a, b, ub, cid } = await callPair(); const admin = await adminOf();
+  const d = await reportAndDossier(a, ub, admin);
+  await admin('POST', `/api/admin/dossiers/${d.id}/penalties`, { kind: 'suspension', days: 1, reason: 'Тестова суспензия' });
+  const blocked = await ring(b, cid); assert.equal(blocked.status, 403); assert.equal(blocked.data.code, 'suspended');
+  const id = (await ring(a, cid)).data.call.id;
+  assert.equal((await b('POST', `/api/calls/${id}/answer`)).status, 200);
+  // никой не се отчита → затваря се
+  dbx.prepare("UPDATE calls SET caller_seen = datetime('now', '-60 seconds') WHERE id = ?").run(id);
+  assert.equal((await a('GET', `/api/calls/poll?callId=${id}`)).data.call.status, 'ended');
+  const meta = (await client()('GET', '/api/meta')).data;
+  assert.ok(Array.isArray(meta.iceServers) && meta.iceServers[0].urls);
+});

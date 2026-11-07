@@ -21,12 +21,13 @@ const app = read('public/js/app.js')
   .replace(/'#\/'/g, "'#'").replace(/href: '#\/'/g, "href: '#'");
 const safe = s => s.replace(/<\/script/gi, '<\\/script');
 
-const html = `<title>Spark — запознанства</title>
+const headPart = `<title>Spark — запознанства</title>
 <style>
 ${read('public/css/style.css')}
 html, body { height: auto; }
 </style>
-<div class="bg-orbs" aria-hidden="true"><i></i><i></i><i></i></div>
+`;
+const bodyPart = `<div class="bg-orbs" aria-hidden="true"><i></i><i></i><i></i></div>
 <header class="topbar" id="topbar">
   <a class="brand" href="#" aria-label="Spark — начало">
     <svg viewBox="0 0 64 64" width="30" height="30" aria-hidden="true"><path d="M34 6 18 36h12l-3 22 19-32H33z" fill="currentColor"/></svg><span>Spark</span>
@@ -57,6 +58,11 @@ ${safe(read('public/js/emoticons.js'))}
 ${safe(app)}
 </script>
 `;
+// 1) index.html – ПЪЛЕН документ (за GitHub Pages и директно отваряне; има viewport за телефони).
+// 2) preview/artifact.html – фрагмент без <html>/<head> (платформата за артефакти добавя собствена обвивка).
+const full = `<!doctype html>\n<html lang="bg">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n<meta name="color-scheme" content="dark">\n<meta name="theme-color" content="#070b14">\n${headPart}</head>\n<body>\n${bodyPart}</body>\n</html>\n`;
 const out = process.argv[2] || path.join(root, 'index.html');
-fs.writeFileSync(out, html);
-console.log('OK', out, Math.round(html.length / 1024) + ' KB');
+fs.writeFileSync(out, full);
+const fragOut = process.argv[3] || path.join(root, 'preview', 'artifact.html');
+fs.writeFileSync(fragOut, headPart + bodyPart);
+console.log('OK', out, Math.round(full.length / 1024) + ' KB', '+ фрагмент', path.relative(root, fragOut));

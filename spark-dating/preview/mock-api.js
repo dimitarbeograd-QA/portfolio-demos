@@ -20,11 +20,11 @@
     const a = [], b = []; for (const p of list) { const i = p.key.indexOf(term); if (i === 0) a.push(p); else if (i > 0) b.push(p); }
     return a.concat(b).slice(0, limit);
   }
-  let db = { users: [], likes: [], seq: 1000, session: null, convs: [], messages: [], blocks: [], reports: null, rseq: 0, dossiers: [], penalties: [], notes: [], visits: [], banned: [], dereg: [], verif: {} };
+  let db = { users: [], likes: [], seq: 1000, session: null, convs: [], messages: [], blocks: [], calls: [], reports: null, rseq: 0, dossiers: [], penalties: [], notes: [], visits: [], banned: [], dereg: [], verif: {} };
   let files = {}; // id -> { id, name, size, kind, url (data URL) } – пазят се отделно, защото са големи
   try { const raw = localStorage.getItem(KEY); if (raw) db = JSON.parse(raw); } catch { /* без storage */ }
   db.messages = db.messages || []; db.blocks = db.blocks || []; db.convs = db.convs || [];
-  for (const k of ['dossiers', 'penalties', 'notes', 'visits', 'banned', 'dereg']) db[k] = db[k] || []; db.verif = db.verif || {};
+  for (const k of ['dossiers', 'penalties', 'notes', 'visits', 'banned', 'dereg', 'calls']) db[k] = db[k] || []; db.verif = db.verif || {};
   try { files = JSON.parse(localStorage.getItem(FKEY) || '{}'); } catch { files = {}; }
   const saveFiles = () => { try { localStorage.setItem(FKEY, JSON.stringify(files)); } catch { /* квотата е пълна – файловете остават само в тази сесия */ } };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* ignore */ } };
@@ -87,7 +87,7 @@
 
   route('GET', /^\/api\/meta$/, () => ok({
     regions: REGIONS.map(r => ({ code: r.code, name: r.name, count: people().filter(u => visible(u) && u.placeId && BY_ID.get(u.placeId).region === r.code).length })),
-    interests: D.interests, minAge: MIN_AGE, maxPhotos: MAX_PHOTOS, total: people().filter(visible).length, demoAdmin: true, goals: GOALS, mailDev: true, reportReasons: D.reportReasons,
+    interests: D.interests, minAge: MIN_AGE, maxPhotos: MAX_PHOTOS, total: people().filter(visible).length, demoAdmin: true, goals: GOALS, mailDev: true, callsDemo: true, iceServers: [], reportReasons: D.reportReasons,
   }));
   route('GET', /^\/api\/places$/, ({ q }) => {
     const region = q.get('region') || ''; if (!REGION_NAME.has(region)) return bad('Изберете област.');
@@ -488,6 +488,57 @@
     else { if (wasOwner) c.members[0].role = 'owner'; addSystem(c, me.id, uid === me.id ? `${nickOf(uid)} напусна групата` : `${nickOf(uid)} беше премахнат от групата`); }
     save(); return ok({ ok: true });
   }));
+
+  // ── Обаждания (демо: профилите „вдигат“ и няма реален събеседник) ──
+  const lbl = c => (c.kind === 'video' ? 'видео' : 'гласово');
+  const openCall = uid => db.calls.find(c => ['ringing', 'active'].includes(c.status) && (c.caller === uid || c.callee === uid));
+  const callLog = (c, text) => { const conv = convById(c.cid); if (conv) addSystem(conv, c.caller, text); };
+  const callEnd = (c, status) => {
+    c.status = status; c.ended = Date.now();
+    if (status === 'ended' && c.answered) { const sec = Math.round((c.ended - c.answered) / 1000); callLog(c, `📞 ${lbl(c)[0].toUpperCase() + lbl(c).slice(1)} обаждане · ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`); }
+    else if (status === 'canceled' || status === 'missed') callLog(c, `📞 Пропуснато ${lbl(c)} обаждане`);
+    else if (status === 'declined') callLog(c, `📞 Отказано ${lbl(c)} обаждане`);
+  };
+  const callTick = () => {
+    for (const c of db.calls) {
+      if (c.status !== 'ringing') continue;
+      const demoCallee = demo.some(d => d.id === c.callee), age = Date.now() - c.created;
+      if (demoCallee && age > 2500) { c.status = 'active'; c.answered = Date.now(); }          // демо профилът вдига след малко
+      else if (age > 45000) callEnd(c, 'missed');
+    }
+  };
+  const callView = (c, me) => { const otherId = c.caller === me.id ? c.callee : c.caller; const o = all().find(u => u.id === otherId);
+    return { id: c.id, kind: c.kind, status: c.status, conversationId: c.cid, incoming: c.callee === me.id, peer: o ? pub(o, me.id) : null, answeredAt: c.answered ? iso(c.answered) : null, createdAt: iso(c.created), demo: true }; };
+  route('POST', /^\/api\/calls$/, active(({ body: b, me }) => {
+    if (!['audio', 'video'].includes(b.kind)) return bad('Невалиден вид обаждане.');
+    const conv = convById(Number(b.conversationId)); if (!conv || conv.kind !== 'direct' || !memberOf(conv, me.id)) return bad('Обаждания има само в лични разговори.', 404);
+    const peer = peerUser(conv, me); if (!peer) return bad('Не можете да се обадите на този профил.', 403);
+    callTick(); if (openCall(me.id)) return errc('Вече си в обаждане.', 409, 'busy_self');
+    if (openCall(peer.id)) return errc(`${peer.nickname} е в друго обаждане. Опитай по-късно.`, 409, 'busy');
+    const c = { id: ++db.seq, cid: conv.id, caller: me.id, callee: peer.id, kind: b.kind, status: 'ringing', created: Date.now(), answered: null, ended: null }; db.calls.push(c); save();
+    return ok({ call: callView(c, me) }, 201);
+  }));
+  route('GET', /^\/api\/calls\/poll$/, authed(({ q, me }) => {
+    // Демо: след ~20 сек. „Теди“ се обажда на тестовия потребител (веднъж), за да се види входящо обаждане.
+    if (me.id === 998 && !db.demoRang) {
+      db.firstPoll = db.firstPoll || Date.now();
+      const teddy = demo.find(d => d.nickname === 'Теди'), conv = teddy && db.convs.find(c => c.kind === 'direct' && memberOf(c, me.id) && memberOf(c, teddy.id));
+      if (conv && Date.now() - db.firstPoll > 20000 && !openCall(me.id)) { db.calls.push({ id: ++db.seq, cid: conv.id, caller: teddy.id, callee: me.id, kind: 'video', status: 'ringing', created: Date.now(), answered: null, ended: null }); db.demoRang = true; }
+      save();
+    }
+    callTick();
+    const id = Number(q.get('callId')) || 0;
+    const c = id ? db.calls.find(x => x.id === id && (x.caller === me.id || x.callee === me.id)) : openCall(me.id);
+    return ok({ call: c ? callView(c, me) : null, signals: [] });
+  }));
+  const myCall = (m, me) => db.calls.find(x => x.id === Number(m[1]) && (x.caller === me.id || x.callee === me.id));
+  route('POST', /^\/api\/calls\/(\d+)\/signal$/, authed(({ m, me }) => (myCall(m, me) ? ok({ id: 0 }, 201) : bad('Обаждането не е намерено.', 404))));
+  route('POST', /^\/api\/calls\/(\d+)\/answer$/, authed(({ m, me }) => { const c = myCall(m, me); if (!c) return bad('Обаждането не е намерено.', 404);
+    if (c.callee !== me.id || c.status !== 'ringing') return bad('Не можеш да вдигнеш това обаждане.', 403); c.status = 'active'; c.answered = Date.now(); save(); return ok({ call: callView(c, me) }); }));
+  route('POST', /^\/api\/calls\/(\d+)\/decline$/, authed(({ m, me }) => { const c = myCall(m, me); if (!c) return bad('Обаждането не е намерено.', 404);
+    if (c.callee !== me.id || c.status !== 'ringing') return bad('Не можеш да откажеш това обаждане.', 403); callEnd(c, 'declined'); save(); return ok({ ok: true }); }));
+  route('POST', /^\/api\/calls\/(\d+)\/end$/, authed(({ m, me }) => { const c = myCall(m, me); if (!c) return bad('Обаждането не е намерено.', 404);
+    if (['ringing', 'active'].includes(c.status)) callEnd(c, c.status === 'ringing' ? (c.caller === me.id ? 'canceled' : 'declined') : 'ended'); save(); return ok({ ok: true }); }));
 
   // ── Доклади ──
   route('POST', /^\/api\/profiles\/(\d+)\/report$/, active(({ m, body: b, me }) => {

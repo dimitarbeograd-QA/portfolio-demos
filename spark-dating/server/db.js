@@ -231,6 +231,32 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_visits_visited ON visits(visited_id, day);
 
+  -- Гласови и видео обаждания (WebRTC). Сървърът само предава сигналите (offer/answer/ICE); медията върви директно между двамата.
+  CREATE TABLE IF NOT EXISTS calls (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER REFERENCES conversations(id) ON DELETE SET NULL,
+    caller_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    callee_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind            TEXT NOT NULL CHECK (kind IN ('audio','video')),
+    status          TEXT NOT NULL DEFAULT 'ringing' CHECK (status IN ('ringing','active','ended','declined','missed','canceled')),
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    answered_at     TEXT,
+    ended_at        TEXT,
+    caller_seen     TEXT NOT NULL DEFAULT (datetime('now')),
+    callee_seen     TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_calls_caller ON calls(caller_id, status);
+  CREATE INDEX IF NOT EXISTS idx_calls_callee ON calls(callee_id, status);
+  CREATE TABLE IF NOT EXISTS call_signals (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    call_id    INTEGER NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+    from_id    INTEGER NOT NULL,
+    type       TEXT NOT NULL CHECK (type IN ('offer','answer','ice')),
+    payload    TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_signals_call ON call_signals(call_id, id);
+
   CREATE TABLE IF NOT EXISTS sessions (
     sid     TEXT PRIMARY KEY,
     data    TEXT NOT NULL,

@@ -9,6 +9,8 @@ const SqliteStore = require('./session-store');
 const places = require('./places');
 const emailutil = require('./emailutil');
 const mailer = require('./mailer');
+// STUN/TURN за обажданията. За връзка зад строги мрежи добави TURN чрез ICE_SERVERS (JSON масив).
+const ICE_SERVERS = (() => { try { const v = JSON.parse(process.env.ICE_SERVERS || ''); if (Array.isArray(v) && v.length) return v; } catch { /* ignore */ } return [{ urls: 'stun:stun.l.google.com:19302' }]; })();
 const STRIKE_LIMIT = Number(process.env.STRIKE_LIMIT) || 3;   // при толкова наказания се препоръчва дерегистрация
 
 const { GOALS, SUSPEND_DAYS, INTERESTS, GENDERS, LOOKING, MIN_AGE, MAX_PHOTOS, REPORT_REASONS } = require('./constants');
@@ -257,6 +259,7 @@ app.get('/api/meta', (req, res) => {
     reportReasons: REPORT_REASONS,
     goals: GOALS,
     mailDev: mailer.mode === 'dev',
+    iceServers: ICE_SERVERS,
   });
 });
 
@@ -1017,6 +1020,97 @@ app.delete('/api/chats/:id/members/:uid', requireAuth, wrap((req, res) => {
     if (target.role === 'owner') db.prepare("UPDATE conversation_members SET role = 'owner' WHERE conversation_id = ? AND user_id = ?").run(cid, left[0].user_id);
     addSystem(cid, me, uid === me ? `${nick} напусна групата` : `${nick} беше премахнат от групата`);
   })();
+  res.json({ ok: true });
+}));
+
+// ── Гласови и видео обаждания ──
+const RING_SECONDS = 45, STALE_SECONDS = 25;
+const callLabel = c => (c.kind === 'video' ? 'Видео' : 'Гласово');
+const fmtDur = sec => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+function logCall(c, text) { if (c.conversation_id && convRow(c.conversation_id)) addSystem(c.conversation_id, c.caller_id, text); }
+// Затваря неотговорени и „зависнали“ обаждания (никой не се отчита повече от 25 сек.).
+function expireCalls() {
+  for (const c of db.prepare("SELECT * FROM calls WHERE status = 'ringing' AND created_at < datetime('now', ?)").all(`-${RING_SECONDS} seconds`)) {
+    db.prepare("UPDATE calls SET status = 'missed', ended_at = datetime('now') WHERE id = ?").run(c.id);
+    logCall(c, `📞 Пропуснато ${callLabel(c).toLowerCase()} обаждане`);
+  }
+  for (const c of db.prepare(`SELECT * FROM calls WHERE status = 'active' AND (caller_seen < datetime('now', ?) OR COALESCE(callee_seen, answered_at) < datetime('now', ?))`).all(`-${STALE_SECONDS} seconds`, `-${STALE_SECONDS} seconds`)) {
+    endCall(c, 'ended');
+  }
+}
+function endCall(c, status) {
+  db.prepare("UPDATE calls SET status = ?, ended_at = datetime('now') WHERE id = ?").run(status, c.id);
+  if (status === 'ended' && c.answered_at) {
+    const sec = Math.max(0, Math.round((Date.now() - new Date(c.answered_at.replace(' ', 'T') + 'Z').getTime()) / 1000));
+    logCall(c, `📞 ${callLabel(c)} обаждане · ${fmtDur(sec)}`);
+  } else if (status === 'canceled') logCall(c, `📞 Пропуснато ${callLabel(c).toLowerCase()} обаждане`);
+  else if (status === 'declined') logCall(c, `📞 Отказано ${callLabel(c).toLowerCase()} обаждане`);
+}
+const callOpen = uid => db.prepare("SELECT * FROM calls WHERE status IN ('ringing', 'active') AND (caller_id = ? OR callee_id = ?) ORDER BY id DESC LIMIT 1").get(uid, uid);
+function callView(c, me) {
+  const otherId = c.caller_id === me ? c.callee_id : c.caller_id;
+  const o = db.prepare("SELECT * FROM users WHERE id = ?").get(otherId);
+  return { id: c.id, kind: c.kind, status: c.status, conversationId: c.conversation_id, incoming: c.callee_id === me,
+    peer: o ? publicProfiles([o], me)[0] : null, answeredAt: c.answered_at ? iso(c.answered_at) : null, createdAt: iso(c.created_at) };
+}
+
+app.post('/api/calls', requireActive, wrap((req, res) => {
+  const me = req.session.userId, b = req.body || {};
+  if (!['audio', 'video'].includes(b.kind)) return bad(res, 'Невалиден вид обаждане.');
+  const cid = Number(b.conversationId), conv = convRow(cid);
+  if (!conv || conv.kind !== 'direct' || !memberRow(cid, me)) return bad(res, 'Обаждания има само в лични разговори.', 404);
+  const peer = directPeer(cid, me);
+  if (!peer) return bad(res, 'Не можете да се обадите на този профил.', 403);
+  expireCalls();
+  if (callOpen(me)) return badc(res, 'Вече си в обаждане.', 409, 'busy_self');
+  if (callOpen(peer.id)) return badc(res, `${peer.nickname} е в друго обаждане. Опитай по-късно.`, 409, 'busy');
+  const id = db.prepare('INSERT INTO calls (conversation_id, caller_id, callee_id, kind) VALUES (?, ?, ?, ?)').run(cid, me, peer.id, b.kind).lastInsertRowid;
+  res.status(201).json({ call: callView(db.prepare('SELECT * FROM calls WHERE id = ?').get(id), me) });
+}));
+
+// Опресняване: входящо обаждане (без callId) или състоянието на конкретно обаждане + новите сигнали от другата страна.
+app.get('/api/calls/poll', requireAuth, wrap((req, res) => {
+  const me = req.session.userId;
+  expireCalls();
+  let c = req.query.callId ? db.prepare('SELECT * FROM calls WHERE id = ? AND (caller_id = ? OR callee_id = ?)').get(Number(req.query.callId), me, me) : callOpen(me);
+  if (!c) return res.json({ call: null, signals: [] });
+  if (c.status === 'ringing' || c.status === 'active') {
+    db.prepare(`UPDATE calls SET ${c.caller_id === me ? 'caller_seen' : 'callee_seen'} = datetime('now') WHERE id = ?`).run(c.id);
+  }
+  const after = Number(req.query.after) || 0;
+  const signals = db.prepare('SELECT id, type, payload FROM call_signals WHERE call_id = ? AND from_id <> ? AND id > ? ORDER BY id').all(c.id, me, after);
+  res.json({ call: callView(c, me), signals: signals.map(x => ({ id: x.id, type: x.type, payload: x.payload })) });
+}));
+
+const myCall = (req, res, mustBeOpen = true) => {
+  const me = req.session.userId, c = db.prepare('SELECT * FROM calls WHERE id = ? AND (caller_id = ? OR callee_id = ?)').get(Number(req.params.id), me, me);
+  if (!c) { bad(res, 'Обаждането не е намерено.', 404); return null; }
+  if (mustBeOpen && !['ringing', 'active'].includes(c.status)) { bad(res, 'Обаждането вече приключи.', 409); return null; }
+  return c;
+};
+app.post('/api/calls/:id/signal', requireAuth, wrap((req, res) => {
+  const c = myCall(req, res); if (!c) return;
+  const b = req.body || {}, payload = typeof b.payload === 'string' ? b.payload : JSON.stringify(b.payload || '');
+  if (!['offer', 'answer', 'ice'].includes(b.type)) return bad(res, 'Невалиден сигнал.');
+  if (payload.length > 20000) return bad(res, 'Сигналът е твърде голям.', 413);
+  const id = db.prepare('INSERT INTO call_signals (call_id, from_id, type, payload) VALUES (?, ?, ?, ?)').run(c.id, req.session.userId, b.type, payload).lastInsertRowid;
+  res.status(201).json({ id });
+}));
+app.post('/api/calls/:id/answer', requireAuth, wrap((req, res) => {
+  expireCalls();
+  const c = myCall(req, res); if (!c) return;
+  if (c.callee_id !== req.session.userId || c.status !== 'ringing') return bad(res, 'Не можеш да вдигнеш това обаждане.', 403);
+  db.prepare("UPDATE calls SET status = 'active', answered_at = datetime('now'), callee_seen = datetime('now') WHERE id = ?").run(c.id);
+  res.json({ call: callView(db.prepare('SELECT * FROM calls WHERE id = ?').get(c.id), req.session.userId) });
+}));
+app.post('/api/calls/:id/decline', requireAuth, wrap((req, res) => {
+  const c = myCall(req, res); if (!c) return;
+  if (c.callee_id !== req.session.userId || c.status !== 'ringing') return bad(res, 'Не можеш да откажеш това обаждане.', 403);
+  endCall(c, 'declined'); res.json({ ok: true });
+}));
+app.post('/api/calls/:id/end', requireAuth, wrap((req, res) => {
+  const c = myCall(req, res, false); if (!c) return;
+  if (['ringing', 'active'].includes(c.status)) endCall(c, c.status === 'ringing' ? (c.caller_id === req.session.userId ? 'canceled' : 'declined') : 'ended');
   res.json({ ok: true });
 }));
 

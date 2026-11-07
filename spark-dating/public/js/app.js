@@ -29,6 +29,9 @@ function h(tag, props, ...kids) {
   }
   return el;
 }
+// Мобилен вид (≤700px): долна лента за навигация, цял екран за чата, компактни карти. Функционалността е същата.
+const mobileQuery = window.matchMedia('(max-width: 700px)');
+const isMobile = () => mobileQuery.matches;
 const clear = el => { while (el.firstChild) el.removeChild(el.firstChild); return el; };
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
@@ -229,7 +232,7 @@ const badge = n => (n > 0 ? h('span', { class: 'badge', 'aria-label': `${n} но
 const disc = {
   region: '', place: '', placeLabel: '', stage: 'region', q: '', gender: '', ageMin: '', ageMax: '', interests: new Set(), withPhoto: false,
   online: false, lookingForMe: false, goal: '', sort: 'active', profiles: [], total: 0, loading: false,
-  pickerOpen: true, filtersOpen: (() => { try { const v = localStorage.getItem('spark.filtersOpen'); if (v !== null) return v === '1'; } catch { /* ignore */ } return window.innerWidth > 900; })(), token: 0,
+  pickerOpen: !window.matchMedia('(max-width: 700px)').matches, filtersOpen: (() => { if (window.innerWidth <= 700) return false; try { const v = localStorage.getItem('spark.filtersOpen'); if (v !== null) return v === '1'; } catch { /* ignore */ } return window.innerWidth > 900; })(), token: 0,
 };
 
 /* ═══════════ Горна лента ═══════════ */
@@ -250,23 +253,67 @@ function renderChrome() {
     box.append(
       h('span', { class: 'who', text: state.me.nickname, title: state.me.nickname }),
       h('button', { class: 'btn ghost sm', type: 'button', text: 'Изход', onclick: logout }),
+      h('button', { class: 'menubtn', type: 'button', 'aria-label': 'Меню', title: 'Меню', text: '☰', onclick: openMenuSheet }),
     );
   } else {
     box.append(h('a', { class: 'btn sm', href: '#/', text: 'Вход / Регистрация' }));
   }
   renderBanners();
+  renderTabbar(route);
   syncDock();
 }
+
+// Празнуване при взаимно харесване (като в Bumble и Boo): силен момент и ясно следващо действие.
+function matchDialog(p) {
+  const confetti = Array.from({ length: 16 }, (_, i) => { const c = h('i', { 'aria-hidden': 'true' }); c.style.setProperty('--x', `${(i * 37) % 100}%`); c.style.setProperty('--d', `${(i % 5) * 0.12}s`); c.style.setProperty('--h', `${(i * 47) % 360}`); return c; });
+  openModal(h('div', { class: 'match' }, h('div', { class: 'confetti' }, ...confetti),
+    h('div', { class: 'matchpics' }, h('img', { src: mainPhoto(state.me), alt: '', width: '96', height: '96' }), h('span', { class: 'matchheart', 'aria-hidden': 'true', text: '💙' }), h('img', { src: mainPhoto(p), alt: '', width: '96', height: '96' })),
+    h('h2', { text: 'Взаимно харесване!' }), h('p', { class: 'dim', text: `Ти и ${p.nickname} се харесахте. Кажи здравей!` }),
+    h('div', { class: 'actions', style: 'justify-content:center' }, h('button', { class: 'btn', type: 'button', text: `💬 Пиши на ${p.nickname}`, onclick: () => openChat(p.id) }), h('button', { class: 'btn ghost', type: 'button', text: 'Продължи', onclick: closeModal }))),
+  { narrow: true, title: 'Съвпадение' });
+}
+
+// Долна лента за навигация (само на телефон; на компютър навигацията е горе).
+function renderTabbar(routeKey) {
+  let bar = $('#tabbar');
+  if (!bar) { bar = h('nav', { id: 'tabbar', class: 'tabbar', 'aria-label': 'Навигация' }); document.body.append(bar); }
+  clear(bar);
+  const show = !!(state.me && state.me.emailVerified);
+  document.body.classList.toggle('has-tabbar', show);
+  if (!show) return;
+  const admin = state.me.role === 'admin';
+  const tabs = admin
+    ? [['#/discover', '🧭', 'Открий', 'discover', 0], ['#/admin', '🛡️', 'Админ', 'admin', state.openReports + state.openAppeals], ['#/profile', '👤', 'Профил', 'profile', 0]]
+    : [['#/discover', '🧭', 'Открий', 'discover', 0], ['#/activity', '💙', 'Активност', 'activity', 0], ['#/messages', '💬', 'Чат', 'messages', state.unread], ['#/profile', '👤', 'Профил', 'profile', 0]];
+  tabs.forEach(([href, ico, label, key, n]) => bar.append(h('a', { href, class: 'tab' + (routeKey === key ? ' on' : ''), 'aria-current': routeKey === key ? 'page' : null },
+    h('span', { class: 'ti', 'aria-hidden': 'true', text: ico }), h('span', { class: 'tl2', text: label }), badge(n))));
+  bar.append(h('button', { class: 'tab', type: 'button', onclick: openMenuSheet }, h('span', { class: 'ti', 'aria-hidden': 'true', text: '☰' }), h('span', { class: 'tl2', text: 'Още' })));
+}
+function openMenuSheet() {
+  const me = state.me; if (!me) return;
+  const admin = me.role === 'admin';
+  const link = (href, ico, text) => h('a', { class: 'menuitem', href, onclick: closeModal }, h('span', { 'aria-hidden': 'true', text: ico }), text);
+  openModal(h('div', { class: 'menulist' },
+    h('div', { class: 'menuhead' }, h('img', { src: mainPhoto(me), alt: '', width: '48', height: '48' }), h('div', {}, h('b', { text: me.nickname }), h('small', { class: 'dim', text: admin ? 'Администратор' : me.city }))),
+    link('#/settings', '🎨', 'Дизайн и настройки'), admin ? link('#/admin', '🛡️', 'Админ панел') : link('#/activity', '💙', 'Активност'),
+    h('div', { class: 'fontrow' }, h('span', { text: 'Размер на шрифта' }), h('div', { class: 'fontctl' },
+      h('button', { class: 'chip-btn', type: 'button', 'aria-label': 'По-малък шрифт', text: 'A−', onclick: () => changeTheme({ fontScale: Math.max(80, theme.fontScale - 10) }) }),
+      h('button', { class: 'chip-btn', type: 'button', 'aria-label': 'Нормален шрифт', text: 'A', onclick: () => changeTheme({ fontScale: 100 }) }),
+      h('button', { class: 'chip-btn', type: 'button', 'aria-label': 'По-голям шрифт', text: 'A+', onclick: () => changeTheme({ fontScale: Math.min(150, theme.fontScale + 10) }) }))),
+    h('button', { class: 'btn danger block', type: 'button', text: 'Изход', onclick: () => { closeModal(); logout(); } })), { title: 'Меню' });
+}
+mobileQuery.addEventListener('change', () => { if (state.meta) route(); });
 
 // Филтрите на „Открий хора“ не трябва да „преминават“ към следващия акаунт в същия таб.
 function resetDisc() {
   Object.assign(disc, { region: '', place: '', placeLabel: '', stage: 'region', q: '', gender: '', goal: '', ageMin: '', ageMax: '', withPhoto: false, online: false, lookingForMe: false,
-    sort: 'active', profiles: [], total: 0, loading: false, pickerOpen: true, token: disc.token + 1 });
+    sort: 'active', profiles: [], total: 0, loading: false, pickerOpen: !isMobile(), token: disc.token + 1 });
   disc.interests.clear();
 }
 async function logout() {
   try { await api('POST', '/api/logout'); } catch { /* ignore */ }
-  state.me = null; resetDisc(); chatWith = null; stopBadges();
+  if (callRt.call) await hangup();
+  state.me = null; resetDisc(); chatWith = null; stopBadges(); stopCallWatch();
   location.hash = '#/';
   route();
   toast('Излязохте от профила си.');
@@ -429,7 +476,7 @@ function viewDiscover() {
   }
   const toggle = h('button', { class: 'btn ghost sm filter-toggle', type: 'button', 'aria-controls': 'filtersPanel', onclick: () => {
     disc.filtersOpen = !disc.filtersOpen;
-    try { localStorage.setItem('spark.filtersOpen', disc.filtersOpen ? '1' : '0'); } catch { /* ignore */ }
+    if (!isMobile()) { try { localStorage.setItem('spark.filtersOpen', disc.filtersOpen ? '1' : '0'); } catch { /* ignore */ } }
     syncFilters();
   } });
   const layout = h('div', { class: 'layout' }, sidebar, h('div', { class: 'stack' }, citiesWin, results));
@@ -524,7 +571,7 @@ function viewDiscover() {
     const genderChips = [['', 'Всички'], ...Object.entries(GENDER)].map(([k, t]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(disc.gender === k), text: t, onclick: () => { disc.gender = k; renderFilters(); load(true); } }));
 
     sidebar.append(
-      h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h3', { text: '🎛️ Филтри' })),
+      h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h3', { text: '🎛️ Филтри' }), h('button', { class: 'btn sm sheetclose', type: 'button', text: 'Готово ✓', onclick: () => { disc.filtersOpen = false; syncFilters(); window.scrollTo(0, 0); } })),
       h('div', { class: 'win-body' },
         h('div', { class: 'fgroup' }, h('label', { for: 'f-q', text: 'Търси по никнейм' }), h('input', { id: 'f-q', value: disc.q, maxlength: '30', placeholder: 'напр. Мила', oninput: e => { disc.q = e.target.value; upd(); } })),
         h('div', { class: 'fgroup' }, h('label', { text: 'Пол' }), h('div', { class: 'chips' }, genderChips)),
@@ -544,7 +591,7 @@ function viewDiscover() {
       [['active', 'Последно активни'], ['new', 'Най-нови'], ['young', 'Най-млади'], ['old', 'Най-възрастни']].map(([k, t]) => h('option', { value: k, text: t, selected: disc.sort === k })));
     results.append(h('div', { class: 'citybar' },
       h('h2', { text: disc.loading && !disc.profiles.length ? 'Зареждане…' : `${disc.total} ${disc.total === 1 ? 'човек' : 'души'}${placeTitle() ? ' в ' + placeTitle() : ''}` }), sort));
-    if (disc.loading && !disc.profiles.length) { results.append(h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Зареждане' })); return; }
+    if (disc.loading && !disc.profiles.length) { results.append(h('div', { class: 'grid', role: 'progressbar', 'aria-label': 'Зареждане' }, Array.from({ length: 8 }, () => h('div', { class: 'win card skel' }, h('div', { class: 'ph' }), h('div', { class: 'meta' }, h('p'), h('p')))))); return; }
     if (!disc.profiles.length) {
       results.append(h('div', { class: 'win' }, h('div', { class: 'empty-state' }, h('div', { class: 'big', text: '🔍' }), h('h3', { text: 'Няма намерени профили' }), h('p', { text: 'Опитай с друг град или махни някои филтри.' }))));
       return;
@@ -617,7 +664,7 @@ function openProfile(p) {
     const thumbs = photos.length > 1 ? h('div', { class: 'thumbs' }, photos.map((u, n) => h('button', { type: 'button', 'aria-label': `Снимка ${n + 1}`, 'aria-current': String(n === idx), onclick: () => { idx = n; render(); } }, h('img', { src: u, alt: '' })))) : null;
     const likeBtn = cur.isMe ? null : h('button', { class: cur.liked ? 'btn' : 'btn ghost', type: 'button', 'aria-pressed': String(cur.liked), text: cur.liked ? '💙 Харесан' : '🤍 Харесай', onclick: async e => {
       const likeEl = e.currentTarget; likeEl.disabled = true;
-      try { cur = (await api('POST', `/api/profiles/${cur.id}/like`)).profile; const i = disc.profiles.findIndex(x => x.id === cur.id); if (i >= 0) disc.profiles[i] = cur; if (cur.liked && cur.likedMe) toast(`Взаимно харесване с ${cur.nickname}! 🎉`); render(); }
+      try { cur = (await api('POST', `/api/profiles/${cur.id}/like`)).profile; const i = disc.profiles.findIndex(x => x.id === cur.id); if (i >= 0) disc.profiles[i] = cur; if (cur.liked && cur.likedMe) { render(); matchDialog(cur); return; } render(); }
       catch (x) { toast(x.message, true); likeEl.disabled = false; }
     } });
     body.append(h('div', { class: 'pview' },
@@ -1022,16 +1069,18 @@ function createChatPane({ compact, onBack, onFull, onCollapse, onChanged }) {
     if (!c) { headEl.append(h('h2', { text: 'Зареждане…' })); return; }
     const group = c.kind === 'group';
     const peer = c.peer;
-    headEl.append(
+    headEl.append(...[
       onBack ? h('button', { class: 'xbtn' + (compact ? '' : ' backbtn'), type: 'button', 'aria-label': 'Към разговорите', title: 'Към списъка', text: '←', onclick: onBack }) : null,
       group ? groupAvatar(c.title, 32) : h('img', { class: 'mini', src: peer ? mainPhoto(peer) : avatar('?', ''), alt: '', width: '32', height: '32' }),
       h('h2', {}, group
         ? [h('button', { class: 'linkbtn', type: 'button', text: c.title, title: 'Информация за групата', onclick: () => groupInfoDialog(c, reload) }), h('small', { class: 'dim', text: ` · ${c.members.length} души` })]
         : [peer ? h('a', { href: '#/discover', text: peer.nickname, onclick: e => { e.preventDefault(); openProfile(peer); } }) : c.title, peer ? h('small', { class: 'dim', text: ` · ${peer.city}` }) : null]),
-      group ? h('button', { class: 'xbtn', style: 'margin-left:auto', type: 'button', 'aria-label': 'Информация за групата', title: 'Група', text: '👥', onclick: () => groupInfoDialog(c, reload) })
-            : (peer ? h('button', { class: 'xbtn', style: 'margin-left:auto', type: 'button', 'aria-label': 'Докладвай', title: 'Докладвай', text: '🚩', onclick: () => reportDialog(peer, c.id) }) : null),
+      ...(group ? [h('button', { class: 'xbtn', style: 'margin-left:auto', type: 'button', 'aria-label': 'Информация за групата', title: 'Група', text: '👥', onclick: () => groupInfoDialog(c, reload) })]
+            : peer ? [h('button', { class: 'xbtn callbtn', style: 'margin-left:auto', type: 'button', 'aria-label': 'Гласово обаждане', title: 'Гласово обаждане', text: '📞', onclick: () => startCall(c, 'audio') }),
+                      h('button', { class: 'xbtn callbtn', type: 'button', 'aria-label': 'Видео обаждане', title: 'Видео обаждане', text: '🎥', onclick: () => startCall(c, 'video') }),
+                      h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Докладвай', title: 'Докладвай', text: '🚩', onclick: () => reportDialog(peer, c.id) })] : []),
       onFull ? h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Отвори на цял екран', title: 'Цял екран', text: '⤢', onclick: onFull }) : null,
-      onCollapse ? h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Скрий', title: 'Скрий (Esc)', text: '▾', onclick: onCollapse }) : null);
+      onCollapse ? h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Скрий', title: 'Скрий (Esc)', text: '▾', onclick: onCollapse }) : null].filter(Boolean)); // native append(null) би написало „null“
     noteEl.textContent = group
       ? '🔒 Лична група. При доклад администратор вижда последните съобщения и файлове в нея.'
       : '🔒 Личен разговор. При доклад администратор може да прегледа размяната ви и файловете.';
@@ -1153,6 +1202,179 @@ async function groupInfoDialog(c, changed) {
 
 async function newGroupFlow() { await groupCreateDialog(id => openConversation(id)); }
 
+/* ═══════════ Гласови и видео обаждания ═══════════ */
+// Сървърът само предава сигналите (offer/answer/ICE) чрез кратки заявки; звукът и образът вървят директно между двамата (WebRTC).
+const callRt = { call: null, pc: null, local: null, remote: null, after: 0, poll: null, watch: null, ui: null, els: {}, muted: false, camOff: false, ice: [], remoteSet: false, demo: false,
+  tick: null, startedAt: 0, ringer: null, ac: null, sendQ: Promise.resolve(), busyPoll: false, savedTitle: '' };
+const callTimer = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+
+async function getMedia(kind, optional) {
+  const md = navigator.mediaDevices;
+  if (!md || !md.getUserMedia) { if (optional) return null; throw new Error('Този браузър не поддържа обаждания.'); }
+  try { return await md.getUserMedia({ audio: true, video: kind === 'video' ? { facingMode: 'user' } : false }); }
+  catch (e) {
+    if (optional) return null;
+    throw new Error(e && e.name === 'NotAllowedError' ? `Разреши достъп до микрофона${kind === 'video' ? ' и камерата' : ''} от настройките на браузъра.`
+      : e && e.name === 'NotFoundError' ? `Не е намерен микрофон${kind === 'video' ? ' или камера' : ''}.` : 'Микрофонът или камерата не могат да бъдат стартирани.');
+  }
+}
+function ringtone(on) {
+  if (!on) { clearInterval(callRt.ringer); callRt.ringer = null; return; }
+  try {
+    const ac = callRt.ac || (callRt.ac = new (window.AudioContext || window.webkitAudioContext)());
+    const tone = (f, at) => { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = f; g.gain.value = 0.04; o.connect(g); g.connect(ac.destination); o.start(ac.currentTime + at); o.stop(ac.currentTime + at + 0.3); };
+    const ring = () => { tone(520, 0); tone(660, 0.4); };
+    ring(); callRt.ringer = setInterval(ring, 2400);
+  } catch { /* браузърът може да блокира звука преди първо докосване */ }
+}
+
+function makePc() {
+  const pc = new RTCPeerConnection({ iceServers: (state.meta && state.meta.iceServers) || [] });
+  callRt.pc = pc; callRt.remote = new MediaStream(); callRt.remoteSet = false; callRt.ice = [];
+  pc.ontrack = e => { e.track && !callRt.remote.getTracks().includes(e.track) && callRt.remote.addTrack(e.track); attachMedia(); };
+  pc.onicecandidate = e => { if (e.candidate) sendSignal('ice', JSON.stringify(e.candidate)); };
+  pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') { toast('Връзката се разпадна. Опитай пак.', true); hangup(); } else updateCallUI(); };
+  if (callRt.local) callRt.local.getTracks().forEach(t => pc.addTrack(t, callRt.local));
+  return pc;
+}
+function sendSignal(type, payload) {
+  const c = callRt.call; if (!c || callRt.demo) return;
+  callRt.sendQ = callRt.sendQ.then(() => api('POST', `/api/calls/${c.id}/signal`, { type, payload }).catch(() => {}));
+}
+async function flushIce() { for (const c of callRt.ice.splice(0)) { try { await callRt.pc.addIceCandidate(c); } catch { /* ignore */ } } }
+async function handleSignal(sg) {
+  const pc = callRt.pc; if (!pc) return;
+  try {
+    if (sg.type === 'offer') {
+      await pc.setRemoteDescription(JSON.parse(sg.payload)); callRt.remoteSet = true; await flushIce();
+      const ans = await pc.createAnswer(); await pc.setLocalDescription(ans); sendSignal('answer', JSON.stringify(pc.localDescription));
+    } else if (sg.type === 'answer') { await pc.setRemoteDescription(JSON.parse(sg.payload)); callRt.remoteSet = true; await flushIce(); }
+    else if (sg.type === 'ice') { const c = JSON.parse(sg.payload); if (callRt.remoteSet) await pc.addIceCandidate(c).catch(() => {}); else callRt.ice.push(c); }
+  } catch { /* отделен кандидат може да не е валиден */ }
+}
+
+// Звънене от чата (само личен разговор).
+async function startCall(conv, kind) {
+  if (callRt.call) { toast('Вече си в обаждане.', true); return; }
+  if (!conv || !conv.peer) return;
+  const demo = !!(state.meta && state.meta.callsDemo);
+  try {
+    callRt.local = await getMedia(kind, demo);
+    const r = await api('POST', '/api/calls', { conversationId: conv.id, kind });
+    Object.assign(callRt, { call: r.call, demo, after: 0, muted: false, camOff: false, startedAt: 0 });
+    if (!demo) { const pc = makePc(); const offer = await pc.createOffer(); await pc.setLocalDescription(offer); sendSignal('offer', JSON.stringify(pc.localDescription)); }
+    renderCallUI(); startCallPoll();
+  } catch (x) { cleanupCall(); toast(x.message || 'Обаждането не започна.', true); }
+}
+async function acceptCall() {
+  const c = callRt.call; if (!c) return;
+  try {
+    callRt.local = await getMedia(c.kind, callRt.demo);
+    const r = await api('POST', `/api/calls/${c.id}/answer`);
+    callRt.call = { ...c, ...r.call };
+    if (!callRt.demo) makePc();
+    ringtone(false); onActive(); startCallPoll(); updateCallUI();
+  } catch (x) { toast(x.message, true); declineCall(); }
+}
+async function declineCall() {
+  const c = callRt.call; ringtone(false);
+  if (c) { try { await api('POST', `/api/calls/${c.id}/decline`); } catch { /* ignore */ } }
+  cleanupCall();
+}
+async function hangup() {
+  const c = callRt.call;
+  if (c) { try { await api('POST', `/api/calls/${c.id}/end`); } catch { /* ignore */ } }
+  cleanupCall();
+}
+function onActive() { if (!callRt.startedAt) { callRt.startedAt = Date.now(); ringtone(false); clearInterval(callRt.tick); callRt.tick = setInterval(updateCallUI, 1000); } }
+function startCallPoll() { clearInterval(callRt.poll); callRt.poll = setInterval(pollCall, 800); pollCall(); }
+async function pollCall() {
+  const c = callRt.call; if (!c || callRt.busyPoll) return;
+  callRt.busyPoll = true;
+  try {
+    const r = await api('GET', `/api/calls/poll?callId=${c.id}&after=${callRt.after}`);
+    if (!callRt.call || callRt.call.id !== c.id) return;
+    // Сигналите се приемат чак когато има връзка (pc): докато входящото звъни, offer-ът трябва да остане непрочетен.
+    if (callRt.pc) for (const sg of r.signals) { callRt.after = Math.max(callRt.after, sg.id); await handleSignal(sg); }
+    if (r.call) {
+      const was = callRt.call.status; callRt.demo = callRt.demo || !!r.call.demo;
+      callRt.call = { ...callRt.call, ...r.call };
+      if (r.call.status === 'active' && was !== 'active') onActive();
+      if (!['ringing', 'active'].includes(r.call.status)) { finishCall(r.call.status); return; }
+      updateCallUI();
+    }
+  } catch { /* временна грешка в мрежата */ } finally { callRt.busyPoll = false; }
+}
+function finishCall(status) {
+  const c = callRt.call, name = c && c.peer ? c.peer.nickname : 'Събеседникът', mine = c && !c.incoming;
+  const msg = { declined: `${name} отказа обаждането.`, canceled: 'Обаждането е отменено.', missed: mine ? `${name} не вдигна.` : 'Пропуснато обаждане.', ended: callRt.startedAt ? `Обаждането приключи · ${callTimer(Date.now() - callRt.startedAt)}` : 'Обаждането приключи.' }[status];
+  cleanupCall(); if (msg) toast(msg);
+}
+function cleanupCall() {
+  ringtone(false);
+  clearInterval(callRt.poll); clearInterval(callRt.tick);
+  if (callRt.local) callRt.local.getTracks().forEach(t => t.stop());
+  if (callRt.pc) { try { callRt.pc.close(); } catch { /* ignore */ } }
+  if (callRt.ui) { callRt.ui.remove(); }
+  if (callRt.savedTitle) { document.title = callRt.savedTitle; callRt.savedTitle = ''; }
+  Object.assign(callRt, { call: null, pc: null, local: null, remote: null, poll: null, tick: null, ui: null, els: {}, after: 0, startedAt: 0, demo: false, busyPoll: false, ice: [], remoteSet: false, sendQ: Promise.resolve() });
+  document.body.classList.remove('in-call');
+}
+
+// Входящи обаждания: проверяваме на всеки 3 сек., докато няма текущо.
+function startCallWatch() {
+  if (callRt.watch) return;
+  callRt.watch = setInterval(async () => {
+    if (callRt.call || !state.me || !state.me.emailVerified || state.me.role === 'admin' || document.hidden) return;
+    try {
+      const r = await api('GET', '/api/calls/poll');
+      if (callRt.call || !r.call || !r.call.incoming || r.call.status !== 'ringing') return;
+      Object.assign(callRt, { call: r.call, demo: !!r.call.demo, after: 0, muted: false, camOff: false, startedAt: 0 });
+      callRt.savedTitle = document.title; document.title = '📞 Входящо обаждане · Spark';
+      renderCallUI(); ringtone(true); startCallPoll();
+    } catch { /* ignore */ }
+  }, 3000);
+}
+function stopCallWatch() { if (callRt.watch) { clearInterval(callRt.watch); callRt.watch = null; } if (callRt.call) cleanupCall(); }
+
+function attachMedia() {
+  const e = callRt.els; if (!e.remote) return;
+  if (callRt.remote && e.remote.srcObject !== callRt.remote) e.remote.srcObject = callRt.remote;
+  if (callRt.local && e.local && e.local.srcObject !== callRt.local) e.local.srcObject = callRt.local;
+}
+function renderCallUI() {
+  if (callRt.ui) return;
+  const c = callRt.call, video = c.kind === 'video';
+  const remote = h('video', { class: 'cremote', autoplay: true, playsinline: true }), local = h('video', { class: 'clocal', autoplay: true, playsinline: true, muted: true });
+  local.muted = true;
+  const status = h('div', { class: 'cstatus', 'aria-live': 'polite' }), name = h('h2', { class: 'cname', text: c.peer ? c.peer.nickname : 'Обаждане' });
+  const ctl = h('div', { class: 'cctl' }), demoNote = h('p', { class: 'cdemo', hidden: true, text: 'Демо: няма реален събеседник. Връзката е симулирана.' });
+  const stage = h('div', { class: 'cstage' + (video ? ' video' : '') }, remote, h('div', { class: 'cavatar' }, h('img', { src: c.peer ? mainPhoto(c.peer) : '', alt: '', width: '120', height: '120' })), local);
+  callRt.ui = h('div', { class: 'callui', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Обаждане' }, h('div', { class: 'callwin' }, stage, h('div', { class: 'cinfo' }, name, status, demoNote), ctl,
+    h('p', { class: 'chint', text: '🔒 Директна връзка между вас двамата. Събеседникът вижда IP адреса ти.' })));
+  callRt.els = { remote, local, status, ctl, stage, demoNote };
+  document.body.append(callRt.ui); document.body.classList.add('in-call');
+  attachMedia(); updateCallUI();
+}
+function updateCallUI() {
+  const c = callRt.call, e = callRt.els; if (!c || !callRt.ui) return;
+  const incoming = c.incoming && c.status === 'ringing', live = c.status === 'active';
+  const connected = callRt.demo || (callRt.pc && ['connected', 'completed'].includes(callRt.pc.connectionState)) || (callRt.pc && callRt.pc.iceConnectionState === 'connected');
+  e.status.textContent = incoming ? `Входящо ${c.kind === 'video' ? 'видео' : 'гласово'} обаждане…` : !live ? 'Звъни…' : !connected ? 'Свързване…' : callTimer(Date.now() - callRt.startedAt);
+  e.stage.classList.toggle('live', live && connected);
+  e.stage.classList.toggle('ringing', !live);
+  e.demoNote.hidden = !callRt.demo;
+  e.local.hidden = c.kind !== 'video' || !callRt.local || callRt.camOff;
+  clear(e.ctl);
+  const btn = (cls, label, text, fn, pressed) => h('button', { class: `cbtn ${cls}`, type: 'button', 'aria-label': label, title: label, 'aria-pressed': pressed === undefined ? null : String(pressed), onclick: fn }, h('span', { 'aria-hidden': 'true', text }), h('small', { text: label }));
+  if (incoming) e.ctl.append(btn('bad', 'Откажи', '✕', declineCall), btn('good', 'Приеми', c.kind === 'video' ? '🎥' : '📞', acceptCall));
+  else {
+    e.ctl.append(btn('', callRt.muted ? 'Включи микрофона' : 'Заглуши', callRt.muted ? '🔇' : '🎙️', () => { callRt.muted = !callRt.muted; if (callRt.local) callRt.local.getAudioTracks().forEach(t => { t.enabled = !callRt.muted; }); updateCallUI(); }, callRt.muted));
+    if (c.kind === 'video') e.ctl.append(btn('', callRt.camOff ? 'Включи камерата' : 'Изключи камерата', callRt.camOff ? '🚫' : '📷', () => { callRt.camOff = !callRt.camOff; if (callRt.local) callRt.local.getVideoTracks().forEach(t => { t.enabled = !callRt.camOff; }); updateCallUI(); }, callRt.camOff));
+    e.ctl.append(btn('bad', live ? 'Затвори' : 'Откажи', '📞', hangup));
+  }
+}
+
 /* ═══════════ Плаващо кръгче със съобщения ═══════════ */
 const SVG_NS = 'http://www.w3.org/2000/svg';
 function chatIcon() {
@@ -1164,7 +1386,7 @@ function chatIcon() {
   svg.append(path);
   return svg;
 }
-const dockVisible = () => !!state.me && state.me.emailVerified && state.me.role !== 'admin' && currentRoute() !== 'messages';
+const dockVisible = () => !!state.me && state.me.emailVerified && state.me.role !== 'admin' && currentRoute() !== 'messages' && !isMobile();
 
 function syncDock() {
   if (!dockVisible()) {
@@ -1243,6 +1465,7 @@ async function openChat(userId) {
 }
 function openConversation(id) {
   if (currentRoute() === 'messages') { chatWith = id; route(); return; }
+  if (isMobile()) { chatWith = id; location.hash = '#/messages'; return; }   // на телефон разговорът е на цял екран
   syncDock(); dockOpenWith(id);
 }
 
@@ -1276,11 +1499,13 @@ function reportDialog(p, convId) {
 
 function viewMessages() {
   const v = clear($('#view'));
+  v.classList.add('msgview');
+  const thread = on => document.body.classList.toggle('thread-open', !!on);
   const listBox = h('div', { class: 'chatlist', role: 'list' });
   let chats = [];
   const pane = createChatPane({ compact: false,
-    onBack: () => { chatWith = null; layout.classList.remove('open'); renderList(); showEmpty(); },
-    onChanged: (grew, gone) => { if (gone) { chatWith = null; layout.classList.remove('open'); showEmpty(); } loadList(); } });
+    onBack: () => { chatWith = null; layout.classList.remove('open'); thread(false); renderList(); showEmpty(); },
+    onChanged: (grew, gone) => { if (gone) { chatWith = null; layout.classList.remove('open'); thread(false); showEmpty(); } loadList(); } });
   const threadBox = h('section', { class: 'win chatthread', 'aria-label': 'Разговор' });
   const layout = h('div', { class: 'chatlayout' + (chatWith ? ' open' : '') },
     h('aside', { class: 'win chatside', 'aria-label': 'Разговори' },
@@ -1294,7 +1519,7 @@ function viewMessages() {
     clear(threadBox).append(h('div', { class: 'empty-state' }, h('div', { class: 'big', text: '💬' }), h('h3', { text: 'Избери разговор' }), h('p', { text: 'Или започни нов: избери човек и натисни „Пиши“, или създай група.' }),
       h('div', { class: 'actions', style: 'justify-content:center' }, h('a', { class: 'btn', href: '#/discover', text: '＋ Нов чат' }), h('button', { class: 'btn ghost', type: 'button', text: '👥 Нова група', onclick: () => newGroupFlow() }))));
   }
-  function select(id) { chatWith = id; layout.classList.add('open'); clear(threadBox).append(pane.el); pane.open(id); renderList(); }
+  function select(id) { chatWith = id; layout.classList.add('open'); thread(true); clear(threadBox).append(pane.el); pane.open(id); renderList(); }
   function renderList() {
     clear(listBox);
     if (!chats.length) { listBox.append(h('div', { class: 'empty-state', style: 'padding:1.5rem 1rem' }, h('p', { text: 'Още нямаш разговори.' }), h('p', { class: 'dim', text: 'Намери човек в „Открий хора“ и натисни „💬 Пиши“ на неговата карта.' }), h('a', { class: 'btn', href: '#/discover', text: 'Открий хора' }))); return; }
@@ -1302,7 +1527,7 @@ function viewMessages() {
   }
   async function loadList() { try { chats = (await api('GET', '/api/chats')).chats; renderList(); } catch (x) { if (x.status) toast(x.message, true); } }
 
-  if (chatWith) { clear(threadBox).append(pane.el); pane.open(chatWith); } else showEmpty();
+  if (chatWith) { thread(true); clear(threadBox).append(pane.el); pane.open(chatWith); } else showEmpty();
   loadList();
   viewTimer = setInterval(() => { loadList(); if (chatWith) pane.reload(false); }, 5000);
 }
@@ -1723,14 +1948,16 @@ function currentRoute() {
 function route() {
   closeModal();
   stopViewTimer();
+  document.body.classList.remove('thread-open');
+  { const vEl = $('#view'); if (vEl) vEl.className = ''; }
   let r = currentRoute();
   if (!state.me && r !== 'settings') r = '';
   if (r === 'admin' && !(state.me && state.me.role === 'admin')) r = state.me ? 'discover' : '';
   if (r === 'messages' && !(state.me && state.me.role !== 'admin')) r = state.me ? 'discover' : '';
   if (r === 'activity' && !(state.me && state.me.role !== 'admin')) r = state.me ? 'discover' : '';
   // Непотвърден имейл → само екранът за потвърждение (и изход).
-  if (state.me && !state.me.emailVerified) { stopBadges(); renderChrome(); if (state.meta) { viewVerify(); document.title = 'Потвърди имейла · Spark'; } return; }
-  if (state.me) startBadges(); else stopBadges();
+  if (state.me && !state.me.emailVerified) { stopBadges(); stopCallWatch(); renderChrome(); if (state.meta) { viewVerify(); document.title = 'Потвърди имейла · Spark'; } return; }
+  if (state.me) { startBadges(); startCallWatch(); } else { stopBadges(); stopCallWatch(); }
   if (state.me && r === '') { r = 'discover'; history.replaceState(null, '', '#/discover'); }
   renderChrome();
   if (!state.meta) return;
