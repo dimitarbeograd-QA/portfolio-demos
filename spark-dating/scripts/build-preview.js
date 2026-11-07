@@ -47,7 +47,7 @@ const bodyPart = `<div class="bg-orbs" aria-hidden="true"><i></i><i></i><i></i><
 <footer class="foot"><span>© Spark · само за лица над 18 години</span><span class="dim">Профилите с значка „демо“ са примерни.</span></footer>
 <div id="modalRoot"></div>
 <div id="toasts" role="status" aria-live="polite"></div>
-<script>window.__SPARK_PREVIEW__ = ${safe(JSON.stringify({ places: { regions: placesData.regions, obshtini: placesData.obshtini, places: placesData.places }, adminPlaceId: placeIdOf('София'), interests: INTERESTS, people, reportReasons: REPORT_REASONS, sampleReports: SAMPLE_REPORTS, testUser: { ...TEST_USER, placeId: placeIdOf(TEST_USER.city) }, testChats: TEST_CHATS, testGroups: TEST_GROUPS, samplePenalties: SAMPLE_PENALTIES, goals: GOALS, suspendDays: SUSPEND_DAYS, strikeLimit: 3 }))};</script>
+<script>window.__SPARK_PREVIEW__ = ${safe(JSON.stringify({ places: { regions: placesData.regions, obshtini: placesData.obshtini, places: placesData.places }, geo: require('../server/places-geo.json').coords, adminPlaceId: placeIdOf('София'), interests: INTERESTS, people, reportReasons: REPORT_REASONS, sampleReports: SAMPLE_REPORTS, testUser: { ...TEST_USER, placeId: placeIdOf(TEST_USER.city) }, testChats: TEST_CHATS, testGroups: TEST_GROUPS, samplePenalties: SAMPLE_PENALTIES, goals: GOALS, suspendDays: SUSPEND_DAYS, strikeLimit: 3 }))};</script>
 <script>
 ${safe(read('preview/mock-api.js'))}
 </script>

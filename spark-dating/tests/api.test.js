@@ -1166,3 +1166,59 @@ test('обаждане: суспендиран не може да звъни, н
   const meta = (await client()('GET', '/api/meta')).data;
   assert.ok(Array.isArray(meta.iceServers) && meta.iceServers[0].urls);
 });
+
+test('наблизо: радиус, закръглено разстояние, поверителност', async () => {
+  const mk = async place => { const c = client(); const u = (await c('POST', '/api/register', reg({ placeId: pid(place) }))).data.user; return { c, u }; };
+  const me = await mk('Пловдив'), near = await mk('Асеновград'), far = await mk('Варна'), mid = await mk('Карлово');
+  const list = async (c, km, extra = '') => c('GET', `/api/profiles?nearby=${km}&limit=48${extra}`);
+  const r = await list(me.c, 25);
+  assert.equal(r.status, 200);
+  const ids = r.data.profiles.map(p => p.id);
+  assert.ok(ids.includes(near.u.id), 'Асеновград е в 25 км');
+  assert.ok(!ids.includes(far.u.id) && !ids.includes(mid.u.id), 'Варна и Карлово са извън 25 км');
+  const pn = r.data.profiles.find(p => p.id === near.u.id);
+  assert.ok(pn.distanceKm >= 5 && pn.distanceKm <= 30 && pn.distanceKm % 5 === 0, 'разстоянието е закръглено до 5 км');
+  assert.equal((await list(me.c, 100)).data.profiles.some(p => p.id === mid.u.id), true);
+  assert.equal((await list(me.c, 100)).data.profiles.some(p => p.id === far.u.id), false);
+  // подредени по разстояние
+  const ds = (await list(me.c, 100)).data.profiles.map(p => p.distanceKm).filter(x => x !== null);
+  assert.deepEqual(ds, [...ds].sort((x, y) => x - y));
+  assert.equal((await list(me.c, 7)).status, 400);
+  // обикновеният списък също връща разстояние, но без точни координати
+  const all = (await me.c('GET', '/api/profiles?limit=48')).data.profiles.find(p => p.id === near.u.id);
+  assert.ok(all.distanceKm > 0 && !('lat' in all) && !('lng' in all));
+  // скрито разстояние: не се вижда в „наблизо“, няма разстояние, и не може да се търси наблизо
+  await near.c('PUT', '/api/me/settings', { hideDistance: true });
+  assert.ok(!(await list(me.c, 25)).data.profiles.some(p => p.id === near.u.id));
+  assert.equal((await me.c('GET', '/api/profiles?limit=48')).data.profiles.find(p => p.id === near.u.id).distanceKm, null);
+  assert.equal((await list(near.c, 25)).status, 409);
+});
+
+test('местоположение: проверка с GPS и ограничение на смяната на мястото', async () => {
+  const c = client();
+  const u = (await c('POST', '/api/register', reg({ placeId: pid('Пловдив') }))).data.user;
+  assert.equal(u.locVerified, false);
+  // далеч (София) → отказ, нищо не се записва
+  const bad1 = await c('POST', '/api/me/location/verify', { lat: 42.698, lng: 23.324, accuracy: 20 });
+  assert.equal(bad1.status, 409);
+  assert.equal((await c('GET', '/api/me')).data.user.locVerified, false);
+  assert.equal((await c('POST', '/api/me/location/verify', { lat: 'x', lng: 1 })).status, 400);
+  assert.equal((await c('POST', '/api/me/location/verify', { lat: 42.15, lng: 24.75, accuracy: 90000 })).status, 400);
+  // наблизо до Пловдив → потвърдено
+  const ok = await c('POST', '/api/me/location/verify', { lat: 42.16, lng: 24.76, accuracy: 30 });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.data.user.locVerified, true);
+  const row = dbx.prepare('SELECT * FROM users WHERE id = ?').get(u.id);
+  assert.ok(row.loc_verified_at && !Object.keys(row).some(k => /^(lat|lng|latitude|longitude)$/.test(k)), 'координатите не се пазят');
+  // публичният профил показва знака
+  const o = client(); await o('POST', '/api/register', reg());
+  assert.equal((await o('GET', `/api/profiles/${u.id}`)).data.profile.locVerified, true);
+  // смяна на мястото: първата минава, нулира проверката; втората в рамките на 7 дни е отказана
+  const m1 = await c('PUT', '/api/me', { placeId: pid('Варна') });
+  assert.equal(m1.status, 200);
+  assert.equal(m1.data.user.locVerified, false);
+  assert.equal((await c('PUT', '/api/me', { placeId: pid('Бургас') })).status, 429);
+  assert.equal((await c('PUT', '/api/me', { bio: 'ок' })).status, 200);
+  dbx.prepare("UPDATE users SET place_changed_at = datetime('now', '-8 days') WHERE id = ?").run(u.id);
+  assert.equal((await c('PUT', '/api/me', { placeId: pid('Бургас') })).status, 200);
+});

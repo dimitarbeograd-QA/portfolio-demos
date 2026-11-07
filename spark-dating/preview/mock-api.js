@@ -10,6 +10,11 @@
   const REGION_NAME = new Map(REGIONS.map(r => [r.code, r.name]));
   const PLACES = D.places.places.map(([id, kind, name, region, ob]) => ({ id, kind, name, region, obshtina: D.places.obshtini[ob] || '', label: kind === 'гр.' ? name : `${kind} ${name}`, key: name.toLowerCase() }));
   const BY_ID = new Map(PLACES.map(p => [p.id, p]));
+  // ── Наблизо: същата логика като на сървъра (центрове на населените места от GeoNames, CC BY 4.0) ──
+  const GEO = D.geo || {};
+  const dKm = (a, b) => { if (!a || !b) return null; const r = x => x * Math.PI / 180, h = Math.sin(r(b[0] - a[0]) / 2) ** 2 + Math.cos(r(a[0])) * Math.cos(r(b[0])) * Math.sin(r(b[1] - a[1]) / 2) ** 2; return 12742 * Math.asin(Math.sqrt(h)); };
+  const bucket = km => (km === null ? null : km < 5 ? 5 : km < 50 ? Math.round(km / 5) * 5 : Math.round(km / 10) * 10);
+  const locOk = u => !!u.locAt && Date.now() - u.locAt < 30 * 864e5;
   const BY_REGION = new Map(REGIONS.map(r => [r.code, PLACES.filter(p => p.region === r.code)]));
   const describe = p => ({ id: p.id, label: p.label, kind: p.kind, name: p.name, obshtina: p.obshtina, region: p.region, regionName: REGION_NAME.get(p.region) });
   const placeFields = u => { const p = BY_ID.get(u.placeId); return p ? { city: p.label, placeId: p.id, region: p.region, regionName: REGION_NAME.get(p.region), obshtina: p.obshtina } : { city: u.city || '', placeId: '', region: '', regionName: '', obshtina: '' }; };
@@ -75,10 +80,12 @@
       bio: u.bio, goal: u.goal || '', goalLabel: GOALS[u.goal] || '', interests: [...u.interests].sort(), photos: u.photos.map(p => ({ id: p.id, url: p.url })), isDemo: !!u.isDemo,
       online: u.isDemo ? u.lastMin < 5 : true, liked: db.likes.some(l => l.from === viewer && l.to === u.id),
       likedMe: db.likes.some(l => l.from === u.id && l.to === viewer), likes, isMe: u.id === viewer,
+      distanceKm: (() => { const v = all().find(x => x.id === viewer); return u.id === viewer || u.hideDistance || !v || v.hideDistance ? null : bucket(dKm(GEO[v.placeId], GEO[u.placeId])); })(),
+      locVerified: locOk(u),
     };
   }
   const full = u => ({ ...pub(u, u.id), username: u.username, birthDate: u.birthDate, theme: u.theme || null, role: u.role || 'user',
-    email: u.email || '', emailMasked: maskEmail(u.email), emailVerified: isVerified(u), paused: !!u.paused, hideVisits: !!u.hideVisits,
+    email: u.email || '', emailMasked: maskEmail(u.email), emailVerified: isVerified(u), paused: !!u.paused, hideVisits: !!u.hideVisits, hideDistance: !!u.hideDistance, placeChangeAt: u.placeChangedAt ? new Date(u.placeChangedAt + 7 * 864e5).toISOString() : null,
     suspension: penView(activeSusp(u.id)), warning: penView(db.penalties.filter(p => p.userId === u.id && p.kind === 'warning' && !p.ackedAt && !p.liftedAt).sort((a, b) => b.id - a.id)[0]),
     completeness: completeness(u) });
 
@@ -182,13 +189,13 @@
     }
     if (['male', 'female', 'other'].includes(b.gender)) me.gender = b.gender;
     if (['male', 'female', 'any'].includes(b.lookingFor)) me.lookingFor = b.lookingFor;
-    if (b.placeId !== undefined) { if (!BY_ID.has(String(b.placeId))) return bad('Изберете област и населено място от списъка.'); me.placeId = String(b.placeId); }
+    if (b.placeId !== undefined) { if (!BY_ID.has(String(b.placeId))) return bad('Изберете област и населено място от списъка.'); if (String(b.placeId) !== me.placeId) { if (me.placeChangedAt && Date.now() - me.placeChangedAt < 7 * 864e5) return bad('Населеното място може да се сменя веднъж на 7 дни.', 429); me.placeId = String(b.placeId); me.placeChangedAt = Date.now(); me.locAt = null; } }
     if (b.goal !== undefined) { if (b.goal !== '' && !GOALS[b.goal]) return bad('Невалидна стойност за „Какво търся“.'); me.goal = b.goal; }
     if (b.bio !== undefined) { if (String(b.bio).length > 600) return bad('Биото може да е до 600 символа.'); me.bio = String(b.bio).trim(); }
     if (Array.isArray(b.interests)) me.interests = [...new Set(b.interests.filter(x => D.interests.includes(x)))].slice(0, 8);
     save(); return ok({ user: full(me) });
   }));
-  route('PUT', /^\/api\/me\/settings$/, authed(({ body: b, me }) => { if (b.paused !== undefined) me.paused = !!b.paused; if (b.hideVisits !== undefined) me.hideVisits = !!b.hideVisits; save(); return ok({ user: full(me) }); }));
+  route('PUT', /^\/api\/me\/settings$/, authed(({ body: b, me }) => { if (b.paused !== undefined) me.paused = !!b.paused; if (b.hideVisits !== undefined) me.hideVisits = !!b.hideVisits; if (b.hideDistance !== undefined) me.hideDistance = !!b.hideDistance; save(); return ok({ user: full(me) }); }));
   route('PUT', /^\/api\/me\/password$/, sessionOnly(({ body: b, me }) => {
     if (me.pw !== hash(String(b.current || ''))) return bad('Текущата парола е грешна.', 403);
     if (String(b.next || '').length < 8) return bad('Новата парола трябва да е 8–72 символа.');
@@ -214,11 +221,28 @@
     me.photos.unshift(me.photos.splice(i, 1)[0]); save(); return ok({ user: full(me) });
   }));
 
+  route('POST', /^\/api\/me\/location\/verify$/, active(({ body: b, me }) => {
+    const lat = Number(b.lat), lng = Number(b.lng), acc = Number(b.accuracy);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return bad('Невалидно местоположение.');
+    if (Number.isFinite(acc) && acc > 5000) return bad('Сигналът е твърде неточен. Опитайте на открито или с включен GPS.');
+    const km = dKm([lat, lng], GEO[me.placeId]);
+    if (km === null) return bad('Няма координати за избраното населено място.');
+    if (km > 30) return bad(`Изглежда си на около ${Math.round(km / 5) * 5} км от избраното населено място. Сменете мястото в профила или опитайте отново от там.`, 409);
+    me.locAt = Date.now(); save(); return ok({ user: full(me) });
+  }));
   route('GET', /^\/api\/profiles$/, authed(({ q, me }) => {
     let list = people().filter(u => u.id !== me.id && !blocked(u.id, me.id) && visible(u));
+    let near = null;
+    if (q.get('nearby')) {
+      const km = Number(q.get('nearby'));
+      if (![10, 25, 50, 100, 200].includes(km)) return bad('Невалиден радиус.');
+      if (me.hideDistance) return bad('Търсенето „Наблизо“ е изключено, защото си скрил разстоянието си (Дизайн и настройки → Поверителност).', 409);
+      near = new Map(); for (const pl of PLACES) { const d = dKm(GEO[me.placeId], GEO[pl.id]); if (d !== null && d <= km) near.set(pl.id, d); }
+      list = list.filter(u => !u.hideDistance && near.has(u.placeId));
+    }
     if (q.get('goal')) { if (!GOALS[q.get('goal')]) return bad('Непозната цел.'); list = list.filter(u => u.goal === q.get('goal')); }
-    if (q.get('region')) { if (!REGION_NAME.has(q.get('region'))) return bad('Непозната област.'); list = list.filter(u => (BY_ID.get(u.placeId) || {}).region === q.get('region')); }
-    if (q.get('place')) { if (!BY_ID.has(q.get('place'))) return bad('Непознато населено място.'); list = list.filter(u => u.placeId === q.get('place')); }
+    if (q.get('region') && !near) { if (!REGION_NAME.has(q.get('region'))) return bad('Непозната област.'); list = list.filter(u => (BY_ID.get(u.placeId) || {}).region === q.get('region')); }
+    if (q.get('place') && !near) { if (!BY_ID.has(q.get('place'))) return bad('Непознато населено място.'); list = list.filter(u => u.placeId === q.get('place')); }
     if (q.get('gender')) list = list.filter(u => u.gender === q.get('gender'));
     const age = u => (u.isDemo ? u.age : ageFrom(u.birthDate));
     if (q.get('ageMin')) list = list.filter(u => age(u) >= Number(q.get('ageMin')));
@@ -229,7 +253,8 @@
     const ints = q.getAll('interest'); if (ints.length) list = list.filter(u => u.interests.some(i => ints.includes(i)));
     const term = (q.get('q') || '').trim().toLowerCase(); if (term) list = list.filter(u => u.nickname.toLowerCase().includes(term));
     const sorts = { active: (a, b) => (a.lastMin ?? 0) - (b.lastMin ?? 0), new: (a, b) => b.created - a.created, young: (a, b) => age(a) - age(b), old: (a, b) => age(b) - age(a) };
-    list.sort(sorts[q.get('sort')] || sorts.active);
+    sorts.nearest = (a, b) => near.get(a.placeId) - near.get(b.placeId);
+    list.sort(near && (!q.get('sort') || q.get('sort') === 'nearest') ? sorts.nearest : (sorts[q.get('sort')] || sorts.active));
     const limit = Math.min(48, Number(q.get('limit')) || 12), offset = Number(q.get('offset')) || 0;
     return ok({ total: list.length, offset, profiles: list.slice(offset, offset + limit).map(u => pub(u, me.id)) });
   }));

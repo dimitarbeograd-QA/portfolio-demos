@@ -533,3 +533,9 @@ button[aria-pressed=true].btn:not(.ghost) { animation: likepop .35s var(--ease);
 .vcap:empty { display: none; }
 @media (max-width: 700px) { .vnav { display: none; } .vimg { cursor: default; } }
 .viewer [hidden] { display: none !important; }
+
+/* Хора наблизо */
+.nearbtn { white-space: nowrap; } .fgroup.nearby { padding: .6rem; border: var(--bw) dashed var(--border); border-radius: 12px; background: var(--faint); }
+.locbox { display: grid; gap: .4rem; justify-items: start; margin: .5rem 0; padding: .7rem; border: var(--bw) dashed var(--border); border-radius: 12px; }
+.locbox p { margin: 0; }
+[hidden] { display: none !important; }

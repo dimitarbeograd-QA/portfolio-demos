@@ -1,5 +1,6 @@
 // Области и населени места (ЕКАТТЕ на НСИ). Данните са в places.json (виж scripts/build-places.js).
 const data = require('./places.json');
+const GEO = require('./places-geo.json').coords; // { id: [lat, lng] } – центрове на населените места (GeoNames, CC BY 4.0)
 
 const REGIONS = data.regions; // [{ code, name }]
 const REGION_BY_CODE = new Map(REGIONS.map(r => [r.code, r]));
@@ -37,4 +38,34 @@ function findPlace(name, { region, kind } = {}) {
   return hits.find(p => p.kind === 'гр.') || hits[0] || null;
 }
 
-module.exports = { REGIONS, REGION_BY_CODE, PLACES, BY_ID, BY_REGION, describe, search, findPlace };
+// Най-близкото населено място до точка (за проверка на местоположението).
+function nearestPlace(lat, lng) {
+  let best = null, bd = Infinity;
+  for (const p of PLACES) { const d = distanceKm([lat, lng], GEO[p.id]); if (d !== null && d < bd) { bd = d; best = p; } }
+  return best ? { place: best, km: bd } : null;
+}
+const coordsOf = id => GEO[id] || null;
+// Разстояние по въздушна линия в км (хаверсинус).
+function distanceKm(a, b) {
+  if (!a || !b) return null;
+  const R = 6371, rad = x => x * Math.PI / 180;
+  const dLat = rad(b[0] - a[0]), dLng = rad(b[1] - a[1]);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+// Грубо закръглява разстоянието, за да не може да се определи точно къде живее човек.
+function distanceBucket(km) {
+  if (km === null || km === undefined) return null;
+  if (km < 5) return 5;            // „до 5 км“
+  if (km < 50) return Math.round(km / 5) * 5;
+  return Math.round(km / 10) * 10;
+}
+// Ид-та на всички населени места в радиус от дадено място (с разстоянията им).
+function within(placeId, radiusKm) {
+  const c = coordsOf(placeId), out = new Map();
+  if (!c) return out;
+  for (const p of PLACES) { const d = distanceKm(c, GEO[p.id]); if (d !== null && d <= radiusKm) out.set(p.id, d); }
+  return out;
+}
+
+module.exports = { coordsOf, distanceKm, distanceBucket, within, nearestPlace, REGIONS, REGION_BY_CODE, PLACES, BY_ID, BY_REGION, describe, search, findPlace };

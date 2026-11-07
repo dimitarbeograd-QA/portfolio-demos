@@ -118,6 +118,8 @@ function placeFields(r) {
     ? { city: d.label, placeId: d.id, region: d.region, regionName: d.regionName, obshtina: d.obshtina }
     : { city: r.city, placeId: '', region: '', regionName: '', obshtina: '' };
 }
+const LOC_VERIFY_DAYS = 30, LOC_VERIFY_KM = 30, PLACE_CHANGE_DAYS = 7;
+const locVerified = r => !!r.loc_verified_at && Date.now() - Date.parse(r.loc_verified_at.replace(' ', 'T') + 'Z') < LOC_VERIFY_DAYS * 864e5;
 function publicProfiles(rows, viewerId) {
   const ids = rows.map(r => r.id);
   const photos = photosOf(ids);
@@ -140,6 +142,8 @@ function publicProfiles(rows, viewerId) {
           .all(...ids).map(r => [r.to_id, r.c])
       : []
   );
+  const vrow = db.prepare('SELECT place_id, hide_distance FROM users WHERE id = ?').get(viewerId) || {};
+  const vc = vrow.hide_distance ? null : places.coordsOf(vrow.place_id);
   return rows.map(r => ({
     id: r.id,
     nickname: r.nickname,
@@ -158,6 +162,9 @@ function publicProfiles(rows, viewerId) {
     likedMe: likedMe.has(r.id),
     likes: counts.get(r.id) || 0,
     isMe: r.id === viewerId,
+    // Разстоянието е между центровете на населените места и е закръглено; скрито е, ако някой от двамата е изключил това.
+    distanceKm: r.id === viewerId || r.hide_distance || !vc ? null : places.distanceBucket(places.distanceKm(vc, places.coordsOf(r.place_id))),
+    locVerified: locVerified(r),
   }));
 }
 const penaltyView = p => !p ? null : ({ id: p.id, kind: p.kind, reason: p.reason, days: p.days, at: iso(p.created_at), until: p.ends_at ? iso(p.ends_at) : null,
@@ -185,7 +192,8 @@ function meOf(id) {
   const warn = db.prepare("SELECT * FROM penalties WHERE user_id = ? AND kind = 'warning' AND acked_at IS NULL AND lifted_at IS NULL ORDER BY id DESC LIMIT 1").get(id);
   return { ...p, username: r.username, birthDate: r.birth_date, theme, role: r.role,
     email: r.email || '', emailMasked: emailutil.maskEmail(r.email), emailVerified: !!r.email_verified_at,
-    paused: !!r.paused, hideVisits: !!r.hide_visits,
+    paused: !!r.paused, hideVisits: !!r.hide_visits, hideDistance: !!r.hide_distance,
+    placeChangeAt: r.place_changed_at ? new Date(Date.parse(r.place_changed_at.replace(' ', 'T') + 'Z') + PLACE_CHANGE_DAYS * 864e5).toISOString() : null,
     suspension: penaltyView(susp), warning: penaltyView(warn),
     completeness: completenessOf(r, p.photos.length, p.interests.length) };
 }
@@ -438,6 +446,7 @@ app.put('/api/me', requireActive, wrap((req, res) => {
   const id = req.session.userId;
   const cur = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   const next = { ...cur };
+  let placeChanged = false;
 
   if (b.nickname !== undefined) {
     const nick = String(b.nickname).trim().replace(/\s+/g, ' ');
@@ -457,7 +466,12 @@ app.put('/api/me', requireActive, wrap((req, res) => {
   if (b.placeId !== undefined) {
     const place = places.BY_ID.get(String(b.placeId));
     if (!place) return bad(res, 'Изберете област и населено място от списъка.');
-    next.city = place.label; next.place_id = place.id; next.region = place.region;
+    if (place.id !== cur.place_id) {
+      // Смяната на населеното място е ограничена (веднъж на 7 дни), за да не се „скача“ между градове и да се следи човек.
+      if (cur.place_changed_at && Date.now() - Date.parse(cur.place_changed_at.replace(' ', 'T') + 'Z') < PLACE_CHANGE_DAYS * 864e5)
+        return bad(res, `Населеното място може да се сменя веднъж на ${PLACE_CHANGE_DAYS} дни.`, 429);
+      next.city = place.label; next.place_id = place.id; next.region = place.region; placeChanged = true;
+    }
   }
   if (b.goal !== undefined) {
     if (b.goal !== '' && !GOALS[b.goal]) return bad(res, 'Невалидна стойност за „Какво търся“.');
@@ -471,6 +485,7 @@ app.put('/api/me', requireActive, wrap((req, res) => {
   db.transaction(() => {
     db.prepare('UPDATE users SET nickname=?, nickname_key=?, gender=?, looking_for=?, city=?, place_id=?, region=?, bio=?, goal=? WHERE id=?')
       .run(next.nickname, nickKey(next.nickname), next.gender, next.looking_for, next.city, next.place_id, next.region, next.bio, next.goal, id);
+    if (placeChanged) db.prepare("UPDATE users SET place_changed_at = datetime('now'), loc_verified_at = NULL WHERE id = ?").run(id);
     if (b.interests !== undefined) {
       db.prepare('DELETE FROM user_interests WHERE user_id = ?').run(id);
       const ins = db.prepare('INSERT INTO user_interests (user_id, interest) VALUES (?, ?)');
@@ -484,6 +499,27 @@ app.put('/api/me/settings', requireAuth, wrap((req, res) => {
   const b = req.body || {}, id = req.session.userId;
   if (b.paused !== undefined) db.prepare('UPDATE users SET paused = ? WHERE id = ?').run(b.paused ? 1 : 0, id);
   if (b.hideVisits !== undefined) db.prepare('UPDATE users SET hide_visits = ? WHERE id = ?').run(b.hideVisits ? 1 : 0, id);
+  if (b.hideDistance !== undefined) db.prepare('UPDATE users SET hide_distance = ? WHERE id = ?').run(b.hideDistance ? 1 : 0, id);
+  res.json({ user: meOf(id) });
+}));
+
+// Проверка на местоположението: браузърът праща GPS координати, сървърът ги сравнява с избраното населено място
+// и ги ИЗХВЪРЛЯ – пази се само дали проверката е минала и кога. Не е доказателство (GPS може да се имитира), а възпиращ знак.
+app.post('/api/me/location/verify', requireActive, wrap((req, res) => {
+  const id = req.session.userId, key = 'loc:' + id;
+  if (tooMany(key)) return bad(res, 'Твърде много опити. Опитайте по-късно.', 429);
+  const lat = Number(req.body && req.body.lat), lng = Number(req.body && req.body.lng), acc = Number(req.body && req.body.accuracy);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return bad(res, 'Невалидно местоположение.');
+  if (Number.isFinite(acc) && acc > 5000) return bad(res, 'Сигналът е твърде неточен. Опитайте на открито или с включен GPS.');
+  const me = db.prepare('SELECT place_id FROM users WHERE id = ?').get(id);
+  const home = places.coordsOf(me.place_id);
+  if (!home) return bad(res, 'Няма координати за избраното населено място.');
+  const km = places.distanceKm([lat, lng], home);
+  if (km > LOC_VERIFY_KM) {
+    noteFail(key);
+    return bad(res, `Изглежда си на около ${Math.round(km / 5) * 5} км от избраното населено място. Сменете мястото в профила или опитайте отново от там.`, 409);
+  }
+  db.prepare("UPDATE users SET loc_verified_at = datetime('now') WHERE id = ?").run(id);
   res.json({ user: meOf(id) });
 }));
 
@@ -584,6 +620,7 @@ app.put('/api/me/photos/:pid/main', requireActive, wrap((req, res) => {
 }));
 
 // ── Разглеждане на хора ──
+const NEARBY_KM = [10, 25, 50, 100, 200];
 const SORTS = {
   active: 'u.last_seen DESC, u.id DESC',
   new: 'u.id DESC',
@@ -631,9 +668,26 @@ app.get('/api/profiles', requireAuth, wrap((req, res) => {
     const term = nickKey(String(q.q).trim().slice(0, 30)).replace(/[\\%_]/g, c => '\\' + c);
     if (term) { where.push("u.nickname_key LIKE ? ESCAPE '\\'"); args.push('%' + term + '%'); }
   }
-  const order = SORTS[q.sort] || SORTS.active;
   const limit = Math.min(48, Math.max(1, parseInt(q.limit, 10) || 12));
   const offset = Math.max(0, parseInt(q.offset, 10) || 0);
+
+  // „Хора наблизо“: радиус около собственото населено място, независимо от кое място са се регистрирали.
+  // Включени са само хора, които не са скрили разстоянието си; и този, който го е скрил, не може да търси наблизо.
+  if (q.nearby) {
+    const radius = parseInt(q.nearby, 10);
+    if (!NEARBY_KM.includes(radius)) return bad(res, 'Невалиден радиус.');
+    const me = db.prepare('SELECT place_id, hide_distance FROM users WHERE id = ?').get(req.session.userId);
+    if (me.hide_distance) return bad(res, 'Търсенето „Наблизо“ е изключено, защото си скрил разстоянието си (Дизайн и настройки → Поверителност).', 409);
+    const near = places.within(me.place_id, radius);
+    if (!near.size) return bad(res, 'Няма координати за твоето населено място.');
+    where.push('u.hide_distance = 0', `u.place_id IN (${[...near.keys()].map(() => '?').join(',')})`);
+    args.push(...near.keys());
+    // Подрежда се по разстояние (при равни – по последна активност); при други подреждания – както е избрано.
+    const all = db.prepare(`SELECT u.* FROM users u WHERE ${where.join(' AND ')} ORDER BY u.last_seen DESC, u.id DESC`).all(...args);
+    if (!q.sort || q.sort === 'nearest') all.sort((x, y) => near.get(x.place_id) - near.get(y.place_id));
+    return res.json({ total: all.length, offset, profiles: publicProfiles(all.slice(offset, offset + limit), req.session.userId) });
+  }
+  const order = SORTS[q.sort] || SORTS.active;
   const sqlWhere = 'WHERE ' + where.join(' AND ');
 
   const total = db.prepare(`SELECT COUNT(*) c FROM users u ${sqlWhere}`).get(...args).c;

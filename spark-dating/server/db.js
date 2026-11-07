@@ -283,6 +283,9 @@ for (const [col, ddl] of [
   ['paused', 'ALTER TABLE users ADD COLUMN paused INTEGER NOT NULL DEFAULT 0'],
   ['hide_visits', 'ALTER TABLE users ADD COLUMN hide_visits INTEGER NOT NULL DEFAULT 0'],
   ['goal', "ALTER TABLE users ADD COLUMN goal TEXT NOT NULL DEFAULT ''"],
+  ['hide_distance', 'ALTER TABLE users ADD COLUMN hide_distance INTEGER NOT NULL DEFAULT 0'],
+  ['loc_verified_at', 'ALTER TABLE users ADD COLUMN loc_verified_at TEXT'],
+  ['place_changed_at', 'ALTER TABLE users ADD COLUMN place_changed_at TEXT'],
 ]) {
   if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === col)) {
     db.exec(ddl);
