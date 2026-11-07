@@ -1167,31 +1167,52 @@ test('обаждане: суспендиран не може да звъни, н
   assert.ok(Array.isArray(meta.iceServers) && meta.iceServers[0].urls);
 });
 
-test('наблизо: радиус, закръглено разстояние, поверителност', async () => {
+test('наблизо: разстоянието между населените места е закръглено и може да се скрие', async () => {
   const mk = async place => { const c = client(); const u = (await c('POST', '/api/register', reg({ placeId: pid(place) }))).data.user; return { c, u }; };
-  const me = await mk('Пловдив'), near = await mk('Асеновград'), far = await mk('Варна'), mid = await mk('Карлово');
-  const list = async (c, km, extra = '') => c('GET', `/api/profiles?nearby=${km}&limit=48${extra}`);
-  const r = await list(me.c, 25);
-  assert.equal(r.status, 200);
-  const ids = r.data.profiles.map(p => p.id);
-  assert.ok(ids.includes(near.u.id), 'Асеновград е в 25 км');
-  assert.ok(!ids.includes(far.u.id) && !ids.includes(mid.u.id), 'Варна и Карлово са извън 25 км');
-  const pn = r.data.profiles.find(p => p.id === near.u.id);
-  assert.ok(pn.distanceKm >= 5 && pn.distanceKm <= 30 && pn.distanceKm % 5 === 0, 'разстоянието е закръглено до 5 км');
-  assert.equal((await list(me.c, 100)).data.profiles.some(p => p.id === mid.u.id), true);
-  assert.equal((await list(me.c, 100)).data.profiles.some(p => p.id === far.u.id), false);
-  // подредени по разстояние
-  const ds = (await list(me.c, 100)).data.profiles.map(p => p.distanceKm).filter(x => x !== null);
-  assert.deepEqual(ds, [...ds].sort((x, y) => x - y));
-  assert.equal((await list(me.c, 7)).status, 400);
-  // обикновеният списък също връща разстояние, но без точни координати
-  const all = (await me.c('GET', '/api/profiles?limit=48')).data.profiles.find(p => p.id === near.u.id);
-  assert.ok(all.distanceKm > 0 && !('lat' in all) && !('lng' in all));
-  // скрито разстояние: не се вижда в „наблизо“, няма разстояние, и не може да се търси наблизо
+  const me = await mk('Пловдив'), near = await mk('Асеновград'), far = await mk('Варна');
+  const get = async who => (await me.c('GET', '/api/profiles?limit=48')).data.profiles.find(p => p.id === who.u.id);
+  const pn = await get(near), pf = await get(far);
+  assert.ok(pn.distanceKm >= 5 && pn.distanceKm % 5 === 0 && !('lat' in pn));
+  assert.ok(pf.distanceKm > 200);
   await near.c('PUT', '/api/me/settings', { hideDistance: true });
-  assert.ok(!(await list(me.c, 25)).data.profiles.some(p => p.id === near.u.id));
-  assert.equal((await me.c('GET', '/api/profiles?limit=48')).data.profiles.find(p => p.id === near.u.id).distanceKm, null);
-  assert.equal((await list(near.c, 25)).status, 409);
+  assert.equal((await get(near)).distanceKm, null);
+});
+
+test('на живо: доброволно, грубо разстояние, взаимност, спиране', async () => {
+  const mk = async () => { const c = client(); const u = (await c('POST', '/api/register', reg())).data.user; return { c, u }; };
+  const a = await mk(), b = await mk(), c3 = await mk();
+  const put = (w, lat, lng, accuracy = 20) => w.c('PUT', '/api/live', { lat, lng, accuracy });
+  // без включено собствено споделяне не виждаш никого
+  assert.equal((await a.c('GET', '/api/live/nearby')).status, 409);
+  assert.equal((await put(a, 91, 0)).status, 400);
+  assert.equal((await put(a, 42.15, 24.75, 900)).status, 400, 'твърде неточен сигнал');
+  assert.equal((await put(a, 42.1500, 24.7500)).data.active, true);
+  // b още не споделя – a вижда празен списък, b не вижда a
+  assert.equal((await a.c('GET', '/api/live/nearby')).data.total, 0);
+  assert.equal((await b.c('GET', '/api/live/nearby')).status, 409);
+  // b споделя ~400 м встрани
+  assert.equal((await put(b, 42.1536, 24.7500)).status, 200);
+  await new Promise(r => setTimeout(r, 2600));
+  const r1 = await a.c('GET', '/api/live/nearby');
+  assert.equal(r1.status, 200);
+  const pb = r1.data.profiles.find(p => p.id === b.u.id);
+  assert.ok(pb && pb.liveM === 500, 'около 400 м → „до 500 м“, получено ' + (pb && pb.liveM));
+  assert.ok(!('lat' in pb) && !('lng' in pb) && !('llat' in pb), 'координати не се връщат');
+  assert.ok(!r1.data.profiles.some(p => p.id === c3.u.id), 'който не споделя, не се вижда');
+  // блокиране го скрива
+  await a.c('POST', `/api/profiles/${b.u.id}/report`, { reason: 'harassment', block: true });
+  await new Promise(r => setTimeout(r, 2600));
+  assert.equal((await a.c('GET', '/api/live/nearby')).data.profiles.some(p => p.id === b.u.id), false);
+  // невъзможен скок се отхвърля (София → Варна за секунди)
+  dbx.prepare("UPDATE live_locations SET updated_at = datetime('now', '-10 seconds') WHERE user_id = ?").run(b.u.id);
+  assert.equal((await put(b, 43.2141, 27.9147)).status, 422);
+  // спиране изтрива позицията
+  assert.equal((await b.c('DELETE', '/api/live')).data.active, false);
+  assert.equal(dbx.prepare('SELECT COUNT(*) c FROM live_locations WHERE user_id = ?').get(b.u.id).c, 0);
+  // изтекла сесия (над 3 часа) спира сама
+  dbx.prepare("UPDATE live_locations SET started_at = datetime('now', '-4 hours') WHERE user_id = ?").run(a.u.id);
+  assert.equal((await put(a, 42.15, 24.75)).data.expired, true);
+  assert.equal(dbx.prepare('SELECT COUNT(*) c FROM live_locations WHERE user_id = ?').get(a.u.id).c, 0);
 });
 
 test('местоположение: проверка с GPS и ограничение на смяната на мястото', async () => {

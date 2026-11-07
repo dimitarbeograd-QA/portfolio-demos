@@ -85,7 +85,7 @@
     };
   }
   const full = u => ({ ...pub(u, u.id), username: u.username, birthDate: u.birthDate, theme: u.theme || null, role: u.role || 'user',
-    email: u.email || '', emailMasked: maskEmail(u.email), emailVerified: isVerified(u), paused: !!u.paused, hideVisits: !!u.hideVisits, hideDistance: !!u.hideDistance, placeChangeAt: u.placeChangedAt ? new Date(u.placeChangedAt + 7 * 864e5).toISOString() : null,
+    email: u.email || '', emailMasked: maskEmail(u.email), emailVerified: isVerified(u), paused: !!u.paused, hideVisits: !!u.hideVisits, hideDistance: !!u.hideDistance, live: liveSt(u), placeChangeAt: u.placeChangedAt ? new Date(u.placeChangedAt + 7 * 864e5).toISOString() : null,
     suspension: penView(activeSusp(u.id)), warning: penView(db.penalties.filter(p => p.userId === u.id && p.kind === 'warning' && !p.ackedAt && !p.liftedAt).sort((a, b) => b.id - a.id)[0]),
     completeness: completeness(u) });
 
@@ -94,7 +94,7 @@
 
   route('GET', /^\/api\/meta$/, () => ok({
     regions: REGIONS.map(r => ({ code: r.code, name: r.name, count: people().filter(u => visible(u) && u.placeId && BY_ID.get(u.placeId).region === r.code).length })),
-    interests: D.interests, minAge: MIN_AGE, maxPhotos: MAX_PHOTOS, total: people().filter(visible).length, demoAdmin: true, goals: GOALS, mailDev: true, callsDemo: true, iceServers: [], reportReasons: D.reportReasons,
+    interests: D.interests, minAge: MIN_AGE, maxPhotos: MAX_PHOTOS, total: people().filter(visible).length, demoAdmin: true, goals: GOALS, mailDev: true, callsDemo: true, liveDemo: true, iceServers: [], reportReasons: D.reportReasons,
   }));
   route('GET', /^\/api\/places$/, ({ q }) => {
     const region = q.get('region') || ''; if (!REGION_NAME.has(region)) return bad('Изберете област.');
@@ -221,6 +221,33 @@
     me.photos.unshift(me.photos.splice(i, 1)[0]); save(); return ok({ user: full(me) });
   }));
 
+  // ── На живо (демо): позицията е само в паметта; няколко демо профила „се движат“, за да се вижда обновяването ──
+  const LIVE = {}, LIVE_MAX = 3 * 3600e3;
+  const liveSt = u => { const l = LIVE[u.id]; return l && Date.now() - l.started < LIVE_MAX ? { active: true, startedAt: new Date(l.started).toISOString(), expiresAt: new Date(l.started + LIVE_MAX).toISOString() } : { active: false }; };
+  const liveBucket = m => (m < 300 ? 300 : m < 500 ? 500 : m < 1000 ? 1000 : m < 10000 ? Math.ceil(m / 1000) * 1000 : m < 50000 ? Math.round(m / 5000) * 5000 : Math.round(m / 10000) * 10000);
+  const DEMO_LIVE = [[0, 180, 0], [1, 420, 1.3], [2, 900, 2.1], [3, 1600, 3.4], [4, 3500, 4.2], [5, 12000, 5.5]];
+  route('GET', /^\/api\/live$/, authed(({ me }) => ok(liveSt(me))));
+  route('PUT', /^\/api\/live$/, active(({ body: b, me }) => {
+    if (me.role === 'admin') return bad('Администраторският профил не споделя местоположение.', 403);
+    if (!b.demo) {
+      const lat = Number(b.lat), lng = Number(b.lng), acc = Number(b.accuracy);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return bad('Невалидно местоположение.');
+      if (Number.isFinite(acc) && acc > 500) return bad('Сигналът е твърде неточен (над 500 м). Излез на открито или включи GPS.');
+    }
+    const cur = LIVE[me.id];
+    if (cur && Date.now() - cur.started >= LIVE_MAX) { delete LIVE[me.id]; return ok({ active: false, expired: true }); }
+    LIVE[me.id] = { started: cur ? cur.started : Date.now(), at: Date.now() };
+    return ok(liveSt(me));
+  }));
+  route('DELETE', /^\/api\/live$/, authed(({ me }) => { delete LIVE[me.id]; return ok({ active: false }); }));
+  route('GET', /^\/api\/live\/nearby$/, active(({ me }) => {
+    if (!liveSt(me).active) return bad('Включи местоположението си на живо, за да видиш кой е наблизо.', 409);
+    const pool = people().filter(u => u.isDemo && u.id !== me.id && !blocked(u.id, me.id) && visible(u));
+    const t = Date.now() / 1000, out = [];
+    DEMO_LIVE.forEach(([i, d, ph]) => { const u = pool[i]; if (!u) return; const m = d * (1 + .4 * Math.sin(t / 25 + ph)); out.push({ u, m }); });
+    out.sort((a, b) => a.m - b.m);
+    return ok({ total: out.length, profiles: out.map(x => ({ ...pub(x.u, me.id), liveM: liveBucket(x.m), liveAgo: 3 + Math.round(Math.abs(Math.sin(t + x.m)) * 12) })) });
+  }));
   route('POST', /^\/api\/me\/location\/verify$/, active(({ body: b, me }) => {
     const lat = Number(b.lat), lng = Number(b.lng), acc = Number(b.accuracy);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return bad('Невалидно местоположение.');
@@ -232,17 +259,9 @@
   }));
   route('GET', /^\/api\/profiles$/, authed(({ q, me }) => {
     let list = people().filter(u => u.id !== me.id && !blocked(u.id, me.id) && visible(u));
-    let near = null;
-    if (q.get('nearby')) {
-      const km = Number(q.get('nearby'));
-      if (![10, 25, 50, 100, 200].includes(km)) return bad('Невалиден радиус.');
-      if (me.hideDistance) return bad('Търсенето „Наблизо“ е изключено, защото си скрил разстоянието си (Дизайн и настройки → Поверителност).', 409);
-      near = new Map(); for (const pl of PLACES) { const d = dKm(GEO[me.placeId], GEO[pl.id]); if (d !== null && d <= km) near.set(pl.id, d); }
-      list = list.filter(u => !u.hideDistance && near.has(u.placeId));
-    }
     if (q.get('goal')) { if (!GOALS[q.get('goal')]) return bad('Непозната цел.'); list = list.filter(u => u.goal === q.get('goal')); }
-    if (q.get('region') && !near) { if (!REGION_NAME.has(q.get('region'))) return bad('Непозната област.'); list = list.filter(u => (BY_ID.get(u.placeId) || {}).region === q.get('region')); }
-    if (q.get('place') && !near) { if (!BY_ID.has(q.get('place'))) return bad('Непознато населено място.'); list = list.filter(u => u.placeId === q.get('place')); }
+    if (q.get('region')) { if (!REGION_NAME.has(q.get('region'))) return bad('Непозната област.'); list = list.filter(u => (BY_ID.get(u.placeId) || {}).region === q.get('region')); }
+    if (q.get('place')) { if (!BY_ID.has(q.get('place'))) return bad('Непознато населено място.'); list = list.filter(u => u.placeId === q.get('place')); }
     if (q.get('gender')) list = list.filter(u => u.gender === q.get('gender'));
     const age = u => (u.isDemo ? u.age : ageFrom(u.birthDate));
     if (q.get('ageMin')) list = list.filter(u => age(u) >= Number(q.get('ageMin')));
@@ -253,8 +272,7 @@
     const ints = q.getAll('interest'); if (ints.length) list = list.filter(u => u.interests.some(i => ints.includes(i)));
     const term = (q.get('q') || '').trim().toLowerCase(); if (term) list = list.filter(u => u.nickname.toLowerCase().includes(term));
     const sorts = { active: (a, b) => (a.lastMin ?? 0) - (b.lastMin ?? 0), new: (a, b) => b.created - a.created, young: (a, b) => age(a) - age(b), old: (a, b) => age(b) - age(a) };
-    sorts.nearest = (a, b) => near.get(a.placeId) - near.get(b.placeId);
-    list.sort(near && (!q.get('sort') || q.get('sort') === 'nearest') ? sorts.nearest : (sorts[q.get('sort')] || sorts.active));
+    list.sort(sorts[q.get('sort')] || sorts.active);
     const limit = Math.min(48, Number(q.get('limit')) || 12), offset = Number(q.get('offset')) || 0;
     return ok({ total: list.length, offset, profiles: list.slice(offset, offset + limit).map(u => pub(u, me.id)) });
   }));

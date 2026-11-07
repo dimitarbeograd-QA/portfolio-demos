@@ -555,3 +555,10 @@ button[aria-pressed=true].btn:not(.ghost) { animation: likepop .35s var(--ease);
 .stamprow { display: flex; gap: .2rem; overflow-x: auto; padding-bottom: .2rem; } .stamprow .emobtn[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 .stk-save { display: flex; flex-wrap: wrap; gap: .5rem; }
 @media (max-width: 700px) { .emopop { max-height: 60vh; } .att-stk.sticker img { width: 128px; height: 128px; } }
+
+/* На живо */
+.livedot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; background: #2ec27e; box-shadow: 0 0 0 0 #2ec27e99; animation: livepulse 1.6s infinite; vertical-align: middle; margin-right: .35rem; }
+@keyframes livepulse { 0% { box-shadow: 0 0 0 0 #2ec27e99; } 70% { box-shadow: 0 0 0 .6rem #2ec27e00; } 100% { box-shadow: 0 0 0 0 #2ec27e00; } }
+.livechip { font-weight: 700; } .livecard .livelist { padding-left: 1.2rem; display: grid; gap: .3rem; margin: .6rem 0 1rem; }
+.banner.live .livedot { margin: 0; }
+@media (prefers-reduced-motion: reduce) { .livedot { animation: none; } }

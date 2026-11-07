@@ -60,12 +60,4 @@ function distanceBucket(km) {
   if (km < 50) return Math.round(km / 5) * 5;
   return Math.round(km / 10) * 10;
 }
-// Ид-та на всички населени места в радиус от дадено място (с разстоянията им).
-function within(placeId, radiusKm) {
-  const c = coordsOf(placeId), out = new Map();
-  if (!c) return out;
-  for (const p of PLACES) { const d = distanceKm(c, GEO[p.id]); if (d !== null && d <= radiusKm) out.set(p.id, d); }
-  return out;
-}
-
-module.exports = { coordsOf, distanceKm, distanceBucket, within, nearestPlace, REGIONS, REGION_BY_CODE, PLACES, BY_ID, BY_REGION, describe, search, findPlace };
+module.exports = { coordsOf, distanceKm, distanceBucket, nearestPlace, REGIONS, REGION_BY_CODE, PLACES, BY_ID, BY_REGION, describe, search, findPlace };

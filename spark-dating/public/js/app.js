@@ -232,9 +232,61 @@ const fmtWhen = at => (new Date(at).toDateString() === new Date().toDateString()
 const badge = n => (n > 0 ? h('span', { class: 'badge', 'aria-label': `${n} нови`, text: n > 99 ? '99+' : String(n) }) : null);
 const disc = {
   region: '', place: '', placeLabel: '', stage: 'region', q: '', gender: '', ageMin: '', ageMax: '', interests: new Set(), withPhoto: false,
-  online: false, lookingForMe: false, goal: '', nearby: '', sort: 'active', profiles: [], total: 0, loading: false,
+  online: false, lookingForMe: false, goal: '', live: false, sort: 'active', profiles: [], total: 0, loading: false,
   pickerOpen: !window.matchMedia('(max-width: 700px)').matches, filtersOpen: (() => { if (window.innerWidth <= 700) return false; try { const v = localStorage.getItem('spark.filtersOpen'); if (v !== null) return v === '1'; } catch { /* ignore */ } return window.innerWidth > 900; })(), token: 0,
 };
+
+/* ═══════════ Местоположение на живо (доброволно, временно) ═══════════ */
+const live = { watch: null, timer: null, last: 0, pos: null, warnedAt: 0 };
+const liveText = m => (m < 1000 ? `до ${m} м` : `~${m / 1000} км`);
+const getPos = () => new Promise((res, rej) => (navigator.geolocation ? navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }) : rej({ code: 0 })));
+async function pushLive(c, force) {
+  const now = Date.now();
+  if (!force && now - live.last < 10000) return;
+  live.last = now;
+  try {
+    const r = await api('PUT', '/api/live', c ? { lat: c.latitude, lng: c.longitude, accuracy: c.accuracy } : { demo: true });
+    if (r.expired) { await stopLive(true); toast('Споделянето на живо изтече след 3 часа.'); return; }
+    if (state.me) { state.me.live = { active: r.active, startedAt: r.startedAt, expiresAt: r.expiresAt }; }
+  } catch (x) {
+    if (x.status === 401) return;
+    if (Date.now() - live.warnedAt > 60000) { live.warnedAt = Date.now(); toast(x.message, true); }
+  }
+}
+function detachLive() {
+  if (live.watch !== null && navigator.geolocation) navigator.geolocation.clearWatch(live.watch);
+  live.watch = null; clearInterval(live.timer); live.timer = null;
+}
+function attachLive(initial) {
+  detachLive(); live.pos = initial;
+  if (navigator.geolocation && initial) live.watch = navigator.geolocation.watchPosition(p => { live.pos = p.coords; pushLive(p.coords); }, () => {}, { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 });
+  live.timer = setInterval(() => pushLive(live.pos, true), 20000); // държи позицията „прясна“, когато не се движиш
+}
+async function startLive() {
+  let c = null;
+  try { c = (await getPos()).coords; } catch (e) {
+    if (!state.meta.liveDemo) { toast(e.code === 1 ? 'Нямаш разрешение за местоположение. Разреши го в браузъра.' : 'Не успях да определя местоположението.', true); return false; }
+    toast('Демо: браузърът не дава местоположение, ползвам центъра на твоето населено място.');
+  }
+  await pushLive(c, true);
+  if (!(state.me.live && state.me.live.active)) return false;
+  attachLive(c); renderBanners();
+  return true;
+}
+async function resumeLive() {
+  if (live.timer) return;
+  let c = null;
+  try { c = (await getPos()).coords; } catch { if (!state.meta.liveDemo) { await stopLive(true); return; } }
+  if (!(state.me && state.me.live && state.me.live.active)) return;
+  attachLive(c); pushLive(c, true);
+}
+async function stopLive(silent) {
+  detachLive();
+  try { await api('DELETE', '/api/live'); } catch { /* ignore */ }
+  if (state.me) state.me.live = { active: false };
+  renderBanners();
+  if (!silent) { toast('Споделянето на живо е спряно. Позицията ти е изтрита.'); if (location.hash.startsWith('#/discover')) route(); }
+}
 
 /* Проверка на местоположението: GPS координатите се сравняват на сървъра с избраното населено място и се изхвърлят. */
 function locationBox() {
@@ -329,11 +381,12 @@ mobileQuery.addEventListener('change', () => { if (state.meta) route(); });
 
 // Филтрите на „Открий хора“ не трябва да „преминават“ към следващия акаунт в същия таб.
 function resetDisc() {
-  Object.assign(disc, { region: '', place: '', placeLabel: '', stage: 'region', q: '', gender: '', goal: '', ageMin: '', ageMax: '', withPhoto: false, online: false, lookingForMe: false, nearby: '',
+  Object.assign(disc, { region: '', place: '', placeLabel: '', stage: 'region', q: '', gender: '', goal: '', ageMin: '', ageMax: '', withPhoto: false, online: false, lookingForMe: false, live: false,
     sort: 'active', profiles: [], total: 0, loading: false, pickerOpen: !isMobile(), token: disc.token + 1 });
   disc.interests.clear();
 }
 async function logout() {
+  await stopLive(true);
   try { await api('POST', '/api/logout'); } catch { /* ignore */ }
   if (callRt.call) await hangup();
   state.me = null; resetDisc(); chatWith = null; stopBadges(); stopCallWatch();
@@ -505,7 +558,7 @@ function viewDiscover() {
   const layout = h('div', { class: 'layout' }, sidebar, h('div', { class: 'stack' }, citiesWin, results));
   v.append(h('div', { class: 'filterbar' }, toggle), layout);
   // Колко филтъра са включени (показва се на бутона, когато панелът е скрит, за да не се забравят).
-  const activeFilters = () => [disc.q.trim(), disc.gender, disc.goal, disc.ageMin, disc.ageMax, disc.withPhoto, disc.online, disc.lookingForMe, disc.nearby].filter(Boolean).length + (disc.interests.size ? 1 : 0);
+  const activeFilters = () => [disc.q.trim(), disc.gender, disc.goal, disc.ageMin, disc.ageMax, disc.withPhoto, disc.online, disc.lookingForMe].filter(Boolean).length + (disc.interests.size ? 1 : 0);
   function syncFilters() {
     const n = activeFilters();
     sidebar.classList.toggle('closed', !disc.filtersOpen);
@@ -516,7 +569,7 @@ function viewDiscover() {
   syncFilters();
 
   const regionName = () => (state.meta.regions.find(r => r.code === disc.region) || {}).name || '';
-  const placeTitle = () => disc.nearby ? `радиус ${disc.nearby} км около ${state.me.city}` : disc.place ? `${disc.placeLabel}, обл. ${regionName()}` : disc.region ? `област ${regionName()}` : '';
+  const placeTitle = () => disc.place ? `${disc.placeLabel}, обл. ${regionName()}` : disc.region ? `област ${regionName()}` : '';
   let placeToken = 0;
 
   function renderCities() {
@@ -585,12 +638,6 @@ function viewDiscover() {
     disc.pickerOpen = false; renderCities(); load(true);
   }
 
-  function setNearby(k) {
-    disc.nearby = k;
-    if (k) { disc.sort = 'nearest'; disc.pickerOpen = false; } else if (disc.sort === 'nearest') disc.sort = 'active';
-    citiesWin.hidden = !!k; renderCities(); renderFilters(); load(true);
-  }
-
   function renderFilters() {
     clear(sidebar);
     const upd = debounce(() => load(true), 300);
@@ -599,12 +646,9 @@ function viewDiscover() {
     const chk = (key, label) => h('div', { class: 'checkline' }, h('input', { type: 'checkbox', id: 'f-' + key, checked: disc[key], onchange: e => { disc[key] = e.target.checked; load(true); } }), h('label', { for: 'f-' + key, text: label }));
     const genderChips = [['', 'Всички'], ...Object.entries(GENDER)].map(([k, t]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(disc.gender === k), text: t, onclick: () => { disc.gender = k; renderFilters(); load(true); } }));
 
-    const nearChips = [['', 'Изкл.'], ...[10, 25, 50, 100, 200].map(k => [String(k), k + ' км'])].map(([k, t]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(disc.nearby === k), text: t, onclick: () => setNearby(k) }));
     sidebar.append(
       h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h3', { text: '🎛️ Филтри' }), h('button', { class: 'btn sm sheetclose', type: 'button', text: 'Готово ✓', onclick: () => { disc.filtersOpen = false; syncFilters(); window.scrollTo(0, 0); } })),
       h('div', { class: 'win-body' },
-        h('div', { class: 'fgroup nearby' }, h('label', { text: '📍 Хора наблизо' }), h('div', { class: 'chips' }, nearChips),
-          h('p', { class: 'hint', text: disc.nearby ? `Показват се хора в радиус ${disc.nearby} км от ${state.me.city}, независимо къде са се регистрирали. Областта и градът се игнорират.` : `Разстоянието се мери от ${state.me.city} до избраното от другите населено място.` })),
         h('div', { class: 'fgroup' }, h('label', { for: 'f-q', text: 'Търси по никнейм' }), h('input', { id: 'f-q', value: disc.q, maxlength: '30', placeholder: 'напр. Мила', oninput: e => { disc.q = e.target.value; upd(); } })),
         h('div', { class: 'fgroup' }, h('label', { text: 'Пол' }), h('div', { class: 'chips' }, genderChips)),
         h('div', { class: 'fgroup' }, h('label', { text: 'Какво търсят' }), h('div', { class: 'chips' }, [['', 'Всички'], ...Object.entries(state.meta.goals)].map(([k, t]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(disc.goal === k), text: t, onclick: () => { disc.goal = k; renderFilters(); load(true); } })))),
@@ -620,10 +664,10 @@ function viewDiscover() {
   function renderResults() {
     clear(results);
     const sort = h('select', { 'aria-label': 'Подреждане', style: 'width:auto', onchange: e => { disc.sort = e.target.value; load(true); } },
-      [...(disc.nearby ? [['nearest', 'Най-близки']] : []), ['active', 'Последно активни'], ['new', 'Най-нови'], ['young', 'Най-млади'], ['old', 'Най-възрастни']].map(([k, t]) => h('option', { value: k, text: t, selected: disc.sort === k })));
+      [['active', 'Последно активни'], ['new', 'Най-нови'], ['young', 'Най-млади'], ['old', 'Най-възрастни']].map(([k, t]) => h('option', { value: k, text: t, selected: disc.sort === k })));
     results.append(h('div', { class: 'citybar' },
-      h('h2', { text: disc.loading && !disc.profiles.length ? 'Зареждане…' : `${disc.total} ${disc.total === 1 ? 'човек' : 'души'}${placeTitle() ? (disc.nearby ? ' · ' : ' в ') + placeTitle() : ''}` }),
-      h('button', { class: 'chip nearbtn', type: 'button', 'aria-pressed': String(!!disc.nearby), text: '📍 Наблизо', onclick: () => setNearby(disc.nearby ? '' : '25') }), sort));
+      h('h2', { text: disc.loading && !disc.profiles.length ? 'Зареждане…' : `${disc.total} ${disc.total === 1 ? 'човек' : 'души'}${placeTitle() ? ' в ' + placeTitle() : ''}` }),
+      h('button', { class: 'chip nearbtn', type: 'button', 'aria-pressed': 'false', text: '📍 На живо', onclick: () => setLive(true) }), sort));
     if (disc.loading && !disc.profiles.length) { results.append(h('div', { class: 'grid', role: 'progressbar', 'aria-label': 'Зареждане' }, Array.from({ length: 8 }, () => h('div', { class: 'win card skel' }, h('div', { class: 'ph' }), h('div', { class: 'meta' }, h('p'), h('p')))))); return; }
     if (!disc.profiles.length) {
       results.append(h('div', { class: 'win' }, h('div', { class: 'empty-state' }, h('div', { class: 'big', text: '🔍' }), h('h3', { text: 'Няма намерени профили' }), h('p', { text: 'Опитай с друг град или махни някои филтри.' }))));
@@ -642,8 +686,8 @@ function viewDiscover() {
     if (reset) { disc.profiles = []; }
     renderResults();
     const p = new URLSearchParams();
-    if (disc.nearby) p.set('nearby', disc.nearby);
-    else { if (disc.region) p.set('region', disc.region); if (disc.place) p.set('place', disc.place); }
+    if (disc.region) p.set('region', disc.region);
+    if (disc.place) p.set('place', disc.place);
     if (disc.q.trim()) p.set('q', disc.q.trim());
     if (disc.gender) p.set('gender', disc.gender);
     if (disc.ageMin) p.set('ageMin', disc.ageMin);
@@ -663,24 +707,78 @@ function viewDiscover() {
       if (token !== disc.token) return;
       if (x.status === 401) { state.me = null; route(); return; }
       toast(x.message, true);
-      if (disc.nearby && x.status === 409) { disc.nearby = ''; disc.sort = 'active'; citiesWin.hidden = false; renderFilters(); disc.loading = false; renderResults(); return; }
     }
     disc.loading = false;
     renderResults();
   }
 
-  citiesWin.hidden = !!disc.nearby;
-  renderCities(); renderFilters(); load(true);
+  // ── Режим „На живо“: кой е наблизо в момента (само ако и ти споделяш) ──
+  let liveTimer = null, liveFirst = true;
+  const liveOk = p => (!disc.gender || p.gender === disc.gender) && (!disc.ageMin || p.age >= Number(disc.ageMin)) && (!disc.ageMax || p.age <= Number(disc.ageMax))
+    && (!disc.goal || p.goal === disc.goal) && (!disc.withPhoto || p.photos.length) && (!disc.online || p.online) && (!disc.q.trim() || p.nickname.toLowerCase().includes(disc.q.trim().toLowerCase()));
+  function stopLivePoll() { clearInterval(liveTimer); liveTimer = null; }
+  async function setLive(on) {
+    stopLivePoll(); disc.live = on; liveFirst = true;
+    if (!on) { citiesWin.hidden = false; renderCities(); load(true); return; }
+    citiesWin.hidden = true;
+    if (state.me.live && state.me.live.active) { startLivePoll(); } else renderLive();
+  }
+  function startLivePoll() {
+    stopLivePoll(); loadLive();
+    liveTimer = setInterval(() => { if (!document.body.contains(results) || !disc.live) { stopLivePoll(); return; } if (!document.hidden) loadLive(); }, 6000);
+  }
+  async function loadLive() {
+    try {
+      const r = await api('GET', '/api/live/nearby');
+      disc.liveList = r.profiles; disc.liveErr = '';
+    } catch (x) {
+      if (x.status === 401) { state.me = null; route(); return; }
+      if (x.status === 409) { state.me.live = { active: false }; renderBanners(); stopLivePoll(); renderLive(); return; }
+      if (x.status !== 429) disc.liveErr = x.message;
+    }
+    disc.liveLoaded = true; renderLive();
+  }
+  function renderLive() {
+    clear(results);
+    const back = h('button', { class: 'chip nearbtn', type: 'button', 'aria-pressed': 'true', text: '📍 На живо', onclick: () => setLive(false) });
+    if (!(state.me.live && state.me.live.active)) {
+      results.append(h('div', { class: 'citybar' }, h('h2', { text: '📍 Наблизо на живо' }), back),
+        h('div', { class: 'win livecard' }, h('div', { class: 'win-body' },
+          h('h3', { text: 'Виж кой е наблизо в момента' }),
+          h('p', { text: 'Включи споделянето на местоположението си. Докато е включено, виждаш хората, които също го споделят, подредени от най-близкия, а разстоянието се обновява на живо.' }),
+          h('ul', { class: 'livelist' },
+            h('li', { text: 'Виждаш само хора, които и те споделят – и те виждат теб.' }),
+            h('li', { text: 'Показва се САМО грубо разстояние („до 300 м“, „~2 км“) – никога карта, адрес или посока.' }),
+            h('li', { text: 'Изключва се когато поискаш, автоматично след 3 часа или при липса на сигнал. При спиране позицията ти се изтрива.' }),
+            h('li', { text: 'Блокираните и спрените профили не се виждат.' })),
+          h('div', { class: 'stk-save' }, h('button', { class: 'btn', type: 'button', text: '📍 Включи на живо', onclick: async e => { const b = e.currentTarget; b.disabled = true; const ok = await startLive(); b.disabled = false; if (ok) { liveFirst = true; startLivePoll(); renderLive(); } } }),
+            h('button', { class: 'btn ghost', type: 'button', text: 'Не сега', onclick: () => setLive(false) })),
+          h('p', { class: 'hint', text: 'Съвет: не споделяй, когато си у дома, ако не искаш непознати да знаят, че си наблизо.' }))));
+      return;
+    }
+    const list = (disc.liveList || []).filter(liveOk);
+    results.append(h('div', { class: 'citybar' }, h('h2', {}, h('span', { class: 'livedot', 'aria-hidden': 'true' }), ` На живо наблизо · ${list.length} ${list.length === 1 ? 'човек' : 'души'}`),
+      back, h('button', { class: 'btn ghost sm', type: 'button', text: 'Спри споделянето', onclick: () => stopLive() })));
+    if (disc.liveErr) results.append(h('p', { class: 'hint', text: disc.liveErr }));
+    if (!disc.liveLoaded) { results.append(h('div', { class: 'grid', role: 'progressbar', 'aria-label': 'Зареждане' }, Array.from({ length: 4 }, () => h('div', { class: 'win card skel' }, h('div', { class: 'ph' }), h('div', { class: 'meta' }, h('p'), h('p')))))); return; }
+    if (!list.length) { results.append(h('div', { class: 'win' }, h('div', { class: 'empty-state' }, h('div', { class: 'big', text: '📡' }), h('h3', { text: 'Още няма никой наблизо на живо' }), h('p', { text: 'Списъкът се обновява сам. Само хора с включено споделяне се показват.' })))); return; }
+    const first = liveFirst; liveFirst = false;
+    results.append(h('div', { class: 'grid' }, list.map((p, i) => profileCard(p, i, undefined, !first))));
+  }
+
+  citiesWin.hidden = false;
+  if (disc.live) { citiesWin.hidden = true; if (state.me.live && state.me.live.active) startLivePoll(); else renderLive(); renderFilters(); }
+  else { renderCities(); renderFilters(); load(true); }
 }
 
-function profileCard(p, i, extra) {
+function profileCard(p, i, extra, still) {
   const canChat = state.me && state.me.role !== 'admin';
-  return h('article', { class: 'win card enter', style: `--i:${Math.min(i, 8)}` },
+  return h('article', { class: 'win card' + (still ? '' : ' enter'), style: `--i:${Math.min(i, 8)}` },
     h('button', { class: 'cardmain', type: 'button', 'aria-label': `Профил на ${p.nickname}, ${p.age} г., ${p.city}`, onclick: () => openProfile(p) },
       h('div', { class: 'ph' },
         h('img', { src: mainPhoto(p), alt: '', loading: 'lazy', width: '400', height: '500' }),
         p.isDemo ? h('span', { class: 'tag demo badge-tr', text: 'демо' }) : null,
-        h('div', { class: 'over' }, h('b', { text: `${p.nickname}, ${p.age}` }), h('span', {}, p.online ? h('span', { class: 'dot', 'aria-label': 'онлайн' }) : null, `📍 ${p.city}${p.distanceKm ? ' · ' + distText(p.distanceKm) : ''}${p.locVerified ? ' ✓' : ''}`, p.regionName && p.regionName !== p.city ? h('small', { class: 'obl', text: ` · ${p.regionName}` }) : null))),
+        h('div', { class: 'over' }, h('b', { text: `${p.nickname}, ${p.age}` }), h('span', {}, p.online ? h('span', { class: 'dot', 'aria-label': 'онлайн' }) : null, p.liveM ? h('span', { class: 'livechip' }, h('span', { class: 'livedot', 'aria-hidden': 'true' }), `${liveText(p.liveM)} от теб`) : `📍 ${p.city}${p.distanceKm ? ' · ' + distText(p.distanceKm) : ''}${p.locVerified ? ' ✓' : ''}`, p.regionName && p.regionName !== p.city ? h('small', { class: 'obl', text: ` · ${p.regionName}` }) : null))),
       h('div', { class: 'meta' }, extra ? h('p', { class: 'extra', text: extra }) : null, h('p', { text: p.bio || 'Още няма био.' }),
         h('div', { class: 'chips' }, p.goalLabel ? h('span', { class: 'tag goal', text: '🎯 ' + p.goalLabel }) : null, p.interests.slice(0, 3).map(t => h('span', { class: 'tag', text: t }))))),
     canChat ? h('div', { class: 'cardact' },
@@ -900,7 +998,7 @@ function viewSettings() {
           h('div', { class: 'win-body' },
             h('div', { class: 'checkline' }, h('input', { type: 'checkbox', id: 'pv-pause', checked: state.me.paused, onchange: async e => { try { state.me = (await api('PUT', '/api/me/settings', { paused: e.target.checked })).user; renderChrome(); toast(state.me.paused ? 'Профилът е на пауза.' : 'Профилът отново се вижда.'); } catch (x) { toast(x.message, true); e.target.checked = !e.target.checked; } } }), h('label', { for: 'pv-pause', text: 'Пауза: скрий профила ми от търсенето (разговорите ми остават)' })),
             h('div', { class: 'checkline' }, h('input', { type: 'checkbox', id: 'pv-visits', checked: state.me.hideVisits, onchange: async e => { try { state.me = (await api('PUT', '/api/me/settings', { hideVisits: e.target.checked })).user; toast(state.me.hideVisits ? 'Посещенията ти вече не се записват.' : 'Посещенията ти се записват.'); } catch (x) { toast(x.message, true); e.target.checked = !e.target.checked; } } }), h('label', { for: 'pv-visits', text: 'Не записвай кога разглеждам чужди профили' })),
-            h('div', { class: 'checkline' }, h('input', { type: 'checkbox', id: 'pv-dist', checked: state.me.hideDistance, onchange: async e => { try { state.me = (await api('PUT', '/api/me/settings', { hideDistance: e.target.checked })).user; toast(state.me.hideDistance ? 'Разстоянието ти е скрито и не се показваш в „Наблизо“.' : 'Показваш се в „Наблизо“ с приблизително разстояние.'); } catch (x) { toast(x.message, true); e.target.checked = !e.target.checked; } } }), h('label', { for: 'pv-dist', text: 'Скрий разстоянието ми и не ме показвай в „Наблизо“ (тогава и аз не мога да търся наблизо)' })),
+            h('div', { class: 'checkline' }, h('input', { type: 'checkbox', id: 'pv-dist', checked: state.me.hideDistance, onchange: async e => { try { state.me = (await api('PUT', '/api/me/settings', { hideDistance: e.target.checked })).user; toast(state.me.hideDistance ? 'Приблизителното разстояние е скрито.' : 'Приблизителното разстояние се показва.'); } catch (x) { toast(x.message, true); e.target.checked = !e.target.checked; } } }), h('label', { for: 'pv-dist', text: 'Скрий приблизителното разстояние (между населените места) на картата ми' })),
             locationBox(),
             h('p', { class: 'hint', text: `Имейл: ${state.me.email || '—'}${state.me.emailVerified ? ' ✓ потвърден' : ''}. Виден е само на теб.` }))) : null,
         state.me ? h('section', { class: 'win enter', style: '--i:3' }, h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: '🔐 Акаунт' })),
@@ -1781,6 +1879,11 @@ function renderBanners() {
       h('div', { class: 'btxt' }, h('b', { text: 'Получи предупреждение от администратор' }), h('span', { text: `Причина: ${w.reason}. При повторни нарушения профилът може да бъде спрян или дерегистриран.` })),
       appealBtn(w), h('button', { class: 'btn ghost sm', type: 'button', text: 'Разбрах', onclick: async () => { try { state.me = (await api('POST', `/api/me/penalties/${w.id}/ack`)).user; renderBanners(); } catch (x) { toast(x.message, true); } } })));
   }
+  if (me.live && me.live.active) {
+    box.append(h('div', { class: 'banner info live' }, h('span', { class: 'bico' }, h('span', { class: 'livedot', 'aria-hidden': 'true' })),
+      h('div', { class: 'btxt' }, h('b', { text: 'Споделяш местоположението си на живо' }), h('span', { text: `Другите виждат само грубо разстояние. Спира се автоматично до ${fmtTime(me.live.expiresAt)}.` })),
+      h('button', { class: 'btn sm', type: 'button', text: 'Спри', onclick: () => stopLive() })));
+  }
   if (me.paused) {
     box.append(h('div', { class: 'banner info' }, h('span', { class: 'bico', 'aria-hidden': 'true', text: '😴' }),
       h('div', { class: 'btxt' }, h('b', { text: 'Профилът ти е на пауза' }), h('span', { text: 'Не се показваш в търсенето, но разговорите ти работят нормално.' })),
@@ -2180,7 +2283,7 @@ function route() {
   if (r === 'activity' && !(state.me && state.me.role !== 'admin')) r = state.me ? 'discover' : '';
   // Непотвърден имейл → само екранът за потвърждение (и изход).
   if (state.me && !state.me.emailVerified) { stopBadges(); stopCallWatch(); renderChrome(); if (state.meta) { viewVerify(); document.title = 'Потвърди имейла · Spark'; } return; }
-  if (state.me) { startBadges(); startCallWatch(); } else { stopBadges(); stopCallWatch(); }
+  if (state.me) { startBadges(); startCallWatch(); if (state.me.live && state.me.live.active && !live.timer) resumeLive(); } else { stopBadges(); stopCallWatch(); }
   if (state.me && r === '') { r = 'discover'; history.replaceState(null, '', '#/discover'); }
   renderChrome();
   if (!state.meta) return;

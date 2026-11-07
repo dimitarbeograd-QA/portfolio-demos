@@ -192,7 +192,7 @@ function meOf(id) {
   const warn = db.prepare("SELECT * FROM penalties WHERE user_id = ? AND kind = 'warning' AND acked_at IS NULL AND lifted_at IS NULL ORDER BY id DESC LIMIT 1").get(id);
   return { ...p, username: r.username, birthDate: r.birth_date, theme, role: r.role,
     email: r.email || '', emailMasked: emailutil.maskEmail(r.email), emailVerified: !!r.email_verified_at,
-    paused: !!r.paused, hideVisits: !!r.hide_visits, hideDistance: !!r.hide_distance,
+    paused: !!r.paused, hideVisits: !!r.hide_visits, hideDistance: !!r.hide_distance, live: liveStatus(id),
     placeChangeAt: r.place_changed_at ? new Date(Date.parse(r.place_changed_at.replace(' ', 'T') + 'Z') + PLACE_CHANGE_DAYS * 864e5).toISOString() : null,
     suspension: penaltyView(susp), warning: penaltyView(warn),
     completeness: completenessOf(r, p.photos.length, p.interests.length) };
@@ -620,7 +620,6 @@ app.put('/api/me/photos/:pid/main', requireActive, wrap((req, res) => {
 }));
 
 // ── Разглеждане на хора ──
-const NEARBY_KM = [10, 25, 50, 100, 200];
 const SORTS = {
   active: 'u.last_seen DESC, u.id DESC',
   new: 'u.id DESC',
@@ -671,22 +670,6 @@ app.get('/api/profiles', requireAuth, wrap((req, res) => {
   const limit = Math.min(48, Math.max(1, parseInt(q.limit, 10) || 12));
   const offset = Math.max(0, parseInt(q.offset, 10) || 0);
 
-  // „Хора наблизо“: радиус около собственото населено място, независимо от кое място са се регистрирали.
-  // Включени са само хора, които не са скрили разстоянието си; и този, който го е скрил, не може да търси наблизо.
-  if (q.nearby) {
-    const radius = parseInt(q.nearby, 10);
-    if (!NEARBY_KM.includes(radius)) return bad(res, 'Невалиден радиус.');
-    const me = db.prepare('SELECT place_id, hide_distance FROM users WHERE id = ?').get(req.session.userId);
-    if (me.hide_distance) return bad(res, 'Търсенето „Наблизо“ е изключено, защото си скрил разстоянието си (Дизайн и настройки → Поверителност).', 409);
-    const near = places.within(me.place_id, radius);
-    if (!near.size) return bad(res, 'Няма координати за твоето населено място.');
-    where.push('u.hide_distance = 0', `u.place_id IN (${[...near.keys()].map(() => '?').join(',')})`);
-    args.push(...near.keys());
-    // Подрежда се по разстояние (при равни – по последна активност); при други подреждания – както е избрано.
-    const all = db.prepare(`SELECT u.* FROM users u WHERE ${where.join(' AND ')} ORDER BY u.last_seen DESC, u.id DESC`).all(...args);
-    if (!q.sort || q.sort === 'nearest') all.sort((x, y) => near.get(x.place_id) - near.get(y.place_id));
-    return res.json({ total: all.length, offset, profiles: publicProfiles(all.slice(offset, offset + limit), req.session.userId) });
-  }
   const order = SORTS[q.sort] || SORTS.active;
   const sqlWhere = 'WHERE ' + where.join(' AND ');
 
@@ -854,6 +837,64 @@ app.post('/api/chats/:id/attachments', requireActive, express.raw({ type: () => 
   const r = db.prepare('INSERT INTO attachments (uploader_id, name, mime, size, stored, kind) VALUES (?, ?, ?, ?, ?, ?)')
     .run(me, name, imgType ? IMG_MIME[imgType] : 'application/octet-stream', buf.length, stored, imgType ? 'image' : 'file');
   res.status(201).json({ attachment: attView(attById(r.lastInsertRowid)) });
+}));
+
+// ── Местоположение на живо ──
+// Доброволно и временно: докато е включено, клиентът праща позицията си; другите виждат само ГРУБО разстояние
+// (никога координати или посока), а човек вижда другите, само ако и той самият споделя. Спира се ръчно, след 3 часа
+// или при липса на сигнал 5 минути; при спиране позицията се изтрива.
+const LIVE_FRESH_S = 300, LIVE_MAX_S = 3 * 3600, LIVE_MIN_GAP_S = 4, LIVE_MAX_SPEED = 100; // м/с (360 км/ч)
+const sqlAge = t => (Date.now() - Date.parse(String(t).replace(' ', 'T') + 'Z')) / 1000;
+// Грубо разстояние в метри (покрито отгоре): най-малко 300 м, за да не може човек да бъде „триангулиран“.
+function liveBucket(m) {
+  if (m < 300) return 300;
+  if (m < 500) return 500;
+  if (m < 1000) return 1000;
+  if (m < 10000) return Math.ceil(m / 1000) * 1000;
+  if (m < 50000) return Math.round(m / 5000) * 5000;
+  return Math.round(m / 10000) * 10000;
+}
+const liveRow = uid => db.prepare('SELECT * FROM live_locations WHERE user_id = ?').get(uid);
+const liveActiveFor = uid => { const r = liveRow(uid); return r && sqlAge(r.updated_at) < LIVE_FRESH_S && sqlAge(r.started_at) < LIVE_MAX_S ? r : null; };
+const liveStatus = uid => { const r = liveActiveFor(uid); return r ? { active: true, startedAt: iso(r.started_at), expiresAt: new Date(Date.parse(r.started_at.replace(' ', 'T') + 'Z') + LIVE_MAX_S * 1000).toISOString() } : { active: false }; };
+app.get('/api/live', requireAuth, wrap((req, res) => res.json(liveStatus(req.session.userId))));
+app.put('/api/live', requireActive, wrap((req, res) => {
+  const id = req.session.userId, b = req.body || {};
+  if (db.prepare('SELECT role FROM users WHERE id = ?').get(id).role === 'admin') return bad(res, 'Администраторският профил не споделя местоположение.', 403);
+  const lat = Number(b.lat), lng = Number(b.lng), acc = Number(b.accuracy);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return bad(res, 'Невалидно местоположение.');
+  if (Number.isFinite(acc) && acc > 500) return bad(res, 'Сигналът е твърде неточен (над 500 м). Излез на открито или включи GPS.');
+  const cur = liveRow(id);
+  if (cur) {
+    if (sqlAge(cur.started_at) >= LIVE_MAX_S) { db.prepare('DELETE FROM live_locations WHERE user_id = ?').run(id); return res.json({ active: false, expired: true }); }
+    const dt = sqlAge(cur.updated_at);
+    if (dt < LIVE_MIN_GAP_S) return res.json({ ...liveStatus(id), skipped: true });
+    if (dt < LIVE_FRESH_S) {
+      const d = places.distanceKm([cur.lat, cur.lng], [lat, lng]) * 1000;
+      if (d / dt > LIVE_MAX_SPEED && d > 500) return bad(res, 'Позицията се променя невъзможно бързо – изглежда имитирана. Опитай отново.', 422);
+    }
+    db.prepare("UPDATE live_locations SET lat = ?, lng = ?, acc = ?, updated_at = datetime('now'), started_at = CASE WHEN ? >= ? THEN datetime('now') ELSE started_at END WHERE user_id = ?")
+      .run(lat, lng, Number.isFinite(acc) ? acc : null, dt, LIVE_FRESH_S, id);
+  } else {
+    db.prepare('INSERT INTO live_locations (user_id, lat, lng, acc) VALUES (?, ?, ?, ?)').run(id, lat, lng, Number.isFinite(acc) ? acc : null);
+  }
+  res.json(liveStatus(id));
+}));
+app.delete('/api/live', requireAuth, wrap((req, res) => { db.prepare('DELETE FROM live_locations WHERE user_id = ?').run(req.session.userId); res.json({ active: false }); }));
+const liveAsked = new Map();
+app.get('/api/live/nearby', requireActive, wrap((req, res) => {
+  const me = req.session.userId, mine = liveActiveFor(me);
+  if (!mine) return bad(res, 'Включи местоположението си на живо, за да видиш кой е наблизо.', 409);
+  const last = liveAsked.get(me) || 0;
+  if (Date.now() - last < 2500) return bad(res, 'Твърде често. Изчакай малко.', 429);
+  liveAsked.set(me, Date.now());
+  db.prepare("DELETE FROM live_locations WHERE updated_at < datetime('now', '-1 hour')").run();
+  const rows = db.prepare(`SELECT u.*, l.lat AS llat, l.lng AS llng, l.updated_at AS lat_at FROM live_locations l JOIN users u ON u.id = l.user_id
+    WHERE l.user_id <> ? AND l.updated_at >= datetime('now', '-${LIVE_FRESH_S} seconds') AND u.role <> 'admin' AND ${VISIBLE_SQL}
+    AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = ?))`).all(me, me, me);
+  const withD = rows.map(r => ({ r, m: places.distanceKm([mine.lat, mine.lng], [r.llat, r.llng]) * 1000 })).sort((a, b) => a.m - b.m).slice(0, 60);
+  const profs = publicProfiles(withD.map(x => x.r), me);
+  res.json({ total: withD.length, profiles: profs.map((p, i) => ({ ...p, liveM: liveBucket(withD[i].m), liveAgo: Math.round(sqlAge(withD[i].r.lat_at)) })) });
 }));
 
 // ── Лични стикери и икони ──

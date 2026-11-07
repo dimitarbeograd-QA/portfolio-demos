@@ -109,6 +109,16 @@ db.exec(`
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- Местоположение на живо: една ред на потребител, трие се при спиране/изтичане.
+  CREATE TABLE IF NOT EXISTS live_locations (
+    user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    lat        REAL NOT NULL,
+    lng        REAL NOT NULL,
+    acc        REAL,
+    started_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   -- Лични стикери и икони (качени от телефона или нарисувани). При изпращане файлът се копира като прикачен файл.
   CREATE TABLE IF NOT EXISTS stickers (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
