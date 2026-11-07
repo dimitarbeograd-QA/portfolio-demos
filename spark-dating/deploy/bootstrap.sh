@@ -13,7 +13,7 @@ DIR="${DIR:-$HOME/portfolio-demos}"
 
 echo "==> Инсталиране на Docker, git, ufw"
 sudo apt-get update -y
-sudo apt-get install -y docker.io docker-compose-v2 git ufw openssl curl
+sudo apt-get install -y docker.io docker-compose-v2 git ufw openssl curl fail2ban unattended-upgrades
 sudo usermod -aG docker "$USER" || true
 
 echo "==> Защитна стена (SSH, 80, 443)"
@@ -28,6 +28,10 @@ if sudo iptables -S INPUT 2>/dev/null | grep -q REJECT; then
   command -v netfilter-persistent >/dev/null || sudo apt-get install -y iptables-persistent
   sudo netfilter-persistent save || true
 fi
+
+echo "==> Автоматични обновявания и защита на SSH"
+sudo systemctl enable --now fail2ban >/dev/null 2>&1 || true
+printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' | sudo tee /etc/apt/apt.conf.d/20auto-upgrades >/dev/null
 
 echo "==> Репо"
 if [ -d "$DIR/.git" ]; then git -C "$DIR" fetch origin "$BRANCH" && git -C "$DIR" checkout "$BRANCH" && git -C "$DIR" pull --ff-only origin "$BRANCH"
