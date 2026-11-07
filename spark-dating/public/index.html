@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#070b14">
+<meta name="description" content="Spark — запознанства по градове в България. Профили, снимки, филтри и личен дизайн.">
+<title>Spark — запознанства</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%230f1626' stroke='%235cc8ff' stroke-width='3'/%3E%3Cpath d='M34 10 20 36h11l-3 18 16-28H33z' fill='%235cc8ff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/theme-boot.js"></script>
+</head>
+<body>
+<div class="bg-orbs" aria-hidden="true"><i></i><i></i><i></i></div>
+
+<header class="topbar" id="topbar">
+  <a class="brand" href="#/" aria-label="Spark — начало">
+    <svg viewBox="0 0 64 64" width="30" height="30" aria-hidden="true"><path d="M34 6 18 36h12l-3 22 19-32H33z" fill="currentColor"/></svg>
+    <span>Spark</span>
+  </a>
+  <nav class="nav" id="nav" aria-label="Основна навигация"></nav>
+  <div class="tools">
+    <div class="fontctl" role="group" aria-label="Размер на шрифта">
+      <button type="button" class="chip-btn" id="fontDown" aria-label="По-малък шрифт" title="По-малък шрифт">A−</button>
+      <button type="button" class="chip-btn" id="fontReset" aria-label="Нормален шрифт" title="Нормален размер">A</button>
+      <button type="button" class="chip-btn" id="fontUp" aria-label="По-голям шрифт" title="По-голям шрифт">A+</button>
+    </div>
+    <div id="userbox"></div>
+  </div>
+</header>
+
+<main id="view" tabindex="-1"></main>
+
+<footer class="foot">
+  <span>© Spark · само за лица над 18 години</span>
+  <span class="dim">Профилите с значка „демо“ са примерни и служат за преглед.</span>
+</footer>
+
+<div id="modalRoot"></div>
+<div id="toasts" role="status" aria-live="polite"></div>
+
+<script src="/js/app.js" defer></script>
+</body>
+</html>
