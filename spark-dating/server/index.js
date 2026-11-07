@@ -3,7 +3,8 @@ const app = require('./app');
 const { seedDemo, seedAdmin, seedTestUser } = require('./seed');
 const backup = require('./backup');
 
-if (process.env.SEED_DEMO !== '0') {
+// Демо профили – никога по подразбиране в production (само ако изрично SEED_DEMO=1).
+if (process.env.NODE_ENV === 'production' ? process.env.SEED_DEMO === '1' : process.env.SEED_DEMO !== '0') {
   const n = seedDemo();
   if (n) console.log(`Добавени са ${n} демо профила (SEED_DEMO=0 за изключване).`);
 }
