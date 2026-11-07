@@ -1799,7 +1799,7 @@ function locationBox() {
 function renderChrome() {
   const route = currentRoute();
   const nav = clear($('#nav'));
-  if (state.me && state.me.emailVerified) {
+  if (state.me && state.me.emailVerified && !adminMode()) {
     const isAdmin = state.me.role === 'admin';
     [['#discover', 'Открий хора', 'discover', 0]]
       .concat(isAdmin ? [] : [['#/messages', '💬 Съобщения', 'messages', state.unread], ['#/activity', '💙 Активност', 'activity', 0]])
@@ -1815,7 +1815,7 @@ function renderChrome() {
       h('button', { class: 'btn ghost sm', type: 'button', text: 'Изход', onclick: logout }),
     );
   } else {
-    box.append(h('a', { class: 'btn sm', href: '#', text: 'Вход / Регистрация' }));
+    if (!adminMode()) box.append(h('a', { class: 'btn sm', href: '#', text: 'Вход / Регистрация' }));
   }
   renderBanners();
   renderTabbar(route);
@@ -3463,6 +3463,40 @@ function viewActivity() {
 
 /* ═══════════ Администрация ═══════════ */
 let adminRefresh = () => {};
+/* ═══════════ Отделна администрация: вход с 2FA и потвърждение на необратими действия ═══════════ */
+const adminMode = () => !!(state.meta && state.meta.mode === 'admin');
+// Необратимо действие в отделната админ част иска нов код от приложението за удостоверяване. Връща кода или null.
+function askStepUp(what) {
+  if (!adminMode()) return Promise.resolve('');
+  return new Promise(resolve => {
+    let done = false;
+    const code = h('input', { type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6', placeholder: '123456', 'aria-label': 'Код от приложението', required: true });
+    const finish = v => { if (done) return; done = true; closeModal(); resolve(v); };
+    openModal(h('form', { novalidate: true, onsubmit: e => { e.preventDefault(); if (/^\d{6}$/.test(code.value.trim())) finish(code.value.trim()); else toast('Въведи 6-цифрения код.', true); } },
+      h('p', { text: `${what} Въведи НОВ 6-цифрен код от приложението за удостоверяване (същият код не може да се ползва два пъти).` }), code,
+      h('div', { class: 'stk-save' }, h('button', { class: 'btn danger', type: 'submit', text: 'Потвърди' }), h('button', { class: 'btn ghost', type: 'button', text: 'Отказ', onclick: () => finish(null) }))), { narrow: true, title: 'Потвърждение' });
+    code.focus();
+  });
+}
+function viewAdminLogin() {
+  const v = clear($('#view'));
+  const err = h('p', { class: 'err', role: 'alert' });
+  const u = h('input', { type: 'text', autocomplete: 'username', required: true, 'aria-label': 'Потребител' });
+  const pw = h('input', { type: 'password', autocomplete: 'current-password', required: true, 'aria-label': 'Парола' });
+  const code = h('input', { type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6', placeholder: '123456', required: true, 'aria-label': 'Код от приложението' });
+  v.append(h('section', { class: 'win enter', style: 'max-width:26rem;margin:2rem auto' }, h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: '🔐 Вход за администратори' })),
+    h('form', { class: 'win-body', novalidate: true, onsubmit: async e => {
+      e.preventDefault(); err.textContent = '';
+      const btn = e.currentTarget.querySelector('button[type=submit]'); btn.disabled = true;
+      try { state.me = (await api('POST', '/api/admin-auth/login', { username: u.value.trim(), password: pw.value, code: code.value.trim() })).user; pw.value = ''; code.value = ''; route(); }
+      catch (x) { err.textContent = x.message; btn.disabled = false; code.value = ''; }
+    } },
+      h('label', {}, 'Потребител', u), h('label', {}, 'Парола', pw), h('label', {}, 'Код от приложението (6 цифри)', code), err,
+      h('button', { class: 'btn block', type: 'submit', text: 'Вход' }),
+      h('p', { class: 'hint', text: 'След 5 грешни опита акаунтът се заключва за 15 минути. Сесията изтича след 30 минути без действие.' }))));
+  u.focus();
+}
+
 function viewAdmin() {
   const v = clear($('#view'));
   const head = t => h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: t }));
@@ -3475,6 +3509,14 @@ function viewAdmin() {
   const repFilters = h('div', { class: 'chips', style: 'margin-bottom:.9rem', role: 'group', 'aria-label': 'Филтър на докладите' });
   let repFilter = 'open';
   const tbody = h('tbody');
+  const secBox = h('div');
+  async function loadSecurity() {
+    try {
+      const r = await api('GET', '/api/admin/security');
+      clear(secBox).append(h('div', { class: 'chips' }, r.counts.length ? r.counts.map(c => h('span', { class: 'tag', text: `${c.kind}: ${c.c} за 24 ч` })) : h('span', { class: 'dim', text: 'Няма събития за последното денонощие.' })),
+        h('div', { class: 'tblwrap' }, h('table', { class: 'tbl' }, h('thead', {}, h('tr', {}, ['Кога', 'Вид', 'IP', 'Детайл'].map(t => h('th', { text: t })))), h('tbody', {}, r.events.slice(0, 40).map(e => h('tr', {}, h('td', { text: new Date(e.at).toLocaleString('bg-BG') }), h('td', { text: e.kind }), h('td', { class: 'dim', text: e.ip }), h('td', { class: 'dim', text: e.detail })))))));
+    } catch (x) { clear(secBox).append(h('p', { class: 'hint', text: x.message })); }
+  }
   const count = h('span', { class: 'dim' });
   v.append(h('h1', { text: 'Админ панел' }),
     h('p', { class: 'dim', text: 'Преглед на сайта отвътре: статистика, потребители и модерация. Виждаш и обикновения сайт през менюто горе.' }),
@@ -3482,7 +3524,7 @@ function viewAdmin() {
     h('section', { class: 'win enter' }, head('📊 Накратко'), h('div', { class: 'win-body' }, tiles)),
     h('div', { class: 'two' },
       h('section', { class: 'win enter', style: '--i:1' }, head('📍 Профили по области'), h('div', { class: 'win-body' }, bars)),
-      h('section', { class: 'win enter', style: '--i:2' }, head('🧭 Бърз достъп'), h('div', { class: 'win-body' },
+      adminMode() ? null : h('section', { class: 'win enter', style: '--i:2' }, head('🧭 Бърз достъп'), h('div', { class: 'win-body' },
         h('p', { class: 'dim', text: 'Разгледай сайта като потребител:' }),
         h('div', { class: 'actions' }, h('a', { class: 'btn', href: '#discover', text: 'Открий хора' }), h('a', { class: 'btn ghost', href: '#profile', text: 'Моят профил' }), h('a', { class: 'btn ghost', href: '#settings', text: 'Дизайн' }))))),
     h('section', { class: 'win enter', style: '--i:3', id: 'reportsWin' }, head('🚩 Доклади'), h('div', { class: 'win-body' },
@@ -3491,6 +3533,8 @@ function viewAdmin() {
     h('section', { class: 'win enter', style: '--i:4', id: 'dossiersWin' }, head('📁 Досиета'), h('div', { class: 'win-body' },
       h('p', { class: 'dim', text: 'Досие има само за докладван профил. Тук са историята му, наказанията и бележките. Наказания и дерегистрация се налагат от досието.' }),
       dosFilters, h('input', { type: 'search', placeholder: 'Търси по никнейм', 'aria-label': 'Търсене в досиетата', style: 'max-width:22rem;margin:.2rem 0 .9rem', oninput: debounce(e => { dosQuery = e.target.value; loadDossiers(); }, 250) }), dosBox)),
+    h('section', { class: 'win enter', style: '--i:4' }, head('🛡️ Сигурност'), h('div', { class: 'win-body' },
+      h('p', { class: 'dim', text: 'Последни събития: неуспешни входове, блокирани заявки от чужди сайтове, пренасищане (rate limit), админ входове. Пази се 30 дни; без пароли.' }), secBox)),
     h('section', { class: 'win enter', style: '--i:5' }, head('👥 Потребители'), h('div', { class: 'win-body' },
       h('div', { class: 'citybar' }, h('input', { type: 'search', placeholder: 'Търси по никнейм или потребителско име', 'aria-label': 'Търсене на потребители', style: 'max-width:26rem',
         oninput: debounce(e => loadUsers(e.target.value), 250) }), count),
@@ -3517,7 +3561,7 @@ function viewAdmin() {
         let armed = false;
         del.addEventListener('click', async () => {
           if (!armed) { armed = true; del.textContent = 'Сигурен ли си?'; setTimeout(() => { armed = false; del.textContent = 'Изтрий'; }, 3500); return; }
-          try { await api('DELETE', `/api/admin/users/${u.id}`); toast(`Изтрит: ${u.nickname}`); loadStats(); loadUsers(q); } catch (x) { toast(x.message, true); }
+          try { const code = await askStepUp(`Изтриване на „${u.nickname}“ е необратимо.`); if (code === null) return; await api('DELETE', `/api/admin/users/${u.id}`, adminMode() ? { code } : undefined); toast(`Изтрит: ${u.nickname}`); loadStats(); loadUsers(q); } catch (x) { toast(x.message, true); }
         });
         tbody.append(h('tr', {},
           h('td', {}, h('b', { text: u.nickname })), h('td', { class: 'dim', text: u.isDemo ? '—' : u.username }), h('td', { text: String(u.age) }), h('td', { text: u.regionName && u.regionName !== u.city ? `${u.city}, ${u.regionName}` : u.city }),
@@ -3567,7 +3611,7 @@ function viewAdmin() {
   }
   const refreshAll = () => { loadStats(); loadReports(); loadDossiers(); refreshBadges(); };
   adminRefresh = refreshAll;
-  loadStats(); loadReports(); loadDossiers(); loadUsers();
+  loadStats(); loadReports(); loadDossiers(); loadUsers(); loadSecurity();
 }
 
 // ── Досие: история, наказания, бележки ──
@@ -3675,7 +3719,7 @@ function deregisterDialog(d, done) {
     if (reason.value.trim().length < 5) { err.textContent = 'Напиши причина (поне 5 символа).'; return; }
     if (!armed) { armed = true; btn.textContent = 'Сигурен ли си? Натисни пак'; setTimeout(() => { armed = false; btn.textContent = 'Дерегистрирай завинаги'; }, 4000); return; }
     btn.disabled = true;
-    try { await api('POST', `/api/admin/dossiers/${d.dossier.id}/deregister`, { reason: reason.value, note: note.value }); closeModal(); toast(`${d.dossier.nickname} е дерегистриран. Имейлът му е забранен.`); done(); }
+    try { const rv = reason.value, nv = note.value, code = await askStepUp('Дерегистрацията е необратима.'); if (code === null) { btn.disabled = false; return; } await api('POST', `/api/admin/dossiers/${d.dossier.id}/deregister`, { reason: rv, note: nv, ...(adminMode() ? { code } : {}) }); closeModal(); toast(`${d.dossier.nickname} е дерегистриран. Имейлът му е забранен.`); done(); }
     catch (x) { err.textContent = x.message; btn.disabled = false; }
   } },
     h('div', { class: 'banner danger', style: 'margin-bottom:1rem' }, h('span', { class: 'bico', text: '⛔' }), h('div', { class: 'btxt' }, h('b', { text: 'Необратимо действие' }),
@@ -3701,7 +3745,7 @@ async function openCase(id, changed) {
   const delBtn = h('button', { class: 'btn danger', type: 'button', text: 'Изтрий профила на докладвания' });
   delBtn.addEventListener('click', async () => {
     if (!armed) { armed = true; delBtn.textContent = 'Сигурен ли си? Натисни пак'; setTimeout(() => { armed = false; delBtn.textContent = 'Изтрий профила на докладвания'; }, 3500); return; }
-    try { await api('DELETE', `/api/admin/users/${d.reported.id}`); toast('Профилът е изтрит. Доказателствата в доклада остават.'); closeModal(); changed && changed(); }
+    try { const code = await askStepUp('Изтриването на профила е необратимо.'); if (code === null) return; await api('DELETE', `/api/admin/users/${d.reported.id}`, adminMode() ? { code } : undefined); toast('Профилът е изтрит. Доказателствата в доклада остават.'); closeModal(); changed && changed(); }
     catch (x) { toast(x.message, true); }
   });
 
@@ -3757,6 +3801,11 @@ function currentRoute() {
 }
 function route() {
   closeModal();
+  if (adminMode() && state.meta) {
+    stopViewTimer(); renderChrome(); renderBanners();
+    if (!state.me) viewAdminLogin(); else { if (location.hash !== '#/admin') history.replaceState(null, '', '#/admin'); viewAdmin(); }
+    document.title = 'Spark · Администрация'; return;
+  }
   stopViewTimer();
   document.body.classList.remove('thread-open');
   { const vEl = $('#view'); if (vEl) vEl.className = ''; }
