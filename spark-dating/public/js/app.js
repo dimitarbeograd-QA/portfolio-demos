@@ -659,7 +659,7 @@ function openProfile(p) {
     clear(body);
     const photos = cur.photos.length ? cur.photos.map(x => x.url) : [avatar(cur.nickname, cur.gender)];
     if (idx >= photos.length) idx = 0;
-    const main = h('div', { class: 'main' }, h('img', { src: photos[idx], alt: `Снимка на ${cur.nickname}` }));
+    const main = h('button', { class: 'main', type: 'button', 'aria-label': 'Покажи на цял екран', title: 'Цял екран', onclick: () => openViewer(photos.map(u => ({ url: u, alt: `Снимка на ${cur.nickname}`, caption: cur.nickname })), idx) }, h('img', { src: photos[idx], alt: `Снимка на ${cur.nickname}` }), h('span', { class: 'expand', 'aria-hidden': 'true', text: '⤢' }));
     const thumbs = photos.length > 1 ? h('div', { class: 'thumbs' }, photos.map((u, n) => h('button', { type: 'button', 'aria-label': `Снимка ${n + 1}`, 'aria-current': String(n === idx), onclick: () => { idx = n; render(); } }, h('img', { src: u, alt: '' })))) : null;
     const likeBtn = cur.isMe ? null : h('button', { class: cur.liked ? 'btn' : 'btn ghost', type: 'button', 'aria-pressed': String(cur.liked), text: cur.liked ? '💙 Харесан' : '🤍 Харесай', onclick: async e => {
       const likeEl = e.currentTarget; likeEl.disabled = true;
@@ -746,7 +746,7 @@ function viewProfile() {
   function renderPhotos() {
     clear(photosBox);
     state.me.photos.forEach((ph, i) => photosBox.append(h('div', { class: 'ph-item' },
-      h('img', { src: ph.url, alt: `Моя снимка ${i + 1}` }),
+      h('img', { src: ph.url, alt: `Моя снимка ${i + 1}`, class: 'zoomable', title: 'Цял екран', onclick: () => openViewer(state.me.photos.map(x => ({ url: x.url, alt: 'Моя снимка' })), i) }),
       i === 0 ? h('span', { class: 'main-tag', text: 'Основна' }) : null,
       h('div', { class: 'ctl' },
         i !== 0 ? h('button', { type: 'button', text: 'Основна', onclick: () => photoAction('PUT', `/api/me/photos/${ph.id}/main`) }) : null,
@@ -923,11 +923,62 @@ const lastLine = c => {
   return who + l.body.replace(/:([a-z]+):/g, (m, n) => (SparkEmo.labels[n] ? '🙂' : m));
 };
 
-// Преглед на снимка на цял екран.
-function openLightbox(att) {
-  openModal(h('div', { class: 'lightbox' }, h('img', { src: att.url, alt: att.name }), h('p', { class: 'dim', text: `${att.name} · ${fmtSize(att.size)}` }),
-    h('a', { class: 'btn sm', href: att.url, download: att.name, text: '⬇ Свали' })), { title: att.name });
+// Преглед на снимки на цял екран: стрелки, клавиши ←/→/Esc, плъзване, увеличение с клик/двоен тап.
+let viewerEl = null, viewerKey = null;
+function closeViewer() {
+  if (!viewerEl) return;
+  viewerEl.remove(); viewerEl = null;
+  window.removeEventListener('keydown', viewerKey, true); viewerKey = null;
+  if (!$('#modalRoot').firstChild) document.body.style.overflow = '';
 }
+function openViewer(items, start = 0) {
+  closeViewer();
+  items = items.filter(Boolean);
+  if (!items.length) return;
+  let i = Math.min(Math.max(start, 0), items.length - 1), zoomed = false, x0 = null;
+  const img = h('img', { class: 'vimg', alt: '', draggable: 'false' });
+  const count = h('span', { class: 'vcount' });
+  const dl = h('a', { class: 'vbtn vdl', 'aria-label': 'Свали', title: 'Свали', text: '⬇' });
+  const prev = h('button', { class: 'vbtn vnav vprev', type: 'button', 'aria-label': 'Предишна', text: '‹', onclick: () => go(-1) });
+  const next = h('button', { class: 'vbtn vnav vnext', type: 'button', 'aria-label': 'Следваща', text: '›', onclick: () => go(1) });
+  const cap = h('div', { class: 'vcap' });
+  const stage = h('div', { class: 'vstage' }, img);
+  const setZoom = z => { zoomed = z; img.classList.toggle('zoom', z); stage.classList.toggle('zoomed', z); };
+  function show() {
+    const it = items[i];
+    setZoom(false);
+    img.src = it.url; img.alt = it.alt || '';
+    cap.textContent = it.caption || '';
+    count.textContent = items.length > 1 ? `${i + 1} / ${items.length}` : '';
+    prev.hidden = next.hidden = items.length < 2;
+    if (it.download) { dl.href = it.url; dl.setAttribute('download', it.download); dl.hidden = false; } else dl.hidden = true;
+  }
+  function go(d) { i = (i + d + items.length) % items.length; show(); }
+  stage.addEventListener('click', e => { if (e.target === stage) closeViewer(); });
+  img.addEventListener('click', () => setZoom(!zoomed));
+  stage.addEventListener('touchstart', e => { x0 = !zoomed && e.touches.length === 1 ? e.touches[0].clientX : null; }, { passive: true });
+  stage.addEventListener('touchend', e => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0; x0 = null;
+    if (Math.abs(dx) > 50 && items.length > 1) go(dx < 0 ? 1 : -1);
+  });
+  viewerKey = e => {
+    if (e.key === 'Escape') closeViewer();
+    else if (e.key === 'ArrowLeft' && items.length > 1) go(-1);
+    else if (e.key === 'ArrowRight' && items.length > 1) go(1);
+    else return;
+    e.preventDefault(); e.stopImmediatePropagation();
+  };
+  window.addEventListener('keydown', viewerKey, true);
+  viewerEl = h('div', { class: 'viewer', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Преглед на снимка' },
+    h('div', { class: 'vbar' }, count, h('span', { class: 'vsp' }), dl, h('button', { class: 'vbtn', type: 'button', 'aria-label': 'Затвори', text: '✕', onclick: closeViewer })),
+    stage, prev, next, cap);
+  document.body.append(viewerEl);
+  document.body.style.overflow = 'hidden';
+  show();
+}
+
+function openLightbox(att) { openViewer([{ url: att.url, alt: att.name, caption: `${att.name} · ${fmtSize(att.size)}`, download: att.name }]); }
 function attachmentNode(a) {
   if (a.kind === 'image') return h('button', { class: 'att-img', type: 'button', 'aria-label': `Отвори снимка ${a.name}`, onclick: () => openLightbox(a) }, h('img', { src: a.url, alt: a.name, loading: 'lazy' }));
   return h('a', { class: 'att-file', href: a.url, download: a.name, title: 'Свали' }, h('span', { class: 'ficon', 'aria-hidden': 'true', text: fileIcon(a.name) }),

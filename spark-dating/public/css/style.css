@@ -204,7 +204,7 @@ input[type=color] { padding: 2px; height: 2.4rem; width: 3.4rem; cursor: pointer
 .xbtn { margin-left: auto; font: inherit; font-size: 1.2rem; line-height: 1; cursor: pointer; color: var(--text); background: transparent; border: 0; border-radius: 8px; padding: .2rem .55rem; }
 .xbtn:hover { background: var(--faint); color: var(--heading); }
 .pview { display: grid; grid-template-columns: 1.05fr 1fr; gap: 1.3rem; }
-.gallery .main { aspect-ratio: 4 / 5; border-radius: calc(var(--radius) * .7); overflow: hidden; background: var(--faint); border: var(--bw) solid var(--border); }
+.gallery .main { position: relative; display: block; width: 100%; padding: 0; cursor: zoom-in; aspect-ratio: 4 / 5; border-radius: calc(var(--radius) * .7); overflow: hidden; background: var(--faint); border: var(--bw) solid var(--border); }
 .gallery .main img { width: 100%; height: 100%; object-fit: cover; display: block; animation: fade .4s both; }
 .thumbs { display: flex; gap: .4rem; margin-top: .5rem; flex-wrap: wrap; }
 .thumbs button { width: 56px; height: 56px; padding: 0; border-radius: 10px; overflow: hidden; border: 2px solid transparent; cursor: pointer; background: var(--faint); transition: border-color .2s, transform .2s; }
@@ -514,3 +514,22 @@ button[aria-pressed=true].btn:not(.ghost) { animation: likepop .35s var(--ease);
 }
 @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } }
 @media (max-width: 380px) { .grid { gap: .4rem; } .card .over b { font-size: .9rem; } .tab .tl2 { font-size: .6rem; } }
+
+/* Преглед на снимки на цял екран */
+.gallery .main .expand { position: absolute; right: .6rem; bottom: .6rem; width: 2.2rem; height: 2.2rem; display: grid; place-items: center; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; font-size: 1.1rem; backdrop-filter: blur(4px); }
+.ph-item img.zoomable { cursor: zoom-in; }
+.viewer { position: fixed; inset: 0; z-index: 400; background: #02060e; display: flex; flex-direction: column; animation: fade .2s both; }
+.vbar { position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; align-items: center; gap: .5rem; padding: calc(.6rem + env(safe-area-inset-top, 0px)) .8rem .6rem; background: linear-gradient(rgba(0,0,0,.6), transparent); }
+.vsp { flex: 1; } .vcount { color: #fff; font-weight: 600; font-size: .95rem; }
+.vbtn { width: 2.6rem; height: 2.6rem; border-radius: 50%; border: 0; display: grid; place-items: center; font-size: 1.2rem; text-decoration: none; cursor: pointer; color: #fff; background: rgba(255,255,255,.14); backdrop-filter: blur(4px); }
+.vbtn:hover { background: rgba(255,255,255,.28); }
+.vnav { position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; width: 3rem; height: 3rem; font-size: 2rem; line-height: 1; padding-bottom: .2rem; }
+.vprev { left: .8rem; } .vnext { right: .8rem; }
+.vstage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: auto; }
+.vimg { max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; user-select: none; animation: fade .25s both; }
+.vimg.zoom { max-width: none; max-height: none; width: auto; height: auto; min-width: 160%; cursor: zoom-out; }
+.vstage.zoomed { align-items: flex-start; justify-content: flex-start; }
+.vcap { position: absolute; left: 0; right: 0; bottom: 0; padding: .8rem 1rem calc(.9rem + env(safe-area-inset-bottom, 0px)); text-align: center; color: #fff; font-size: .95rem; background: linear-gradient(transparent, rgba(0,0,0,.6)); pointer-events: none; }
+.vcap:empty { display: none; }
+@media (max-width: 700px) { .vnav { display: none; } .vimg { cursor: default; } }
+.viewer [hidden] { display: none !important; }
