@@ -1,10 +1,25 @@
 // Статичен преглед: имитира /api/* в браузъра (без сървър). Данните са само в този браузър.
 (() => {
   'use strict';
-  const D = window.__SPARK_PREVIEW__; // { cities, interests, people:[{...}] }
+  const D = window.__SPARK_PREVIEW__; // { places, interests, people, ... }
   const KEY = 'spark.preview.v1';
   window.confirm = () => true; // в прегледа диалозите са недостъпни
   const MIN_AGE = 18, MAX_PHOTOS = 6;
+  // ── Области и населени места (ЕКАТТЕ на НСИ) ──
+  const REGIONS = D.places.regions;
+  const REGION_NAME = new Map(REGIONS.map(r => [r.code, r.name]));
+  const PLACES = D.places.places.map(([id, kind, name, region, ob]) => ({ id, kind, name, region, obshtina: D.places.obshtini[ob] || '', label: kind === 'гр.' ? name : `${kind} ${name}`, key: name.toLowerCase() }));
+  const BY_ID = new Map(PLACES.map(p => [p.id, p]));
+  const BY_REGION = new Map(REGIONS.map(r => [r.code, PLACES.filter(p => p.region === r.code)]));
+  const describe = p => ({ id: p.id, label: p.label, kind: p.kind, name: p.name, obshtina: p.obshtina, region: p.region, regionName: REGION_NAME.get(p.region) });
+  const placeFields = u => { const p = BY_ID.get(u.placeId); return p ? { city: p.label, placeId: p.id, region: p.region, regionName: REGION_NAME.get(p.region), obshtina: p.obshtina } : { city: u.city || '', placeId: '', region: '', regionName: '', obshtina: '' }; };
+  function searchPlaces(code, q, limit) {
+    const list = BY_REGION.get(code) || [];
+    const term = String(q || '').toLowerCase().replace(/^(гр\.|с\.|ман\.)\s*/, '').trim();
+    if (!term) return list.slice(0, limit);
+    const a = [], b = []; for (const p of list) { const i = p.key.indexOf(term); if (i === 0) a.push(p); else if (i > 0) b.push(p); }
+    return a.concat(b).slice(0, limit);
+  }
   let db = { users: [], likes: [], seq: 1000, session: null, messages: [], blocks: [], reports: null, rseq: 0 };
   try { const raw = localStorage.getItem(KEY); if (raw) db = JSON.parse(raw); } catch { /* без storage */ }
   db.messages = db.messages || []; db.blocks = db.blocks || [];
@@ -28,7 +43,7 @@
   function pub(u, viewer) {
     const likes = db.likes.filter(l => l.to === u.id).length + (u.likesBase || 0);
     return {
-      id: u.id, nickname: u.nickname, age: u.isDemo ? u.age : ageFrom(u.birthDate), gender: u.gender, lookingFor: u.lookingFor, city: u.city,
+      id: u.id, nickname: u.nickname, age: u.isDemo ? u.age : ageFrom(u.birthDate), gender: u.gender, lookingFor: u.lookingFor, ...placeFields(u),
       bio: u.bio, interests: [...u.interests].sort(), photos: u.photos.map(p => ({ id: p.id, url: p.url })), isDemo: !!u.isDemo,
       online: u.isDemo ? u.lastMin < 5 : true, liked: db.likes.some(l => l.from === viewer && l.to === u.id),
       likedMe: db.likes.some(l => l.from === u.id && l.to === viewer), likes, isMe: u.id === viewer,
@@ -40,9 +55,18 @@
   const route = (m, re, fn) => routes.push([m, re, fn]);
 
   route('GET', /^\/api\/meta$/, () => ok({
-    cities: D.cities.map(name => ({ name, count: people().filter(u => u.city === name).length })),
+    regions: REGIONS.map(r => ({ code: r.code, name: r.name, count: people().filter(u => u.placeId && BY_ID.get(u.placeId).region === r.code).length })),
     interests: D.interests, minAge: MIN_AGE, maxPhotos: MAX_PHOTOS, total: people().length, demoAdmin: true, reportReasons: D.reportReasons,
   }));
+  route('GET', /^\/api\/places$/, ({ q }) => {
+    const region = q.get('region') || ''; if (!REGION_NAME.has(region)) return bad('Изберете област.');
+    const limit = Math.min(60, Math.max(1, parseInt(q.get('limit'), 10) || 30));
+    const counts = new Map(); people().forEach(u => { if (u.placeId && BY_ID.get(u.placeId).region === region) counts.set(u.placeId, (counts.get(u.placeId) || 0) + 1); });
+    const list = q.get('populated') === '1'
+      ? [...counts.keys()].map(id => BY_ID.get(id)).sort((a, b) => counts.get(b.id) - counts.get(a.id) || a.name.localeCompare(b.name, 'bg'))
+      : searchPlaces(region, q.get('q'), limit);
+    return ok({ places: list.slice(0, limit).map(p => ({ ...describe(p), count: counts.get(p.id) || 0 })), total: list.length });
+  });
   route('GET', /^\/api\/me$/, () => ok({ user: meUser() ? full(meUser()) : null }));
 
   route('POST', /^\/api\/register$/, ({ body: b }) => {
@@ -55,11 +79,11 @@
     if (age < MIN_AGE) return bad('Сайтът е само за пълнолетни (18+).');
     if (age > 99) return bad('Невалидна дата на раждане.');
     if (!['male', 'female', 'other'].includes(b.gender)) return bad('Изберете пол.');
-    if (!D.cities.includes(b.city)) return bad('Изберете град от списъка.');
+    const place = BY_ID.get(String(b.placeId || '')); if (!place) return bad('Изберете област и населено място от списъка.');
     if (db.users.some(u => u.username.toLowerCase() === username.toLowerCase())) return bad('Това потребителско име е заето.', 409);
     if (all().some(u => u.nickname.toLowerCase() === nickname.toLowerCase())) return bad('Този никнейм е зает.', 409);
     const u = { id: ++db.seq, username, pw: hash(password), nickname, birthDate: b.birthDate, gender: b.gender, lookingFor: ['male', 'female', 'any'].includes(b.lookingFor) ? b.lookingFor : 'any',
-      city: b.city, bio: '', interests: [], photos: [], theme: null, created: 1000 + db.seq };
+      placeId: place.id, bio: '', interests: [], photos: [], theme: null, created: 1000 + db.seq };
     db.users.push(u); db.session = u.id; save();
     return ok({ user: full(u) }, 201);
   });
@@ -81,7 +105,7 @@
     }
     if (['male', 'female', 'other'].includes(b.gender)) me.gender = b.gender;
     if (['male', 'female', 'any'].includes(b.lookingFor)) me.lookingFor = b.lookingFor;
-    if (D.cities.includes(b.city)) me.city = b.city;
+    if (b.placeId !== undefined) { if (!BY_ID.has(String(b.placeId))) return bad('Изберете област и населено място от списъка.'); me.placeId = String(b.placeId); }
     if (b.bio !== undefined) { if (String(b.bio).length > 600) return bad('Биото може да е до 600 символа.'); me.bio = String(b.bio).trim(); }
     if (Array.isArray(b.interests)) me.interests = [...new Set(b.interests.filter(x => D.interests.includes(x)))].slice(0, 8);
     save(); return ok({ user: full(me) });
@@ -113,7 +137,8 @@
 
   route('GET', /^\/api\/profiles$/, authed(({ q, me }) => {
     let list = people().filter(u => u.id !== me.id && !blocked(u.id, me.id));
-    if (q.get('city')) list = list.filter(u => u.city === q.get('city'));
+    if (q.get('region')) { if (!REGION_NAME.has(q.get('region'))) return bad('Непозната област.'); list = list.filter(u => (BY_ID.get(u.placeId) || {}).region === q.get('region')); }
+    if (q.get('place')) { if (!BY_ID.has(q.get('place'))) return bad('Непознато населено място.'); list = list.filter(u => u.placeId === q.get('place')); }
     if (q.get('gender')) list = list.filter(u => u.gender === q.get('gender'));
     const age = u => (u.isDemo ? u.age : ageFrom(u.birthDate));
     if (q.get('ageMin')) list = list.filter(u => age(u) >= Number(q.get('ageMin')));
@@ -146,23 +171,23 @@
   const ADMIN_ID = 999;
   route('POST', /^\/api\/demo-admin$/, () => {
     let a = db.users.find(u => u.id === ADMIN_ID);
-    if (!a) { a = { id: ADMIN_ID, username: 'admin', pw: hash(Math.random() + ''), nickname: 'Админ', birthDate: '1990-01-01', gender: 'other', lookingFor: 'any', city: 'София', bio: 'Администратор на Spark.', interests: [], photos: [], theme: null, role: 'admin', created: 0 }; db.users.push(a); }
+    if (!a) { a = { id: ADMIN_ID, username: 'admin', pw: hash(Math.random() + ''), nickname: 'Админ', birthDate: '1990-01-01', gender: 'other', lookingFor: 'any', placeId: D.adminPlaceId, bio: 'Администратор на Spark.', interests: [], photos: [], theme: null, role: 'admin', created: 0 }; db.users.push(a); }
     db.session = ADMIN_ID; save(); return ok({ user: full(a) });
   });
   const adminOnly = fn => authed(args => (args.me.role === 'admin' ? fn(args) : bad('Нямате достъп.', 403)));
   const ageOf = u => (u.isDemo ? u.age : ageFrom(u.birthDate));
   route('GET', /^\/api\/admin\/stats$/, adminOnly(() => {
     const ps = people(), real = ps.filter(u => !u.isDemo), by = {};
-    ps.forEach(u => { by[u.city] = (by[u.city] || 0) + 1; });
+    ps.forEach(u => { const n = REGION_NAME.get((BY_ID.get(u.placeId) || {}).region) || '—'; by[n] = (by[n] || 0) + 1; });
     const g = {}; ps.forEach(u => { g[u.gender] = (g[u.gender] || 0) + 1; });
     return ok({ users: ps.length, real: real.length, demo: ps.length - real.length, openReports: (db.reports || []).filter(r => r.status === 'open').length, photos: ps.reduce((n, u) => n + u.photos.length, 0), likes: db.likes.length,
       online: ps.filter(u => !u.isDemo || u.lastMin < 5).length, newToday: real.length,
-      byCity: Object.entries(by).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([city, count]) => ({ city, count })), byGender: g });
+      byRegion: Object.entries(by).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([region, count]) => ({ region, count })), byGender: g });
   }));
   route('GET', /^\/api\/admin\/users$/, adminOnly(({ q }) => {
     const term = (q.get('q') || '').trim().toLowerCase();
     const list = all().filter(u => !term || u.nickname.toLowerCase().includes(term) || (u.username || '').toLowerCase().includes(term)).sort((a, b) => b.id - a.id).slice(0, 200);
-    return ok({ users: list.map(u => ({ id: u.id, username: u.username || '', nickname: u.nickname, age: ageOf(u), gender: u.gender, city: u.city, isDemo: !!u.isDemo, role: u.role || 'user',
+    return ok({ users: list.map(u => ({ id: u.id, username: u.username || '', nickname: u.nickname, age: ageOf(u), gender: u.gender, ...placeFields(u), isDemo: !!u.isDemo, role: u.role || 'user',
       createdAt: '', lastSeen: '', photos: u.photos.length, likes: db.likes.filter(l => l.to === u.id).length + (u.likesBase || 0) })) });
   }));
   route('DELETE', /^\/api\/admin\/users\/(\d+)$/, adminOnly(({ m }) => {
@@ -190,7 +215,7 @@
     let t = db.users.find(u => u.id === TEST_ID);
     if (!t) {
       const T = D.testUser, born = new Date(); born.setFullYear(born.getFullYear() - T.age); born.setMonth(5, 15);
-      t = { id: TEST_ID, username: T.username, pw: hash(Math.random() + ''), nickname: T.nickname, birthDate: born.toISOString().slice(0, 10), gender: T.gender, lookingFor: T.lookingFor, city: T.city,
+      t = { id: TEST_ID, username: T.username, pw: hash(Math.random() + ''), nickname: T.nickname, birthDate: born.toISOString().slice(0, 10), gender: T.gender, lookingFor: T.lookingFor, placeId: T.placeId,
         bio: T.bio, interests: [...T.interests], photos: [], theme: null, role: 'user', created: 1000 };
       db.users.push(t);
       for (const c of D.testChats) {
@@ -265,7 +290,7 @@
     const r = db.reports.find(x => x.id === Number(m[1])); if (!r) return bad('Докладът не е намерен.', 404);
     r.views++; save();
     const u = all().find(x => x.id === r.reportedId);
-    const reported = u ? { id: u.id, nickname: u.nickname, age: ageOf(u), city: u.city, gender: u.gender, bio: u.bio, isDemo: !!u.isDemo, createdAt: iso(Date.now() - (u.created || 0) * 1000), photos: u.photos.length,
+    const reported = u ? { id: u.id, nickname: u.nickname, age: ageOf(u), ...placeFields(u), gender: u.gender, bio: u.bio, isDemo: !!u.isDemo, createdAt: iso(Date.now() - (u.created || 0) * 1000), photos: u.photos.length,
       otherReports: db.reports.filter(x => x.reportedId === u.id && x.id !== r.id).length } : null;
     return ok({ report: { ...rrow(r), details: r.details, adminNote: r.note, reporterStillExists: !!all().find(x => x.id === r.reporterId), reportedStillExists: !!u }, reported,
       messages: r.msgs.map((x, i) => ({ id: i + 1, fromReporter: x.fromReporter, from: x.fromReporter ? r.reporterNick : r.reportedNick, body: x.body, at: iso(x.at) })), views: r.views });

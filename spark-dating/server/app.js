@@ -6,7 +6,8 @@ const path = require('node:path');
 const fs = require('node:fs');
 const db = require('./db');
 const SqliteStore = require('./session-store');
-const { CITIES, INTERESTS, GENDERS, LOOKING, MIN_AGE, MAX_PHOTOS, REPORT_REASONS } = require('./constants');
+const places = require('./places');
+const { INTERESTS, GENDERS, LOOKING, MIN_AGE, MAX_PHOTOS, REPORT_REASONS } = require('./constants');
 
 const isProd = process.env.NODE_ENV === 'production';
 if (isProd && !process.env.SESSION_SECRET) {
@@ -103,6 +104,13 @@ function interestsOf(ids) {
   for (const r of rows) out.get(r.user_id).push(r.interest);
   return out;
 }
+// Населено място на профил: етикет за показване + код на областта и общината.
+function placeFields(r) {
+  const d = places.describe(places.BY_ID.get(r.place_id));
+  return d
+    ? { city: d.label, placeId: d.id, region: d.region, regionName: d.regionName, obshtina: d.obshtina }
+    : { city: r.city, placeId: '', region: '', regionName: '', obshtina: '' };
+}
 function publicProfiles(rows, viewerId) {
   const ids = rows.map(r => r.id);
   const photos = photosOf(ids);
@@ -131,7 +139,7 @@ function publicProfiles(rows, viewerId) {
     age: ageFrom(r.birth_date),
     gender: r.gender,
     lookingFor: r.looking_for,
-    city: r.city,
+    ...placeFields(r),
     bio: r.bio,
     interests: ints.get(r.id),
     photos: photos.get(r.id),
@@ -187,10 +195,10 @@ const DUMMY_HASH = bcrypt.hashSync('dummy-password-for-timing', 10);
 // ── Публични маршрути ──
 app.get('/api/meta', (req, res) => {
   const counts = new Map(
-    db.prepare("SELECT city, COUNT(*) c FROM users WHERE role <> 'admin' GROUP BY city").all().map(r => [r.city, r.c])
+    db.prepare("SELECT region, COUNT(*) c FROM users WHERE role <> 'admin' GROUP BY region").all().map(r => [r.region, r.c])
   );
   res.json({
-    cities: CITIES.map(name => ({ name, count: counts.get(name) || 0 })),
+    regions: places.REGIONS.map(r => ({ code: r.code, name: r.name, count: counts.get(r.code) || 0 })),
     interests: INTERESTS,
     minAge: MIN_AGE,
     maxPhotos: MAX_PHOTOS,
@@ -199,6 +207,23 @@ app.get('/api/meta', (req, res) => {
     reportReasons: REPORT_REASONS,
   });
 });
+
+// Населени места в област (за избор при регистрация и в „Открий хора“).
+// ?populated=1 → само местата с хора, подредени по брой; иначе се търси по ?q (градовете са преди селата).
+app.get('/api/places', wrap((req, res) => {
+  const region = String(req.query.region || '');
+  if (!places.REGION_BY_CODE.has(region)) return bad(res, 'Изберете област.');
+  const limit = Math.min(60, Math.max(1, parseInt(req.query.limit, 10) || 30));
+  const counts = new Map(db.prepare("SELECT place_id, COUNT(*) c FROM users WHERE region = ? AND role <> 'admin' GROUP BY place_id").all(region).map(r => [r.place_id, r.c]));
+  let list;
+  if (req.query.populated === '1') {
+    list = [...counts.keys()].map(id => places.BY_ID.get(id)).filter(Boolean)
+      .sort((a, b) => counts.get(b.id) - counts.get(a.id) || a.name.localeCompare(b.name, 'bg'));
+  } else {
+    list = places.search(region, req.query.q, limit);
+  }
+  res.json({ places: list.slice(0, limit).map(p => ({ ...places.describe(p), count: counts.get(p.id) || 0 })), total: list.length });
+}));
 
 app.post('/api/register', wrap((req, res) => {
   const b = req.body || {};
@@ -215,14 +240,15 @@ app.post('/api/register', wrap((req, res) => {
   if (age > 99) return bad(res, 'Невалидна дата на раждане.');
   if (!GENDERS.includes(b.gender)) return bad(res, 'Изберете пол.');
   const looking = LOOKING.includes(b.lookingFor) ? b.lookingFor : 'any';
-  if (!CITIES.includes(b.city)) return bad(res, 'Изберете град от списъка.');
+  const place = places.BY_ID.get(String(b.placeId || ''));
+  if (!place) return bad(res, 'Изберете област и населено място от списъка.');
 
   if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(username)) return bad(res, 'Това потребителско име е заето.', 409);
   if (db.prepare('SELECT 1 FROM users WHERE nickname_key = ?').get(nickKey(nickname))) return bad(res, 'Този никнейм е зает.', 409);
 
   const id = db.prepare(
-    'INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city) VALUES (?,?,?,?,?,?,?,?)'
-  ).run(username, bcrypt.hashSync(password, 10), nickname, nickKey(nickname), b.birthDate, b.gender, looking, b.city).lastInsertRowid;
+    'INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, place_id, region) VALUES (?,?,?,?,?,?,?,?,?,?)'
+  ).run(username, bcrypt.hashSync(password, 10), nickname, nickKey(nickname), b.birthDate, b.gender, looking, place.label, place.id, place.region).lastInsertRowid;
 
   req.session.regenerate(err => {
     if (err) return bad(res, 'Грешка при създаване на сесия.', 500);
@@ -284,9 +310,10 @@ app.put('/api/me', requireAuth, wrap((req, res) => {
     if (!LOOKING.includes(b.lookingFor)) return bad(res, 'Невалидна стойност за „Търся“.');
     next.looking_for = b.lookingFor;
   }
-  if (b.city !== undefined) {
-    if (!CITIES.includes(b.city)) return bad(res, 'Изберете град от списъка.');
-    next.city = b.city;
+  if (b.placeId !== undefined) {
+    const place = places.BY_ID.get(String(b.placeId));
+    if (!place) return bad(res, 'Изберете област и населено място от списъка.');
+    next.city = place.label; next.place_id = place.id; next.region = place.region;
   }
   if (b.bio !== undefined) {
     const bio = String(b.bio).trim();
@@ -294,8 +321,8 @@ app.put('/api/me', requireAuth, wrap((req, res) => {
     next.bio = bio;
   }
   db.transaction(() => {
-    db.prepare('UPDATE users SET nickname=?, nickname_key=?, gender=?, looking_for=?, city=?, bio=? WHERE id=?')
-      .run(next.nickname, nickKey(next.nickname), next.gender, next.looking_for, next.city, next.bio, id);
+    db.prepare('UPDATE users SET nickname=?, nickname_key=?, gender=?, looking_for=?, city=?, place_id=?, region=?, bio=? WHERE id=?')
+      .run(next.nickname, nickKey(next.nickname), next.gender, next.looking_for, next.city, next.place_id, next.region, next.bio, id);
     if (b.interests !== undefined) {
       db.prepare('DELETE FROM user_interests WHERE user_id = ?').run(id);
       const ins = db.prepare('INSERT INTO user_interests (user_id, interest) VALUES (?, ?)');
@@ -407,9 +434,13 @@ app.get('/api/profiles', requireAuth, wrap((req, res) => {
     'NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = ?))'];
   const args = [req.session.userId, req.session.userId, req.session.userId];
 
-  if (q.city) {
-    if (!CITIES.includes(q.city)) return bad(res, 'Непознат град.');
-    where.push('u.city = ?'); args.push(q.city);
+  if (q.region) {
+    if (!places.REGION_BY_CODE.has(q.region)) return bad(res, 'Непозната област.');
+    where.push('u.region = ?'); args.push(q.region);
+  }
+  if (q.place) {
+    if (!places.BY_ID.has(q.place)) return bad(res, 'Непознато населено място.');
+    where.push('u.place_id = ?'); args.push(q.place);
   }
   if (q.gender) {
     if (!GENDERS.includes(q.gender)) return bad(res, 'Невалиден пол.');
@@ -588,7 +619,7 @@ app.post('/api/demo-user', wrap((req, res) => {
 
 app.get('/api/admin/stats', requireAdmin, wrap((req, res) => {
   const one = sql => db.prepare(sql).get().c;
-  const byCity = db.prepare("SELECT city, COUNT(*) c FROM users WHERE role <> 'admin' GROUP BY city ORDER BY c DESC, city").all();
+  const byRegion = db.prepare("SELECT region, COUNT(*) c FROM users WHERE role <> 'admin' GROUP BY region ORDER BY c DESC").all();
   const byGender = db.prepare("SELECT gender, COUNT(*) c FROM users WHERE role <> 'admin' GROUP BY gender").all();
   res.json({
     users: one("SELECT COUNT(*) c FROM users WHERE role <> 'admin'"),
@@ -599,7 +630,7 @@ app.get('/api/admin/stats', requireAdmin, wrap((req, res) => {
     online: one("SELECT COUNT(*) c FROM users WHERE role <> 'admin' AND last_seen >= datetime('now', '-5 minutes')"),
     openReports: one("SELECT COUNT(*) c FROM reports WHERE status = 'open'"),
     newToday: one("SELECT COUNT(*) c FROM users WHERE role <> 'admin' AND is_demo = 0 AND created_at >= datetime('now', '-1 day')"),
-    byCity: byCity.map(r => ({ city: r.city, count: r.c })),
+    byRegion: byRegion.map(r => ({ region: (places.REGION_BY_CODE.get(r.region) || { name: '—' }).name, count: r.c })),
     byGender: Object.fromEntries(byGender.map(r => [r.gender, r.c])),
   });
 }));
@@ -607,13 +638,13 @@ app.get('/api/admin/stats', requireAdmin, wrap((req, res) => {
 app.get('/api/admin/users', requireAdmin, wrap((req, res) => {
   const term = nickKey(String(req.query.q || '').trim().slice(0, 30)).replace(/[\\%_]/g, c => '\\' + c);
   const rows = db.prepare(`
-    SELECT u.id, u.username, u.nickname, u.birth_date, u.gender, u.city, u.is_demo, u.role, u.created_at, u.last_seen,
+    SELECT u.id, u.username, u.nickname, u.birth_date, u.gender, u.city, u.place_id, u.region, u.is_demo, u.role, u.created_at, u.last_seen,
            (SELECT COUNT(*) FROM photos p WHERE p.user_id = u.id) AS photos,
            (SELECT COUNT(*) FROM likes l WHERE l.to_id = u.id) AS likes
     FROM users u WHERE (u.nickname_key LIKE ? ESCAPE '\\' OR u.username LIKE ? ESCAPE '\\')
     ORDER BY u.id DESC LIMIT 200`).all('%' + term + '%', '%' + term + '%');
   res.json({ users: rows.map(r => ({
-    id: r.id, username: r.username, nickname: r.nickname, age: ageFrom(r.birth_date), gender: r.gender, city: r.city,
+    id: r.id, username: r.username, nickname: r.nickname, age: ageFrom(r.birth_date), gender: r.gender, ...placeFields(r),
     isDemo: !!r.is_demo, role: r.role, createdAt: r.created_at, lastSeen: r.last_seen, photos: r.photos, likes: r.likes,
   })) });
 }));
@@ -657,7 +688,7 @@ app.get('/api/admin/reports/:id', requireAdmin, wrap((req, res) => {
   if (r.reported_id) {
     const u = db.prepare('SELECT * FROM users WHERE id = ?').get(r.reported_id);
     if (u) {
-      reported = { id: u.id, nickname: u.nickname, age: ageFrom(u.birth_date), city: u.city, gender: u.gender, bio: u.bio, isDemo: !!u.is_demo, createdAt: iso(u.created_at),
+      reported = { id: u.id, nickname: u.nickname, age: ageFrom(u.birth_date), ...placeFields(u), gender: u.gender, bio: u.bio, isDemo: !!u.is_demo, createdAt: iso(u.created_at),
         photos: db.prepare('SELECT COUNT(*) c FROM photos WHERE user_id = ?').get(u.id).c,
         otherReports: db.prepare('SELECT COUNT(*) c FROM reports WHERE reported_id = ? AND id <> ?').get(u.id, r.id).c };
     }

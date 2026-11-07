@@ -6,6 +6,8 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 
 const app = require('../server/app');
+const places = require('../server/places');
+const pid = (name, opts) => places.findPlace(name, opts).id;
 const { seedDemo, seedAdmin, seedTestUser } = require('../server/seed');
 seedDemo();
 seedAdmin();
@@ -36,7 +38,7 @@ function client() {
   };
 }
 const adult = () => { const d = new Date(); d.setFullYear(d.getFullYear() - 28); return d.toISOString().slice(0, 10); };
-const reg = (over = {}) => ({ username: 'ivan_' + Math.random().toString(36).slice(2, 8), password: 'supersecret1', nickname: 'Иван' + Math.floor(Math.random() * 1e5), birthDate: adult(), gender: 'male', lookingFor: 'female', city: 'София', ...over });
+const reg = (over = {}) => ({ username: 'ivan_' + Math.random().toString(36).slice(2, 8), password: 'supersecret1', nickname: 'Иван' + Math.floor(Math.random() * 1e5), birthDate: adult(), gender: 'male', lookingFor: 'female', placeId: pid('София'), ...over });
 
 // 1x1 PNG
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -45,7 +47,9 @@ test('meta е публичен и съдържа градове с броя пр
   const c = client();
   const r = await c('GET', '/api/meta');
   assert.equal(r.status, 200);
-  assert.ok(r.data.cities.find(x => x.name === 'София').count >= 1);
+  assert.equal(r.data.regions.length, 28);
+  assert.ok(r.data.regions.find(x => x.code === 'SOF').count >= 1);
+  assert.ok(!('cities' in r.data));
   assert.ok(r.data.interests.length > 5);
 });
 
@@ -58,7 +62,7 @@ test('регистрация: валидации', async () => {
   const c = client();
   assert.equal((await c('POST', '/api/register', reg({ password: 'short' }))).status, 400);
   assert.equal((await c('POST', '/api/register', reg({ username: 'a b' }))).status, 400);
-  assert.equal((await c('POST', '/api/register', reg({ city: 'Атлантида' }))).status, 400);
+  assert.equal((await c('POST', '/api/register', reg({ placeId: '99999' }))).status, 400);
   assert.equal((await c('POST', '/api/register', reg({ gender: 'x' }))).status, 400);
   const young = new Date(); young.setFullYear(young.getFullYear() - 17);
   const r = await c('POST', '/api/register', reg({ birthDate: young.toISOString().slice(0, 10) }));
@@ -116,9 +120,11 @@ test('публичният профил не изтича лични данни'
 test('филтри: град, пол, възраст, интереси, никнейм', async () => {
   const c = client();
   await c('POST', '/api/register', reg());
-  const sofia = await c('GET', '/api/profiles?city=' + encodeURIComponent('София') + '&limit=48');
+  const sofia = await c('GET', '/api/profiles?place=' + pid('София') + '&limit=48');
   assert.ok(sofia.data.total >= 4);
-  assert.ok(sofia.data.profiles.every(p => p.city === 'София'));
+  assert.ok(sofia.data.profiles.every(p => p.city === 'София' && p.regionName === 'София (столица)'));
+  const area = await c('GET', '/api/profiles?region=PDV&limit=48');
+  assert.ok(area.data.total >= 4 && area.data.profiles.every(p => p.region === 'PDV'));
 
   const f = await c('GET', '/api/profiles?gender=female&ageMin=25&ageMax=30&limit=48');
   assert.ok(f.data.profiles.length > 0);
@@ -130,7 +136,8 @@ test('филтри: град, пол, възраст, интереси, никн
   const q = await c('GET', '/api/profiles?q=' + encodeURIComponent('мил'));
   assert.ok(q.data.profiles.some(p => p.nickname === 'Мила'));
 
-  assert.equal((await c('GET', '/api/profiles?city=Нищо')).status, 400);
+  assert.equal((await c('GET', '/api/profiles?region=XXX')).status, 400);
+  assert.equal((await c('GET', '/api/profiles?place=00000')).status, 400);
   // SQL-подобни стойности не чупят заявката
   assert.equal((await c('GET', "/api/profiles?q=" + encodeURIComponent("'; DROP TABLE users;--%_"))).status, 200);
 
@@ -143,9 +150,10 @@ test('филтри: град, пол, възраст, интереси, никн
 test('профил: редакция, био, интереси, валидации', async () => {
   const c = client();
   await c('POST', '/api/register', reg());
-  const r = await c('PUT', '/api/me', { bio: '<script>alert(1)</script> Здравей', city: 'Варна', interests: ['Музика', 'Невалиден', 'Йога'] });
+  const r = await c('PUT', '/api/me', { bio: '<script>alert(1)</script> Здравей', placeId: pid('Варна'), interests: ['Музика', 'Невалиден', 'Йога'] });
   assert.equal(r.status, 200);
   assert.equal(r.data.user.city, 'Варна');
+  assert.equal(r.data.user.regionName, 'Варна');
   assert.deepEqual(r.data.user.interests.sort(), ['Йога', 'Музика']);
   assert.equal(r.data.user.bio, '<script>alert(1)</script> Здравей'); // пази се като текст; клиентът ползва textContent
   assert.equal((await c('PUT', '/api/me', { bio: 'x'.repeat(601) })).status, 400);
@@ -263,7 +271,7 @@ test('DEMO_ADMIN=1: вход без парола и админ панел', asyn
 
     const st = await c('GET', '/api/admin/stats');
     assert.equal(st.status, 200);
-    assert.ok(st.data.users >= 38 && st.data.demo >= 38 && Array.isArray(st.data.byCity));
+    assert.ok(st.data.users >= 38 && st.data.demo >= 38 && Array.isArray(st.data.byRegion) && st.data.byRegion.length > 5);
 
     const list = await c('GET', '/api/admin/users?q=' + encodeURIComponent('мил'));
     assert.ok(list.data.users.some(u => u.nickname === 'Мила' && 'username' in u));
@@ -464,4 +472,47 @@ test('тестов потребител: вход без парола, гото�
     await c('GET', `/api/chats/${teddy.profile.id}`);
     assert.equal((await c('GET', '/api/chats/unread')).data.unread, 1);
   } finally { delete process.env.DEMO_ADMIN; }
+});
+
+// ───────── Области и населени места ─────────
+test('места: публичен списък по област, търсене и броячи', async () => {
+  const c = client(); // без вход
+  assert.equal((await c('GET', '/api/places')).status, 400);
+  assert.equal((await c('GET', '/api/places?region=XXX')).status, 400);
+  const all = await c('GET', '/api/places?region=PDV&limit=60');
+  assert.equal(all.status, 200);
+  assert.ok(all.data.places.length === 60 && all.data.places[0].kind === 'гр.'); // градовете са първи
+  const found = await c('GET', '/api/places?region=PDV&q=' + encodeURIComponent('бачк'));
+  assert.ok(found.data.places.some(p => p.label === 'с. Бачково' && p.obshtina === 'Асеновград' && p.regionName === 'Пловдив'));
+  const pop = await c('GET', '/api/places?region=SOF&populated=1');
+  assert.ok(pop.data.places.length >= 1 && pop.data.places.every(p => p.count > 0));
+  // префиксът „с.“ в търсенето се игнорира
+  assert.ok((await c('GET', '/api/places?region=PDV&q=' + encodeURIComponent('с. бачк'))).data.places.length >= 1);
+});
+
+test('регистрация в село: профилът показва населено място, община и област', async () => {
+  const c = client();
+  const bachkovo = places.findPlace('Бачково');
+  const r = await c('POST', '/api/register', reg({ placeId: bachkovo.id }));
+  assert.equal(r.status, 201);
+  const u = r.data.user;
+  assert.deepEqual([u.city, u.region, u.regionName, u.obshtina, u.placeId], ['с. Бачково', 'PDV', 'Пловдив', 'Асеновград', bachkovo.id]);
+  // филтър по село намира само хората от него
+  const here = await c('GET', `/api/profiles?place=${bachkovo.id}&limit=48`);
+  assert.ok(here.data.profiles.every(p => p.placeId === bachkovo.id) && here.data.total >= 1);
+  // броячът на областта се увеличава
+  const meta = (await c('GET', '/api/meta')).data.regions.find(x => x.code === 'PDV');
+  assert.ok(meta.count >= 5);
+  // смяна на мястото
+  const moved = await c('PUT', '/api/me', { placeId: pid('Варна') });
+  assert.equal(moved.data.user.region, 'VAR');
+  assert.equal((await c('PUT', '/api/me', { placeId: 'нищо' })).status, 400);
+});
+
+test('данни: 28 области, всички места имат област и община', () => {
+  assert.equal(places.REGIONS.length, 28);
+  assert.ok(places.PLACES.length > 5000);
+  assert.ok(places.PLACES.every(p => places.REGION_BY_CODE.has(p.region) && p.obshtina && p.id.length === 5));
+  assert.equal(new Set(places.PLACES.map(p => p.id)).size, places.PLACES.length);
+  assert.ok(places.PLACES.filter(p => p.kind === 'гр.').length >= 250);
 });

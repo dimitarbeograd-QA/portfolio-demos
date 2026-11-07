@@ -3,13 +3,16 @@
 // Употреба: node scripts/build-preview.js [изходен/файл.html]
 const fs = require('node:fs');
 const path = require('node:path');
-const { CITIES, INTERESTS, REPORT_REASONS } = require('../server/constants');
+const { INTERESTS, REPORT_REASONS } = require('../server/constants');
+const places = require('../server/places');
+const placesData = require('../server/places.json');
 const { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS } = require('../server/seed-data');
 
 const root = path.join(__dirname, '..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8');
+const placeIdOf = name => { const p = places.findPlace(name); if (!p) throw new Error('Неизвестно място: ' + name); return p.id; };
 const people = PEOPLE.map(([nickname, gender, age, city, bio], i) => ({
-  nickname, gender, age, city, bio, interests: randomInterests(i),
+  nickname, gender, age, placeId: placeIdOf(city), bio, interests: randomInterests(i),
   lookingFor: i % 9 === 0 ? 'any' : gender === 'male' ? 'female' : gender === 'female' ? 'male' : 'any',
 }));
 // Hash маршрутите в артефактите са само #name (не #/path).
@@ -42,7 +45,7 @@ html, body { height: auto; }
 <footer class="foot"><span>© Spark · само за лица над 18 години</span><span class="dim">Профилите с значка „демо“ са примерни.</span></footer>
 <div id="modalRoot"></div>
 <div id="toasts" role="status" aria-live="polite"></div>
-<script>window.__SPARK_PREVIEW__ = ${safe(JSON.stringify({ cities: CITIES, interests: INTERESTS, people, reportReasons: REPORT_REASONS, sampleReports: SAMPLE_REPORTS, testUser: TEST_USER, testChats: TEST_CHATS }))};</script>
+<script>window.__SPARK_PREVIEW__ = ${safe(JSON.stringify({ places: { regions: placesData.regions, obshtini: placesData.obshtini, places: placesData.places }, adminPlaceId: placeIdOf('София'), interests: INTERESTS, people, reportReasons: REPORT_REASONS, sampleReports: SAMPLE_REPORTS, testUser: { ...TEST_USER, placeId: placeIdOf(TEST_USER.city) }, testChats: TEST_CHATS }))};</script>
 <script>
 ${safe(read('preview/mock-api.js'))}
 </script>

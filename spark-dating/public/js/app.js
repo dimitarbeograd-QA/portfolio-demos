@@ -117,6 +117,74 @@ function loadLocalTheme() {
   try { const t = JSON.parse(localStorage.getItem('spark.theme') || 'null'); if (t) applyTheme(t); else applyTheme({}); } catch { applyTheme({}); }
 }
 
+/* ═══════════ Избор на област и населено място ═══════════ */
+const placeText = p => p.label + (p.kind !== 'гр.' && p.obshtina ? ` (общ. ${p.obshtina})` : '');
+let pickerSeq = 0;
+// Област + търсене на град/село в нея. initial = профил (region, placeId, city, obshtina) или null.
+function placePicker({ initial, onChange }) {
+  const uid = 'pp' + (++pickerSeq);
+  let region = (initial && initial.region) || '';
+  let place = initial && initial.placeId ? { id: initial.placeId, label: initial.city, kind: initial.city.startsWith('с.') ? 'с.' : 'гр.', obshtina: initial.obshtina, region } : null;
+  let items = [], active = -1, token = 0;
+
+  const regionSel = h('select', { id: uid + '-region', 'aria-label': 'Област', onchange: e => {
+    region = e.target.value; place = null; input.value = ''; input.disabled = !region; closeList(); summary(); onChange(null);
+    if (region) { input.focus(); search(''); }
+  } }, h('option', { value: '', text: 'Избери област…' }), state.meta.regions.map(r => h('option', { value: r.code, text: r.name, selected: r.code === region })));
+  const input = h('input', { id: uid + '-place', type: 'text', autocomplete: 'off', role: 'combobox', 'aria-expanded': 'false', 'aria-controls': uid + '-list', 'aria-autocomplete': 'list', maxlength: '40',
+    placeholder: region ? 'Започни да пишеш: град или село…' : 'Първо избери област', disabled: !region });
+  const list = h('ul', { id: uid + '-list', class: 'combo-list', role: 'listbox', hidden: true });
+  const sum = h('p', { class: 'hint', 'aria-live': 'polite' });
+  if (place) input.value = placeText(place);
+
+  function summary() {
+    const rn = region ? (state.meta.regions.find(r => r.code === region) || {}).name : '';
+    sum.textContent = place ? `📍 ${place.label}${place.obshtina && place.kind !== 'гр.' ? ' · общ. ' + place.obshtina : ''} · обл. ${rn}` : region ? 'Избери населено място от списъка (хиляди градове и села).' : '';
+  }
+  function closeList() { list.hidden = true; input.setAttribute('aria-expanded', 'false'); active = -1; }
+  function renderList() {
+    clear(list);
+    if (!items.length) { list.append(h('li', { class: 'combo-empty', role: 'presentation', text: 'Няма такова населено място в тази област.' })); }
+    items.forEach((p, i) => list.append(h('li', { id: `${uid}-o${i}`, role: 'option', 'aria-selected': String(i === active), class: i === active ? 'on' : '',
+      onmousedown: e => { e.preventDefault(); choose(p); } },
+      h('b', { text: p.label }), h('small', { text: `общ. ${p.obshtina}` }))));
+    list.hidden = false; input.setAttribute('aria-expanded', 'true');
+  }
+  function choose(p) {
+    place = p; input.value = placeText(p); closeList(); summary(); onChange(p);
+  }
+  async function search(q) {
+    if (!region) return;
+    const mine = ++token;
+    try {
+      const r = await api('GET', `/api/places?region=${encodeURIComponent(region)}&limit=40&q=${encodeURIComponent(q)}`);
+      if (mine !== token) return;
+      items = r.places; active = -1; renderList();
+    } catch (x) { if (mine === token) toast(x.message, true); }
+  }
+  const lazy = debounce(q => search(q), 150);
+  input.addEventListener('input', () => { if (place) { place = null; summary(); onChange(null); } lazy(input.value); });
+  input.addEventListener('focus', () => { if (region && !place) search(input.value); });
+  input.addEventListener('blur', () => setTimeout(closeList, 120));
+  input.addEventListener('keydown', e => {
+    if (list.hidden && (e.key === 'ArrowDown') && region) { search(input.value); return; }
+    if (list.hidden) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(items.length - 1, active + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(0, active - 1); }
+    else if (e.key === 'Enter') { if (active >= 0 && items[active]) { e.preventDefault(); choose(items[active]); } return; }
+    else if (e.key === 'Escape') { e.stopPropagation(); closeList(); return; }
+    else return;
+    renderList();
+    input.setAttribute('aria-activedescendant', `${uid}-o${active}`);
+    const el = $(`#${uid}-o${active}`); if (el) el.scrollIntoView({ block: 'nearest' });
+  });
+  summary();
+  const el = h('div', { class: 'placepick' },
+    h('div', { class: 'row' }, h('div', {}, h('label', { for: uid + '-region', text: 'Област' }), regionSel), h('div', { class: 'combo' }, h('label', { for: uid + '-place', text: 'Град или село' }), input, list)),
+    sum);
+  return { el, get place() { return place; } };
+}
+
 /* ═══════════ Състояние ═══════════ */
 const state = { me: null, meta: null, unread: 0, openReports: 0 };
 const dock = { open: false, view: 'list', with: null, chats: [], peer: null, msgs: [], timer: null, root: null, panel: null, btn: null, sig: '' };
@@ -152,9 +220,9 @@ const fmtDate = at => new Date(at).toLocaleDateString('bg-BG', { day: 'numeric',
 const fmtWhen = at => (new Date(at).toDateString() === new Date().toDateString() ? fmtTime(at) : `${fmtDate(at)}, ${fmtTime(at)}`);
 const badge = n => (n > 0 ? h('span', { class: 'badge', 'aria-label': `${n} нови`, text: n > 99 ? '99+' : String(n) }) : null);
 const disc = {
-  city: '', q: '', gender: '', ageMin: '', ageMax: '', interests: new Set(), withPhoto: false,
+  region: '', place: '', placeLabel: '', stage: 'region', q: '', gender: '', ageMin: '', ageMax: '', interests: new Set(), withPhoto: false,
   online: false, lookingForMe: false, sort: 'active', profiles: [], total: 0, loading: false,
-  cityOpen: true, filtersOpen: false, token: 0,
+  pickerOpen: true, filtersOpen: false, token: 0,
 };
 
 /* ═══════════ Горна лента ═══════════ */
@@ -220,7 +288,7 @@ document.addEventListener('keydown', e => {
 /* ═══════════ Начална страница + вход ═══════════ */
 function viewLanding() {
   const meta = state.meta;
-  const withPeople = meta.cities.filter(c => c.count > 0).sort((a, b) => b.count - a.count);
+  const withPeople = meta.regions.filter(c => c.count > 0).sort((a, b) => b.count - a.count);
   const v = clear($('#view'));
 
   const authBody = h('div');
@@ -233,18 +301,18 @@ function viewLanding() {
     h('section', { class: 'hero' },
       h('div', { class: 'enter' },
         h('h1', {}, 'Намери своя ', h('span', { text: 'искра' }), ' в твоя град'),
-        h('p', { class: 'lead', text: 'Създай профил с никнейм, снимки и био, избери град и разгледай хора близо до теб. Филтрирай по възраст, интереси и още. Оформи сайта със свои цветове.' }),
+        h('p', { class: 'lead', text: 'Създай профил с никнейм, снимки и био, посочи къде живееш (област, град или село) и разгледай хора близо до теб. Филтрирай по възраст, интереси и още. Оформи сайта със свои цветове.' }),
         h('div', { class: 'stats' },
           h('div', { class: 'stat' }, h('b', { text: String(meta.total) }), h('span', { text: 'профила' })),
-          h('div', { class: 'stat' }, h('b', { text: String(withPeople.length) }), h('span', { text: 'града с хора' })),
+          h('div', { class: 'stat' }, h('b', { text: String(withPeople.length) }), h('span', { text: 'области с хора' })),
           h('div', { class: 'stat' }, h('b', { text: '18+' }), h('span', { text: 'само пълнолетни' }))),
-        h('div', { class: 'cityline', 'aria-label': 'Най-активни градове' },
+        h('div', { class: 'cityline', 'aria-label': 'Най-активни области' },
           withPeople.slice(0, 8).map(c => h('span', { class: 'tag', text: `${c.name} · ${c.count}` })))),
       h('div', { class: 'win enter', style: '--i:2' },
         h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: 'Добре дошъл' })),
         h('div', { class: 'win-body' }, h('div', { class: 'tabs', role: 'tablist' }, tabs.map(t => t[1])), authBody))),
     h('section', { class: 'feat' },
-      [['📍', 'Хора по градове', 'Избери град от списъка и виж кой е наблизо.'],
+      [['📍', 'Хора по градове и села', 'Избери област, после град или село, и виж кой е наблизо.'],
        ['🎛️', 'Умни филтри', 'Възраст, пол, интереси, онлайн сега, само със снимка.'],
        ['🖼️', 'Профил със снимки', 'До 6 снимки, никнейм, био и интереси.'],
        ['🎨', 'Твой собствен дизайн', 'Цветове на текста, рамките, размер на шрифта и още.']]
@@ -287,12 +355,13 @@ function viewLanding() {
       birthDate: h('input', { id: 'r-birth', type: 'date', required: true, max: new Date(Date.now() - 18 * 365.25 * 864e5).toISOString().slice(0, 10) }),
       gender: h('select', { id: 'r-gender' }, h('option', { value: '', text: 'Избери…' }), Object.entries(GENDER).map(([k, t]) => h('option', { value: k, text: t }))),
       lookingFor: h('select', { id: 'r-look' }, Object.entries(LOOKING).map(([k, t]) => h('option', { value: k, text: t, selected: k === 'any' }))),
-      city: h('select', { id: 'r-city' }, h('option', { value: '', text: 'Избери град…' }), state.meta.cities.map(c => h('option', { value: c.name, text: c.name }))),
     };
+    const picker = placePicker({ onChange: () => {} });
     const btn = h('button', { class: 'btn block', type: 'submit', text: 'Създай профил' });
     return h('form', { novalidate: true, onsubmit: async e => {
       e.preventDefault(); err.textContent = '';
-      const body = Object.fromEntries(Object.entries(f).map(([k, el]) => [k, el.value]));
+      if (!picker.place) { err.textContent = 'Избери област и населено място от списъка.'; return; }
+      const body = { ...Object.fromEntries(Object.entries(f).map(([k, el]) => [k, el.value])), placeId: picker.place.id };
       btn.disabled = true;
       try { const r = await api('POST', '/api/register', body); await afterAuth(r.user, true); }
       catch (x) { err.textContent = x.message; } finally { btn.disabled = false; }
@@ -301,9 +370,8 @@ function viewLanding() {
         h('div', { class: 'field' }, h('label', { for: 'r-nick', text: 'Никнейм' }), f.nickname),
         h('div', { class: 'field' }, h('label', { for: 'r-user', text: 'Потребителско име' }), f.username)),
       h('div', { class: 'field' }, h('label', { for: 'r-pass', text: 'Парола (мин. 8 символа)' }), f.password),
-      h('div', { class: 'row' },
-        h('div', { class: 'field' }, h('label', { for: 'r-birth', text: 'Дата на раждане' }), f.birthDate),
-        h('div', { class: 'field' }, h('label', { for: 'r-city', text: 'Град' }), f.city)),
+      h('div', { class: 'field' }, h('label', { for: 'r-birth', text: 'Дата на раждане' }), f.birthDate),
+      h('div', { class: 'field' }, h('span', { class: 'lbl', text: 'Къде живееш' }), picker.el),
       h('div', { class: 'row' },
         h('div', { class: 'field' }, h('label', { for: 'r-gender', text: 'Аз съм' }), f.gender),
         h('div', { class: 'field' }, h('label', { for: 'r-look', text: 'Търся' }), f.lookingFor)),
@@ -331,9 +399,9 @@ async function afterAuth(user, isNew) {
 /* ═══════════ Открий хора ═══════════ */
 function viewDiscover() {
   const v = clear($('#view'));
-  const total = state.meta.cities.reduce((s, c) => s + c.count, 0);
+  const total = state.meta.regions.reduce((n, c) => n + c.count, 0);
 
-  const citiesWin = h('section', { class: 'win enter', id: 'citiesWin', 'aria-label': 'Избор на град' });
+  const citiesWin = h('section', { class: 'win enter', id: 'citiesWin', 'aria-label': 'Избор на област и населено място' });
   const results = h('section', { 'aria-label': 'Резултати' });
   const sidebar = h('aside', { class: 'sidebar win enter' + (disc.filtersOpen ? '' : ' closed'), style: '--i:1', 'aria-label': 'Филтри' });
 
@@ -341,21 +409,75 @@ function viewDiscover() {
     h('button', { class: 'btn ghost sm filter-toggle', type: 'button', text: '🎛️ Филтри', onclick: () => { disc.filtersOpen = !disc.filtersOpen; sidebar.classList.toggle('closed', !disc.filtersOpen); } }),
     h('div', { class: 'layout' }, sidebar, h('div', { class: 'stack' }, citiesWin, results)));
 
+  const regionName = () => (state.meta.regions.find(r => r.code === disc.region) || {}).name || '';
+  const placeTitle = () => disc.place ? `${disc.placeLabel}, обл. ${regionName()}` : disc.region ? `област ${regionName()}` : '';
+  let placeToken = 0;
+
   function renderCities() {
     clear(citiesWin);
     const head = h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')),
-      h('h2', { text: disc.city ? `📍 ${disc.city}` : '📍 Избери град' }));
-    if (disc.city) head.append(h('button', { class: 'btn ghost sm', style: 'margin-left:auto', type: 'button', text: disc.cityOpen ? 'Скрий' : 'Смени града', 'aria-expanded': String(disc.cityOpen), onclick: () => { disc.cityOpen = !disc.cityOpen; renderCities(); } }));
+      h('h2', { text: disc.place ? `📍 ${disc.placeLabel}` : disc.region ? `📍 Област ${regionName()}` : '📍 Избери област' }));
+    if (disc.region || disc.place) head.append(h('button', { class: 'btn ghost sm', style: 'margin-left:auto', type: 'button', text: disc.pickerOpen ? 'Скрий' : 'Смени',
+      'aria-expanded': String(disc.pickerOpen), onclick: () => { disc.pickerOpen = !disc.pickerOpen; disc.stage = disc.region ? 'place' : 'region'; renderCities(); } }));
     citiesWin.append(head);
-    if (disc.cityOpen) {
-      const grid = h('div', { class: 'cities' },
-        h('button', { class: 'city', type: 'button', 'aria-pressed': String(!disc.city), onclick: () => pickCity('') }, h('span', { text: 'Всички градове' }), h('small', { text: String(total) })),
-        state.meta.cities.map(c => h('button', { class: 'city' + (c.count ? '' : ' empty'), type: 'button', 'aria-pressed': String(disc.city === c.name), onclick: () => pickCity(c.name) },
-          h('span', { text: c.name }), h('small', { text: String(c.count) }))));
-      citiesWin.append(h('div', { class: 'win-body' }, grid));
+    if (disc.place) citiesWin.append(h('div', { class: 'crumbs' }, `обл. ${regionName()}`));
+    if (!disc.pickerOpen) return;
+    const body = h('div', { class: 'win-body' });
+    citiesWin.append(body);
+    if (disc.stage === 'region' || !disc.region) renderRegionGrid(body); else renderPlaceStage(body);
+  }
+
+  function renderRegionGrid(body) {
+    body.append(h('p', { class: 'dim', style: 'margin-top:0', text: 'Избери област, после ще можеш да стесниш до конкретен град или село.' }),
+      h('div', { class: 'cities' },
+        h('button', { class: 'city', type: 'button', 'aria-pressed': String(!disc.region), onclick: () => pickRegion('') }, h('span', { text: 'Цяла България' }), h('small', { text: String(total) })),
+        state.meta.regions.map(c => h('button', { class: 'city' + (c.count ? '' : ' empty'), type: 'button', 'aria-pressed': String(disc.region === c.code), onclick: () => pickRegion(c.code) },
+          h('span', { text: c.name }), h('small', { text: String(c.count) })))));
+  }
+
+  function renderPlaceStage(body) {
+    const rc = state.meta.regions.find(r => r.code === disc.region);
+    const popBox = h('div', { class: 'cities', 'aria-label': 'Населени места с хора' });
+    const found = h('div', { class: 'chips', style: 'margin-top:.6rem' });
+    const q = h('input', { type: 'search', placeholder: `Търси друг град или село в област ${rc.name}…`, 'aria-label': 'Търсене на населено място', value: '', maxlength: '40',
+      oninput: debounce(e => searchPlaces(e.target.value), 200) });
+    body.append(
+      h('div', { class: 'actions', style: 'margin:0 0 .8rem' }, h('button', { class: 'btn ghost sm', type: 'button', text: '‹ Всички области', onclick: () => { disc.stage = 'region'; renderCities(); } })),
+      h('div', { class: 'cities' },
+        h('button', { class: 'city', type: 'button', 'aria-pressed': String(!disc.place), onclick: () => pickPlace(null) }, h('span', { text: `Цялата област ${rc.name}` }), h('small', { text: String(rc.count) }))),
+      h('h3', { style: 'margin:1rem 0 .5rem', text: 'Населени места с хора' }), popBox,
+      h('h3', { style: 'margin:1rem 0 .5rem', text: 'Търси град или село' }), q, found);
+    const mine = ++placeToken;
+    api('GET', `/api/places?region=${disc.region}&populated=1&limit=60`).then(r => {
+      if (mine !== placeToken) return;
+      if (!r.places.length) popBox.replaceWith(h('p', { class: 'dim', text: 'Още няма хора в тази област. Потърси населено място по-долу.' }));
+      else popBox.append(...r.places.map(p => placeTile(p)));
+    }).catch(x => toast(x.message, true));
+    function placeTile(p) {
+      return h('button', { class: 'city', type: 'button', 'aria-pressed': String(disc.place === p.id), onclick: () => pickPlace(p) },
+        h('span', {}, p.label, p.kind !== 'гр.' ? h('em', { class: 'sub', text: `общ. ${p.obshtina}` }) : null), h('small', { text: String(p.count) }));
+    }
+    async function searchPlaces(text) {
+      clear(found);
+      if (!text.trim()) return;
+      try {
+        const r = await api('GET', `/api/places?region=${disc.region}&limit=40&q=${encodeURIComponent(text.trim())}`);
+        if (!r.places.length) found.append(h('p', { class: 'dim', text: 'Няма такова населено място в тази област.' }));
+        r.places.forEach(p => found.append(h('button', { class: 'chip', type: 'button', 'aria-pressed': String(disc.place === p.id), onclick: () => pickPlace(p),
+          title: `общ. ${p.obshtina}`, text: `${p.label}${p.kind !== 'гр.' ? ` · общ. ${p.obshtina}` : ''}${p.count ? ` · ${p.count}` : ''}` })));
+      } catch (x) { toast(x.message, true); }
     }
   }
-  function pickCity(name) { disc.city = name; disc.cityOpen = !name; renderCities(); load(true); }
+
+  function pickRegion(code) {
+    disc.region = code; disc.place = ''; disc.placeLabel = '';
+    disc.stage = code ? 'place' : 'region'; disc.pickerOpen = !!code;
+    renderCities(); load(true);
+  }
+  function pickPlace(p) {
+    disc.place = p ? p.id : ''; disc.placeLabel = p ? p.label : '';
+    disc.pickerOpen = false; renderCities(); load(true);
+  }
 
   function renderFilters() {
     clear(sidebar);
@@ -384,7 +506,7 @@ function viewDiscover() {
     const sort = h('select', { 'aria-label': 'Подреждане', style: 'width:auto', onchange: e => { disc.sort = e.target.value; load(true); } },
       [['active', 'Последно активни'], ['new', 'Най-нови'], ['young', 'Най-млади'], ['old', 'Най-възрастни']].map(([k, t]) => h('option', { value: k, text: t, selected: disc.sort === k })));
     results.append(h('div', { class: 'citybar' },
-      h('h2', { text: disc.loading && !disc.profiles.length ? 'Зареждане…' : `${disc.total} ${disc.total === 1 ? 'човек' : 'души'}${disc.city ? ' в ' + disc.city : ''}` }), sort));
+      h('h2', { text: disc.loading && !disc.profiles.length ? 'Зареждане…' : `${disc.total} ${disc.total === 1 ? 'човек' : 'души'}${placeTitle() ? ' в ' + placeTitle() : ''}` }), sort));
     if (disc.loading && !disc.profiles.length) { results.append(h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Зареждане' })); return; }
     if (!disc.profiles.length) {
       results.append(h('div', { class: 'win' }, h('div', { class: 'empty-state' }, h('div', { class: 'big', text: '🔍' }), h('h3', { text: 'Няма намерени профили' }), h('p', { text: 'Опитай с друг град или махни някои филтри.' }))));
@@ -402,7 +524,8 @@ function viewDiscover() {
     if (reset) { disc.profiles = []; }
     renderResults();
     const p = new URLSearchParams();
-    if (disc.city) p.set('city', disc.city);
+    if (disc.region) p.set('region', disc.region);
+    if (disc.place) p.set('place', disc.place);
     if (disc.q.trim()) p.set('q', disc.q.trim());
     if (disc.gender) p.set('gender', disc.gender);
     if (disc.ageMin) p.set('ageMin', disc.ageMin);
@@ -436,7 +559,7 @@ function profileCard(p, i) {
       h('div', { class: 'ph' },
         h('img', { src: mainPhoto(p), alt: '', loading: 'lazy', width: '400', height: '500' }),
         p.isDemo ? h('span', { class: 'tag demo badge-tr', text: 'демо' }) : null,
-        h('div', { class: 'over' }, h('b', { text: `${p.nickname}, ${p.age}` }), h('span', {}, p.online ? h('span', { class: 'dot', 'aria-label': 'онлайн' }) : null, `📍 ${p.city}`))),
+        h('div', { class: 'over' }, h('b', { text: `${p.nickname}, ${p.age}` }), h('span', {}, p.online ? h('span', { class: 'dot', 'aria-label': 'онлайн' }) : null, `📍 ${p.city}`, p.regionName && p.regionName !== p.city ? h('small', { class: 'obl', text: ` · ${p.regionName}` }) : null))),
       h('div', { class: 'meta' }, h('p', { text: p.bio || 'Още няма био.' }),
         h('div', { class: 'chips' }, p.interests.slice(0, 3).map(t => h('span', { class: 'tag', text: t }))))),
     canChat ? h('div', { class: 'cardact' },
@@ -464,7 +587,9 @@ function openProfile(p) {
         h('h2', {}, `${cur.nickname}, ${cur.age} `, cur.isDemo ? h('span', { class: 'tag demo', text: 'демо' }) : null),
         h('p', { class: 'dim' }, cur.online ? h('span', { class: 'dot' }) : null, cur.online ? 'Онлайн сега' : 'Не е онлайн'),
         h('dl', { class: 'facts' },
-          h('dt', { text: 'Град' }), h('dd', { text: cur.city }),
+          h('dt', { text: 'Населено място' }), h('dd', { text: cur.city }),
+          cur.obshtina && cur.obshtina !== cur.city ? [h('dt', { text: 'Община' }), h('dd', { text: cur.obshtina })] : null,
+          cur.regionName ? [h('dt', { text: 'Област' }), h('dd', { text: cur.regionName })] : null,
           h('dt', { text: 'Пол' }), h('dd', { text: GENDER[cur.gender] }),
           h('dt', { text: 'Търси' }), h('dd', { text: LOOKING[cur.lookingFor] }),
           h('dt', { text: 'Харесвания' }), h('dd', { text: String(cur.likes) })),
@@ -502,7 +627,7 @@ function resizeImage(file, maxSide = 1100) {
 function viewProfile() {
   const v = clear($('#view'));
   const me = state.me;
-  const draft = { nickname: me.nickname, gender: me.gender, lookingFor: me.lookingFor, city: me.city, bio: me.bio, interests: new Set(me.interests) };
+  const draft = { nickname: me.nickname, gender: me.gender, lookingFor: me.lookingFor, placeId: me.placeId, bio: me.bio, interests: new Set(me.interests) };
 
   const photosBox = h('div', { class: 'photos' });
   function renderPhotos() {
@@ -537,6 +662,7 @@ function viewProfile() {
     }
   }
 
+  const picker = placePicker({ initial: me, onChange: p => { draft.placeId = p ? p.id : ''; } });
   const err = h('div', { class: 'err', role: 'alert' });
   const bio = h('textarea', { id: 'p-bio', maxlength: '600', placeholder: 'Разкажи нещо за себе си – какво обичаш, какво търсиш…', oninput: e => { draft.bio = e.target.value; counter.textContent = `${draft.bio.length}/600`; } });
   bio.value = draft.bio;
@@ -544,9 +670,11 @@ function viewProfile() {
   const save = h('button', { class: 'btn', type: 'submit', text: 'Запази профила' });
 
   const form = h('form', { novalidate: true, onsubmit: async e => {
-    e.preventDefault(); err.textContent = ''; save.disabled = true;
+    e.preventDefault(); err.textContent = '';
+    if (!draft.placeId) { err.textContent = 'Избери област и населено място от списъка.'; return; }
+    save.disabled = true;
     try {
-      state.me = (await api('PUT', '/api/me', { nickname: draft.nickname, gender: draft.gender, lookingFor: draft.lookingFor, city: draft.city, bio: draft.bio, interests: [...draft.interests] })).user;
+      state.me = (await api('PUT', '/api/me', { nickname: draft.nickname, gender: draft.gender, lookingFor: draft.lookingFor, placeId: draft.placeId, bio: draft.bio, interests: [...draft.interests] })).user;
       refreshMeta();
       renderChrome();
       toast('Профилът е запазен ✔');
@@ -555,8 +683,8 @@ function viewProfile() {
     h('div', { class: 'row' },
       h('div', { class: 'field' }, h('label', { for: 'p-nick', text: 'Никнейм' }), h('input', { id: 'p-nick', value: draft.nickname, maxlength: '20', oninput: e => { draft.nickname = e.target.value; } })),
       h('div', { class: 'field' }, h('label', { text: 'Възраст' }), h('input', { value: `${me.age} г.`, disabled: true, 'aria-label': 'Възраст' }))),
+    h('div', { class: 'field' }, h('span', { class: 'lbl', text: 'Къде живееш' }), picker.el),
     h('div', { class: 'row' },
-      h('div', { class: 'field' }, h('label', { for: 'p-city', text: 'Град' }), h('select', { id: 'p-city', onchange: e => { draft.city = e.target.value; } }, state.meta.cities.map(c => h('option', { value: c.name, text: c.name, selected: c.name === draft.city })))),
       h('div', { class: 'field' }, h('label', { for: 'p-gender', text: 'Аз съм' }), h('select', { id: 'p-gender', onchange: e => { draft.gender = e.target.value; } }, Object.entries(GENDER).map(([k, t]) => h('option', { value: k, text: t, selected: k === draft.gender })))),
       h('div', { class: 'field' }, h('label', { for: 'p-look', text: 'Търся' }), h('select', { id: 'p-look', onchange: e => { draft.lookingFor = e.target.value; } }, Object.entries(LOOKING).map(([k, t]) => h('option', { value: k, text: t, selected: k === draft.lookingFor }))))),
     h('div', { class: 'field' }, h('label', { for: 'p-bio', text: 'Био' }), bio, counter),
@@ -682,7 +810,7 @@ function renderDockButton() {
   dock.btn.className = 'dockbtn' + (n > 0 ? ' alert' : '');
   dock.btn.setAttribute('aria-expanded', String(dock.open));
   dock.btn.setAttribute('aria-label', (dock.open ? 'Скрий съобщенията' : 'Покажи съобщенията') + (n > 0 ? `, ${n} нови` : ''));
-  clear(dock.btn).append(chatIcon(), badge(n));
+  clear(dock.btn).append(...[chatIcon(), badge(n)].filter(Boolean)); // native append(null) би написало „null“
 }
 function toggleDock(force) {
   if (!dock.root) return;
@@ -925,7 +1053,7 @@ function viewAdmin() {
     h('div', { class: 'stack' },
     h('section', { class: 'win enter' }, head('📊 Накратко'), h('div', { class: 'win-body' }, tiles)),
     h('div', { class: 'two' },
-      h('section', { class: 'win enter', style: '--i:1' }, head('📍 Профили по градове'), h('div', { class: 'win-body' }, bars)),
+      h('section', { class: 'win enter', style: '--i:1' }, head('📍 Профили по области'), h('div', { class: 'win-body' }, bars)),
       h('section', { class: 'win enter', style: '--i:2' }, head('🧭 Бърз достъп'), h('div', { class: 'win-body' },
         h('p', { class: 'dim', text: 'Разгледай сайта като потребител:' }),
         h('div', { class: 'actions' }, h('a', { class: 'btn', href: '#/discover', text: 'Открий хора' }), h('a', { class: 'btn ghost', href: '#/profile', text: 'Моят профил' }), h('a', { class: 'btn ghost', href: '#/settings', text: 'Дизайн' }))))),
@@ -936,16 +1064,16 @@ function viewAdmin() {
       h('div', { class: 'citybar' }, h('input', { type: 'search', placeholder: 'Търси по никнейм или потребителско име', 'aria-label': 'Търсене на потребители', style: 'max-width:26rem',
         oninput: debounce(e => loadUsers(e.target.value), 250) }), count),
       h('div', { class: 'tblwrap' }, h('table', { class: 'tbl' },
-        h('thead', {}, h('tr', {}, ['Никнейм', 'Потребител', 'Възраст', 'Град', 'Снимки', '♥', 'Тип', ''].map(t => h('th', { scope: 'col', text: t })))), tbody))))));
+        h('thead', {}, h('tr', {}, ['Никнейм', 'Потребител', 'Възраст', 'Място', 'Снимки', '♥', 'Тип', ''].map(t => h('th', { scope: 'col', text: t })))), tbody))))));
 
   async function loadStats() {
     try {
       const st = await api('GET', '/api/admin/stats');
       clear(tiles).append(...[['Профили', st.users], ['Реални', st.real], ['Демо', st.demo], ['Снимки', st.photos], ['Харесвания', st.likes], ['Отворени доклади', st.openReports], ['Онлайн', st.online], ['Нови за 24ч', st.newToday]]
         .map(([l, n]) => h('div', { class: 'tile' }, h('b', { text: String(n) }), h('span', { text: l }))));
-      const max = Math.max(1, ...st.byCity.map(c => c.count));
-      clear(bars).append(...st.byCity.slice(0, 12).map(c => h('div', { class: 'bar' },
-        h('span', { text: c.city }), h('div', { class: 'track', role: 'img', 'aria-label': `${c.city}: ${c.count}` }, h('i', { style: `width:${Math.round(c.count / max * 100)}%` })), h('b', { text: String(c.count) }))));
+      const max = Math.max(1, ...st.byRegion.map(c => c.count));
+      clear(bars).append(...st.byRegion.slice(0, 12).map(c => h('div', { class: 'bar' },
+        h('span', { text: c.region }), h('div', { class: 'track', role: 'img', 'aria-label': `${c.region}: ${c.count}` }, h('i', { style: `width:${Math.round(c.count / max * 100)}%` })), h('b', { text: String(c.count) }))));
     } catch (x) { toast(x.message, true); }
   }
   async function loadUsers(q = '') {
@@ -961,7 +1089,7 @@ function viewAdmin() {
           try { await api('DELETE', `/api/admin/users/${u.id}`); toast(`Изтрит: ${u.nickname}`); loadStats(); loadUsers(q); } catch (x) { toast(x.message, true); }
         });
         tbody.append(h('tr', {},
-          h('td', {}, h('b', { text: u.nickname })), h('td', { class: 'dim', text: u.isDemo ? '—' : u.username }), h('td', { text: String(u.age) }), h('td', { text: u.city }),
+          h('td', {}, h('b', { text: u.nickname })), h('td', { class: 'dim', text: u.isDemo ? '—' : u.username }), h('td', { text: String(u.age) }), h('td', { text: u.regionName && u.regionName !== u.city ? `${u.city}, ${u.regionName}` : u.city }),
           h('td', { text: String(u.photos) }), h('td', { text: String(u.likes) }),
           h('td', {}, h('span', { class: 'tag' + (u.isDemo ? ' demo' : ''), text: u.role === 'admin' ? 'админ' : u.isDemo ? 'демо' : 'потребител' })),
           h('td', {}, u.role === 'admin' ? null : del)));
@@ -1033,7 +1161,7 @@ async function openCase(id, changed) {
         h('h3', { text: 'Описание от докладващия' }),
         h('p', { class: 'bio', text: r.details || 'Без описание.' }),
         rep ? [h('h3', { text: 'Докладваният профил' }),
-          h('p', { class: 'dim', text: `${rep.age} г. · ${rep.city} · ${rep.photos} снимки · в сайта от ${fmtDate(rep.createdAt)}` }),
+          h('p', { class: 'dim', text: `${rep.age} г. · ${rep.city}${rep.regionName && rep.regionName !== rep.city ? ', обл. ' + rep.regionName : ''} · ${rep.photos} снимки · в сайта от ${fmtDate(rep.createdAt)}` }),
           h('p', { class: 'bio', text: rep.bio || 'Няма био.' }),
           rep.otherReports ? h('p', {}, h('span', { class: 'tag st-upheld', text: `⚠️ Още ${rep.otherReports} доклада срещу този профил` })) : null] : null),
       h('div', {},

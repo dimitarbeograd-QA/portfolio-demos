@@ -309,6 +309,21 @@ input[type=color] { padding: 2px; height: 2.4rem; width: 3.4rem; cursor: pointer
 .rep .who { flex: 1 1 14rem; min-width: 0; overflow-wrap: anywhere; }
 .tag.st-open { border-color: var(--accent); color: var(--heading); } .tag.st-upheld { border-color: var(--danger); color: var(--danger); } .tag.st-dismissed { border-color: var(--ok); color: var(--ok); }
 
+/* ── Избор на област и населено място ── */
+.placepick .row { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .7rem; margin-bottom: 0; }
+.lbl { display: block; font-weight: 600; margin-bottom: .3rem; color: var(--heading); font-size: .92rem; }
+.combo { position: relative; }
+.combo-list { position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: .3rem; list-style: none; max-height: 16rem; overflow-y: auto;
+  background: var(--surface); border: var(--bw) solid var(--accent); border-radius: calc(var(--radius) * .6); box-shadow: var(--glow-shadow), 0 14px 34px rgba(0,0,0,.55); }
+.combo-list[hidden] { display: none; }
+.combo-list li { display: flex; justify-content: space-between; align-items: baseline; gap: .6rem; padding: .45rem .6rem; border-radius: 8px; cursor: pointer; color: var(--heading); }
+.combo-list li small { color: var(--muted); white-space: nowrap; }
+.combo-list li:hover, .combo-list li.on { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.combo-list li.combo-empty { cursor: default; color: var(--muted); } .combo-list li.combo-empty:hover { background: none; }
+.sub { display: block; font-style: normal; font-size: .74rem; color: var(--muted); font-weight: 500; }
+.crumbs { padding: .3rem 1rem .6rem; color: var(--muted); font-size: .88rem; }
+.obl { opacity: .8; font-size: .8rem; }
+
 /* ── Тостове ── */
 #toasts { position: fixed; z-index: 200; bottom: 1rem; left: 50%; transform: translateX(-50%); display: grid; gap: .5rem; width: min(92vw, 420px); pointer-events: none; }
 .toast { pointer-events: auto; padding: .7rem 1rem; border-radius: 14px; background: var(--surface); color: var(--heading); border: var(--bw) solid var(--accent); box-shadow: var(--glow-shadow), 0 10px 30px rgba(0,0,0,.5); animation: fadeUp .35s var(--ease) both; }

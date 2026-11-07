@@ -4,7 +4,7 @@
 const crypto = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
-const { CITIES, INTERESTS } = require('./constants');
+const places = require('./places');
 
 const { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS } = require('./seed-data');
 
@@ -31,18 +31,19 @@ function seedReports() {
 function seedDemo() {
   if (db.prepare('SELECT 1 FROM users LIMIT 1').get()) return 0;
   const insUser = db.prepare(`
-    INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, bio, is_demo, last_seen)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now', ?))`);
+    INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, place_id, region, bio, is_demo, last_seen)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now', ?))`);
   const insInt = db.prepare('INSERT INTO user_interests (user_id, interest) VALUES (?, ?)');
   // Един и същ неизползваем хеш за всички демо акаунти.
   const dead = bcrypt.hashSync(crypto.randomBytes(24).toString('hex'), 4);
   const tx = db.transaction(() => {
     PEOPLE.forEach(([nick, gender, age, city, bio], i) => {
-      if (!CITIES.includes(city)) throw new Error('Unknown city in seed: ' + city);
+      const place = places.findPlace(city);
+      if (!place) throw new Error('Unknown place in seed: ' + city);
       const looking = gender === 'male' ? 'female' : gender === 'female' ? 'male' : 'any';
       const id = insUser.run(
         `demo_${i}_${crypto.randomBytes(4).toString('hex')}`, dead, nick, nick.toLowerCase(),
-        birthFor(age, i), gender, i % 9 === 0 ? 'any' : looking, city, bio,
+        birthFor(age, i), gender, i % 9 === 0 ? 'any' : looking, place.label, place.id, place.region, bio,
         `-${(i * 37) % 600} minutes`
       ).lastInsertRowid;
       randomInterests(i).forEach(x => insInt.run(id, x));
@@ -55,10 +56,11 @@ function seedDemo() {
 
 // Администраторски акаунт: без използваема парола. Влиза се само през /api/demo-admin (DEMO_ADMIN=1).
 function seedAdmin() {
+  const sofia = places.findPlace('София');
   if (db.prepare("SELECT 1 FROM users WHERE role = 'admin'").get()) return false;
   const dead = bcrypt.hashSync(crypto.randomBytes(24).toString('hex'), 4);
-  db.prepare(`INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, bio, role)
-              VALUES ('admin', ?, 'Админ', 'админ', '1990-01-01', 'other', 'any', 'София', 'Администратор на Spark.', 'admin')`).run(dead);
+  db.prepare(`INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, place_id, region, bio, role)
+              VALUES ('admin', ?, 'Админ', 'админ', '1990-01-01', 'other', 'any', ?, ?, ?, 'Администратор на Spark.', 'admin')`).run(dead, sofia.label, sofia.id, sofia.region);
   return true;
 }
 
@@ -66,13 +68,14 @@ function seedAdmin() {
 function seedTestUser() {
   if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(TEST_USER.username)) return false;
   const T = TEST_USER;
+  const place = places.findPlace(T.city);
   const dead = bcrypt.hashSync(crypto.randomBytes(24).toString('hex'), 4);
   const born = new Date(); born.setFullYear(born.getFullYear() - T.age); born.setMonth(5, 15);
   const readAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
   db.transaction(() => {
-    const id = db.prepare(`INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, bio, is_demo)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`)
-      .run(T.username, dead, T.nickname, T.nickname.toLowerCase(), born.toISOString().slice(0, 10), T.gender, T.lookingFor, T.city, T.bio).lastInsertRowid;
+    const id = db.prepare(`INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, place_id, region, bio, is_demo)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`)
+      .run(T.username, dead, T.nickname, T.nickname.toLowerCase(), born.toISOString().slice(0, 10), T.gender, T.lookingFor, place.label, place.id, place.region, T.bio).lastInsertRowid;
     T.interests.forEach(i => db.prepare('INSERT INTO user_interests (user_id, interest) VALUES (?, ?)').run(id, i));
     const ins = db.prepare("INSERT INTO messages (from_id, to_id, body, created_at, read_at) VALUES (?, ?, ?, datetime('now', ?), ?)");
     for (const c of TEST_CHATS) {

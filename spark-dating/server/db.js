@@ -21,7 +21,9 @@ db.exec(`
     birth_date    TEXT NOT NULL,            -- YYYY-MM-DD, никога не се връща на другите
     gender        TEXT NOT NULL CHECK (gender IN ('male','female','other')),
     looking_for   TEXT NOT NULL DEFAULT 'any' CHECK (looking_for IN ('male','female','any')),
-    city          TEXT NOT NULL,
+    city          TEXT NOT NULL,            -- етикет на населеното място (напр. „Пловдив“ или „с. Дъбница“)
+    place_id      TEXT NOT NULL DEFAULT '', -- ЕКАТТЕ код на населеното място
+    region        TEXT NOT NULL DEFAULT '', -- код на областта (напр. PDV)
     bio           TEXT NOT NULL DEFAULT '',
     theme         TEXT,                     -- JSON с персонални цветове/шрифт
     is_demo       INTEGER NOT NULL DEFAULT 0,
@@ -29,7 +31,6 @@ db.exec(`
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     last_seen     TEXT NOT NULL DEFAULT (datetime('now'))
   );
-  CREATE INDEX IF NOT EXISTS idx_users_city ON users(city);
 
   CREATE TABLE IF NOT EXISTS user_interests (
     user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -117,6 +118,18 @@ db.exec(`
 if (!db.prepare("PRAGMA table_info(users)").all().some(c => c.name === 'role')) {
   db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
 }
+
+// Миграция за бази, създадени преди областите и населените места.
+if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'place_id')) {
+  db.exec("ALTER TABLE users ADD COLUMN place_id TEXT NOT NULL DEFAULT ''; ALTER TABLE users ADD COLUMN region TEXT NOT NULL DEFAULT '';");
+  const { findPlace } = require('./places');
+  const upd = db.prepare('UPDATE users SET place_id = ?, region = ? WHERE id = ?');
+  for (const u of db.prepare('SELECT id, city FROM users').all()) {
+    const p = findPlace(u.city);
+    if (p) upd.run(p.id, p.region, u.id);
+  }
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_users_place ON users(place_id); CREATE INDEX IF NOT EXISTS idx_users_region ON users(region);');
 
 module.exports = db;
 module.exports.UPLOAD_DIR = UPLOAD_DIR;
