@@ -39,7 +39,12 @@ async function api(method, url, body) {
   try { res = await fetch(url, opt); } catch { throw Object.assign(new Error('Няма връзка със сървъра.'), { status: 0 }); }
   let data = {};
   try { data = await res.json(); } catch { /* празен отговор */ }
-  if (!res.ok) throw Object.assign(new Error(data.error || 'Нещо се обърка.'), { status: res.status });
+  if (!res.ok) {
+    // Профилът е станал непотвърден/суспендиран → обновяваме състоянието, за да се покаже екранът или банерът.
+    if (data.code === 'email_unverified' && state.me && state.me.emailVerified) { state.me.emailVerified = false; queueMicrotask(route); }
+    if (data.code === 'suspended') queueMicrotask(refreshMe);
+    throw Object.assign(new Error(data.error || 'Нещо се обърка.'), { status: res.status, code: data.code, data });
+  }
   return data;
 }
 
@@ -186,7 +191,7 @@ function placePicker({ initial, onChange }) {
 }
 
 /* ═══════════ Състояние ═══════════ */
-const state = { me: null, meta: null, unread: 0, openReports: 0 };
+const state = { me: null, meta: null, unread: 0, openReports: 0, openAppeals: 0, devMail: null };
 const dock = { open: false, view: 'list', with: null, chats: [], timer: null, root: null, panel: null, btn: null, pane: null };
 let chatWith = null;                 // id на отворения разговор (страница „Съобщения“)
 let viewTimer = null, badgeTimer = null;
@@ -194,12 +199,12 @@ const stopViewTimer = () => { if (viewTimer) { clearInterval(viewTimer); viewTim
 let unreadKnown = false;
 const applyTitleBadge = () => { const base = document.title.replace(/^\(\d+\) /, ''); document.title = state.unread > 0 ? `(${state.unread}) ${base}` : base; };
 async function refreshBadges() {
-  if (!state.me) return;
+  if (!state.me || !state.me.emailVerified) return;
   try {
     const r = await api('GET', '/api/chats/unread');
     const grew = unreadKnown && r.unread > state.unread;
-    const changed = r.unread !== state.unread || r.openReports !== state.openReports;
-    state.unread = r.unread; state.openReports = r.openReports; unreadKnown = true;
+    const changed = r.unread !== state.unread || r.openReports !== state.openReports || (r.openAppeals || 0) !== state.openAppeals;
+    state.unread = r.unread; state.openReports = r.openReports; state.openAppeals = r.openAppeals || 0; unreadKnown = true;
     if (changed) { renderChrome(); applyTitleBadge(); }
     if (grew) announceNewMessage();
   } catch { /* следващият опит ще мине */ }
@@ -216,14 +221,14 @@ async function announceNewMessage() {
   } catch { /* ignore */ }
 }
 function startBadges() { if (badgeTimer) return; refreshBadges(); badgeTimer = setInterval(refreshBadges, 8000); }
-function stopBadges() { if (badgeTimer) { clearInterval(badgeTimer); badgeTimer = null; } state.unread = 0; state.openReports = 0; unreadKnown = false; }
+function stopBadges() { if (badgeTimer) { clearInterval(badgeTimer); badgeTimer = null; } state.unread = 0; state.openReports = 0; state.openAppeals = 0; unreadKnown = false; }
 const fmtTime = at => new Date(at).toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit' });
 const fmtDate = at => new Date(at).toLocaleDateString('bg-BG', { day: 'numeric', month: 'short' });
 const fmtWhen = at => (new Date(at).toDateString() === new Date().toDateString() ? fmtTime(at) : `${fmtDate(at)}, ${fmtTime(at)}`);
 const badge = n => (n > 0 ? h('span', { class: 'badge', 'aria-label': `${n} нови`, text: n > 99 ? '99+' : String(n) }) : null);
 const disc = {
   region: '', place: '', placeLabel: '', stage: 'region', q: '', gender: '', ageMin: '', ageMax: '', interests: new Set(), withPhoto: false,
-  online: false, lookingForMe: false, sort: 'active', profiles: [], total: 0, loading: false,
+  online: false, lookingForMe: false, goal: '', sort: 'active', profiles: [], total: 0, loading: false,
   pickerOpen: true, filtersOpen: false, token: 0,
 };
 
@@ -231,12 +236,12 @@ const disc = {
 function renderChrome() {
   const route = currentRoute();
   const nav = clear($('#nav'));
-  if (state.me) {
+  if (state.me && state.me.emailVerified) {
     const isAdmin = state.me.role === 'admin';
     [['#/discover', 'Открий хора', 'discover', 0]]
-      .concat(isAdmin ? [] : [['#/messages', '💬 Съобщения', 'messages', state.unread]])
+      .concat(isAdmin ? [] : [['#/messages', '💬 Съобщения', 'messages', state.unread], ['#/activity', '💙 Активност', 'activity', 0]])
       .concat([['#/profile', 'Моят профил', 'profile', 0], ['#/settings', 'Дизайн и настройки', 'settings', 0]])
-      .concat(isAdmin ? [['#/admin', '🛡️ Админ', 'admin', state.openReports]] : [])
+      .concat(isAdmin ? [['#/admin', '🛡️ Админ', 'admin', state.openReports + state.openAppeals]] : [])
       .forEach(([href, label, key, n]) => nav.append(h('a', { href, class: route === key ? 'on' : '', 'aria-current': route === key ? 'page' : null }, label, badge(n))));
   }
   const box = clear($('#userbox'));
@@ -249,12 +254,19 @@ function renderChrome() {
   } else {
     box.append(h('a', { class: 'btn sm', href: '#/', text: 'Вход / Регистрация' }));
   }
+  renderBanners();
   syncDock();
 }
 
+// Филтрите на „Открий хора“ не трябва да „преминават“ към следващия акаунт в същия таб.
+function resetDisc() {
+  Object.assign(disc, { region: '', place: '', placeLabel: '', stage: 'region', q: '', gender: '', goal: '', ageMin: '', ageMax: '', withPhoto: false, online: false, lookingForMe: false,
+    sort: 'active', profiles: [], total: 0, loading: false, pickerOpen: true, token: disc.token + 1 });
+  disc.interests.clear();
+}
 async function logout() {
   try { await api('POST', '/api/logout'); } catch { /* ignore */ }
-  state.me = null; disc.profiles = []; chatWith = null; stopBadges();
+  state.me = null; resetDisc(); chatWith = null; stopBadges();
   location.hash = '#/';
   route();
   toast('Излязохте от профила си.');
@@ -336,14 +348,14 @@ function viewLanding() {
       err, btn,
       state.meta.demoAdmin ? h('div', { class: 'demologin' },
         h('button', { class: 'btn ghost block', type: 'button', text: '👤 Вход като тестов потребител (без парола)', onclick: async e => {
-          e.currentTarget.disabled = true; err.textContent = '';
+          const btn = e.currentTarget; btn.disabled = true; err.textContent = '';
           try { const r = await api('POST', '/api/demo-user'); await afterAuth(r.user); }
-          catch (x) { err.textContent = x.message; e.currentTarget.disabled = false; }
+          catch (x) { err.textContent = x.message; btn.disabled = false; }
         } }),
         h('button', { class: 'btn ghost block', type: 'button', text: '🔑 Вход като администратор (без парола)', onclick: async e => {
-          e.currentTarget.disabled = true; err.textContent = '';
+          const btn = e.currentTarget; btn.disabled = true; err.textContent = '';
           try { const r = await api('POST', '/api/demo-admin'); await afterAuth(r.user); location.hash = '#/admin'; route(); }
-          catch (x) { err.textContent = x.message; e.currentTarget.disabled = false; }
+          catch (x) { err.textContent = x.message; btn.disabled = false; }
         } })) : null,
       h('p', { class: 'hint', text: state.meta.demoAdmin ? 'Демо режим: входът е без парола. Тестовият потребител има готови разговори; администраторът вижда сайта отвътре.' : 'Нямаш профил? Натисни „Регистрация“ по-горе.' }));
   }
@@ -353,24 +365,28 @@ function viewLanding() {
     const f = {
       username: h('input', { id: 'r-user', autocomplete: 'username', required: true, maxlength: '30', placeholder: 'само за вход, не се показва' }),
       nickname: h('input', { id: 'r-nick', autocomplete: 'nickname', required: true, maxlength: '20', placeholder: 'виждат го другите' }),
+      email: h('input', { id: 'r-email', type: 'email', autocomplete: 'email', required: true, maxlength: '254', placeholder: 'за потвърждение и известия' }),
       password: h('input', { id: 'r-pass', type: 'password', autocomplete: 'new-password', required: true, minlength: '8', maxlength: '72' }),
       birthDate: h('input', { id: 'r-birth', type: 'date', required: true, max: new Date(Date.now() - 18 * 365.25 * 864e5).toISOString().slice(0, 10) }),
       gender: h('select', { id: 'r-gender' }, h('option', { value: '', text: 'Избери…' }), Object.entries(GENDER).map(([k, t]) => h('option', { value: k, text: t }))),
       lookingFor: h('select', { id: 'r-look' }, Object.entries(LOOKING).map(([k, t]) => h('option', { value: k, text: t, selected: k === 'any' }))),
     };
     const picker = placePicker({ onChange: () => {} });
+    // Капан за ботове: скрито поле, което човек не вижда и не попълва.
+    const hp = h('input', { name: 'website', type: 'text', tabindex: '-1', autocomplete: 'off', 'aria-hidden': 'true', class: 'hp' });
     const btn = h('button', { class: 'btn block', type: 'submit', text: 'Създай профил' });
     return h('form', { novalidate: true, onsubmit: async e => {
       e.preventDefault(); err.textContent = '';
       if (!picker.place) { err.textContent = 'Избери област и населено място от списъка.'; return; }
-      const body = { ...Object.fromEntries(Object.entries(f).map(([k, el]) => [k, el.value])), placeId: picker.place.id };
+      const body = { ...Object.fromEntries(Object.entries(f).map(([k, el]) => [k, el.value])), placeId: picker.place.id, website: hp.value };
       btn.disabled = true;
-      try { const r = await api('POST', '/api/register', body); await afterAuth(r.user, true); }
+      try { const r = await api('POST', '/api/register', body); state.devMail = r.mail; await afterAuth(r.user, true); }
       catch (x) { err.textContent = x.message; } finally { btn.disabled = false; }
     } },
       h('div', { class: 'row' },
         h('div', { class: 'field' }, h('label', { for: 'r-nick', text: 'Никнейм' }), f.nickname),
         h('div', { class: 'field' }, h('label', { for: 'r-user', text: 'Потребителско име' }), f.username)),
+      h('div', { class: 'field' }, h('label', { for: 'r-email', text: 'Имейл' }), f.email, h('p', { class: 'hint', text: 'Ще ти пратим код за потвърждение. Без него профилът остава ограничен.' })),
       h('div', { class: 'field' }, h('label', { for: 'r-pass', text: 'Парола (мин. 8 символа)' }), f.password),
       h('div', { class: 'field' }, h('label', { for: 'r-birth', text: 'Дата на раждане' }), f.birthDate),
       h('div', { class: 'field' }, h('span', { class: 'lbl', text: 'Къде живееш' }), picker.el),
@@ -391,6 +407,7 @@ function adoptServerTheme(user) {
 }
 
 async function afterAuth(user, isNew) {
+  resetDisc();
   state.me = user;
   adoptServerTheme(user);
   location.hash = isNew ? '#/profile' : '#/discover';
@@ -407,6 +424,9 @@ function viewDiscover() {
   const results = h('section', { 'aria-label': 'Резултати' });
   const sidebar = h('aside', { class: 'sidebar win enter' + (disc.filtersOpen ? '' : ' closed'), style: '--i:1', 'aria-label': 'Филтри' });
 
+  if (state.me.role !== 'admin' && state.me.completeness && state.me.completeness.pct < 80) {
+    v.append(h('div', { class: 'nudge' }, h('span', { text: `Профилът ти е ${state.me.completeness.pct}% попълнен – допълни го, за да те забелязват повече хора.` }), h('a', { class: 'btn sm', href: '#/profile', text: 'Допълни' })));
+  }
   v.append(
     h('button', { class: 'btn ghost sm filter-toggle', type: 'button', text: '🎛️ Филтри', onclick: () => { disc.filtersOpen = !disc.filtersOpen; sidebar.classList.toggle('closed', !disc.filtersOpen); } }),
     h('div', { class: 'layout' }, sidebar, h('div', { class: 'stack' }, citiesWin, results)));
@@ -494,13 +514,14 @@ function viewDiscover() {
       h('div', { class: 'win-body' },
         h('div', { class: 'fgroup' }, h('label', { for: 'f-q', text: 'Търси по никнейм' }), h('input', { id: 'f-q', value: disc.q, maxlength: '30', placeholder: 'напр. Мила', oninput: e => { disc.q = e.target.value; upd(); } })),
         h('div', { class: 'fgroup' }, h('label', { text: 'Пол' }), h('div', { class: 'chips' }, genderChips)),
+        h('div', { class: 'fgroup' }, h('label', { text: 'Какво търсят' }), h('div', { class: 'chips' }, [['', 'Всички'], ...Object.entries(state.meta.goals)].map(([k, t]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(disc.goal === k), text: t, onclick: () => { disc.goal = k; renderFilters(); load(true); } })))),
         h('div', { class: 'fgroup' }, h('label', { text: 'Възраст' }), h('div', { class: 'agepair' }, num('ageMin', 'от', 18, 99), h('span', { text: '–' }), num('ageMax', 'до', 18, 99))),
         h('div', { class: 'fgroup' }, h('label', { text: 'Интереси (поне един)' }),
           h('div', { class: 'chips' }, state.meta.interests.map(i => h('button', { class: 'chip', type: 'button', text: i, 'aria-pressed': String(disc.interests.has(i)),
             onclick: e => { disc.interests.has(i) ? disc.interests.delete(i) : disc.interests.add(i); e.currentTarget.setAttribute('aria-pressed', String(disc.interests.has(i))); upd(); } })))),
         h('div', { class: 'fgroup' }, chk('withPhoto', 'Само със снимка'), chk('online', 'Онлайн сега'), chk('lookingForMe', 'Търсят хора като мен')),
         h('button', { class: 'btn ghost block', type: 'button', text: 'Изчисти филтрите', onclick: () => {
-          Object.assign(disc, { q: '', gender: '', ageMin: '', ageMax: '', withPhoto: false, online: false, lookingForMe: false }); disc.interests.clear(); renderFilters(); load(true); } })));
+          Object.assign(disc, { q: '', gender: '', goal: '', ageMin: '', ageMax: '', withPhoto: false, online: false, lookingForMe: false }); disc.interests.clear(); renderFilters(); load(true); } })));
   }
 
   function renderResults() {
@@ -535,6 +556,7 @@ function viewDiscover() {
     if (disc.withPhoto) p.set('withPhoto', '1');
     if (disc.online) p.set('online', '1');
     if (disc.lookingForMe) p.set('lookingForMe', '1');
+    if (disc.goal) p.set('goal', disc.goal);
     disc.interests.forEach(i => p.append('interest', i));
     p.set('sort', disc.sort); p.set('limit', '12'); p.set('offset', String(reset ? 0 : disc.profiles.length));
     try {
@@ -554,7 +576,7 @@ function viewDiscover() {
   renderCities(); renderFilters(); load(true);
 }
 
-function profileCard(p, i) {
+function profileCard(p, i, extra) {
   const canChat = state.me && state.me.role !== 'admin';
   return h('article', { class: 'win card enter', style: `--i:${Math.min(i, 8)}` },
     h('button', { class: 'cardmain', type: 'button', 'aria-label': `Профил на ${p.nickname}, ${p.age} г., ${p.city}`, onclick: () => openProfile(p) },
@@ -562,8 +584,8 @@ function profileCard(p, i) {
         h('img', { src: mainPhoto(p), alt: '', loading: 'lazy', width: '400', height: '500' }),
         p.isDemo ? h('span', { class: 'tag demo badge-tr', text: 'демо' }) : null,
         h('div', { class: 'over' }, h('b', { text: `${p.nickname}, ${p.age}` }), h('span', {}, p.online ? h('span', { class: 'dot', 'aria-label': 'онлайн' }) : null, `📍 ${p.city}`, p.regionName && p.regionName !== p.city ? h('small', { class: 'obl', text: ` · ${p.regionName}` }) : null))),
-      h('div', { class: 'meta' }, h('p', { text: p.bio || 'Още няма био.' }),
-        h('div', { class: 'chips' }, p.interests.slice(0, 3).map(t => h('span', { class: 'tag', text: t }))))),
+      h('div', { class: 'meta' }, extra ? h('p', { class: 'extra', text: extra }) : null, h('p', { text: p.bio || 'Още няма био.' }),
+        h('div', { class: 'chips' }, p.goalLabel ? h('span', { class: 'tag goal', text: '🎯 ' + p.goalLabel }) : null, p.interests.slice(0, 3).map(t => h('span', { class: 'tag', text: t }))))),
     canChat ? h('div', { class: 'cardact' },
       h('button', { class: 'btn sm', type: 'button', text: '💬 Пиши', 'aria-label': `Пиши на ${p.nickname}`, onclick: () => openChat(p.id) }),
       p.likedMe ? h('span', { class: 'tag', text: '💙 Харесва те' }) : null) : null);
@@ -579,9 +601,9 @@ function openProfile(p) {
     const main = h('div', { class: 'main' }, h('img', { src: photos[idx], alt: `Снимка на ${cur.nickname}` }));
     const thumbs = photos.length > 1 ? h('div', { class: 'thumbs' }, photos.map((u, n) => h('button', { type: 'button', 'aria-label': `Снимка ${n + 1}`, 'aria-current': String(n === idx), onclick: () => { idx = n; render(); } }, h('img', { src: u, alt: '' })))) : null;
     const likeBtn = cur.isMe ? null : h('button', { class: cur.liked ? 'btn' : 'btn ghost', type: 'button', 'aria-pressed': String(cur.liked), text: cur.liked ? '💙 Харесан' : '🤍 Харесай', onclick: async e => {
-      e.currentTarget.disabled = true;
+      const likeEl = e.currentTarget; likeEl.disabled = true;
       try { cur = (await api('POST', `/api/profiles/${cur.id}/like`)).profile; const i = disc.profiles.findIndex(x => x.id === cur.id); if (i >= 0) disc.profiles[i] = cur; if (cur.liked && cur.likedMe) toast(`Взаимно харесване с ${cur.nickname}! 🎉`); render(); }
-      catch (x) { toast(x.message, true); e.currentTarget.disabled = false; }
+      catch (x) { toast(x.message, true); likeEl.disabled = false; }
     } });
     body.append(h('div', { class: 'pview' },
       h('div', { class: 'gallery' }, main, thumbs),
@@ -594,6 +616,7 @@ function openProfile(p) {
           cur.regionName ? [h('dt', { text: 'Област' }), h('dd', { text: cur.regionName })] : null,
           h('dt', { text: 'Пол' }), h('dd', { text: GENDER[cur.gender] }),
           h('dt', { text: 'Търси' }), h('dd', { text: LOOKING[cur.lookingFor] }),
+          cur.goalLabel ? [h('dt', { text: 'Цел' }), h('dd', { text: cur.goalLabel })] : null,
           h('dt', { text: 'Харесвания' }), h('dd', { text: String(cur.likes) })),
         cur.likedMe && !cur.isMe ? h('p', {}, h('span', { class: 'tag', text: '💙 Харесва те' })) : null,
         h('h3', { text: 'За мен' }), h('p', { class: 'bio', text: cur.bio || 'Още няма био.' }),
@@ -643,10 +666,20 @@ function resizeToBlob(file, maxSide = 1600) {
   });
 }
 
+// Индикатор „Профил N% попълнен“ със следващи стъпки.
+function completenessBar(me) {
+  const c = me.completeness, todo = c.steps.filter(x => !x.done);
+  const bar = h('div', { class: 'meter', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(c.pct), 'aria-label': 'Попълненост на профила' }, h('i'));
+  bar.firstChild.style.setProperty('width', c.pct + '%');
+  return h('section', { class: 'win enter completeness' }, h('div', { class: 'win-body' },
+    h('div', { class: 'cmeta' }, h('b', { text: `Профилът ти е ${c.pct}% попълнен` }), h('span', { class: 'dim', text: c.pct >= 100 ? 'Страхотно! 🎉' : 'Попълнените профили получават повече харесвания и съобщения.' })), bar,
+    todo.length ? h('div', { class: 'chips', style: 'margin-top:.6rem' }, todo.map(t => h('span', { class: 'tag', text: `＋ ${t.label} (+${t.points}%)` }))) : null));
+}
+
 function viewProfile() {
   const v = clear($('#view'));
   const me = state.me;
-  const draft = { nickname: me.nickname, gender: me.gender, lookingFor: me.lookingFor, placeId: me.placeId, bio: me.bio, interests: new Set(me.interests) };
+  const draft = { nickname: me.nickname, gender: me.gender, lookingFor: me.lookingFor, placeId: me.placeId, goal: me.goal || '', bio: me.bio, interests: new Set(me.interests) };
 
   const photosBox = h('div', { class: 'photos' });
   function renderPhotos() {
@@ -693,7 +726,7 @@ function viewProfile() {
     if (!draft.placeId) { err.textContent = 'Избери област и населено място от списъка.'; return; }
     save.disabled = true;
     try {
-      state.me = (await api('PUT', '/api/me', { nickname: draft.nickname, gender: draft.gender, lookingFor: draft.lookingFor, placeId: draft.placeId, bio: draft.bio, interests: [...draft.interests] })).user;
+      state.me = (await api('PUT', '/api/me', { nickname: draft.nickname, gender: draft.gender, lookingFor: draft.lookingFor, placeId: draft.placeId, goal: draft.goal, bio: draft.bio, interests: [...draft.interests] })).user;
       refreshMeta();
       renderChrome();
       toast('Профилът е запазен ✔');
@@ -703,6 +736,7 @@ function viewProfile() {
       h('div', { class: 'field' }, h('label', { for: 'p-nick', text: 'Никнейм' }), h('input', { id: 'p-nick', value: draft.nickname, maxlength: '20', oninput: e => { draft.nickname = e.target.value; } })),
       h('div', { class: 'field' }, h('label', { text: 'Възраст' }), h('input', { value: `${me.age} г.`, disabled: true, 'aria-label': 'Възраст' }))),
     h('div', { class: 'field' }, h('span', { class: 'lbl', text: 'Къде живееш' }), picker.el),
+    h('div', { class: 'field' }, h('label', { for: 'p-goal', text: 'Какво търся' }), h('select', { id: 'p-goal', onchange: e => { draft.goal = e.target.value; } }, h('option', { value: '', text: 'Не искам да казвам' }), Object.entries(state.meta.goals).map(([k, t]) => h('option', { value: k, text: t, selected: k === draft.goal })))),
     h('div', { class: 'row' },
       h('div', { class: 'field' }, h('label', { for: 'p-gender', text: 'Аз съм' }), h('select', { id: 'p-gender', onchange: e => { draft.gender = e.target.value; } }, Object.entries(GENDER).map(([k, t]) => h('option', { value: k, text: t, selected: k === draft.gender })))),
       h('div', { class: 'field' }, h('label', { for: 'p-look', text: 'Търся' }), h('select', { id: 'p-look', onchange: e => { draft.lookingFor = e.target.value; } }, Object.entries(LOOKING).map(([k, t]) => h('option', { value: k, text: t, selected: k === draft.lookingFor }))))),
@@ -717,7 +751,7 @@ function viewProfile() {
     err,
     h('div', { class: 'actions' }, save, h('button', { class: 'btn ghost', type: 'button', text: 'Как ме виждат другите', onclick: () => openProfile(state.me) })));
 
-  v.append(h('h1', { text: 'Моят профил' }),
+  v.append(h('h1', { text: 'Моят профил' }), completenessBar(state.me),
     h('div', { class: 'two' },
       h('section', { class: 'win enter' }, h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: '🖼️ Снимки' })),
         h('div', { class: 'win-body' }, photosBox, h('p', { class: 'hint', text: `До ${state.meta.maxPhotos} снимки · JPG, PNG или WebP · първата е основна.` }))),
@@ -764,7 +798,12 @@ function viewSettings() {
         h('section', { class: 'win enter', style: '--i:1' }, h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: '👁️ Преглед на живо' })),
           h('div', { class: 'win-body' }, h('div', { class: 'live' }, h('h3', { text: 'Примерен прозорец' }), h('p', { text: 'Така изглеждат текстът, рамките и бутоните с твоите настройки.' }), h('div', { class: 'chips' }, h('span', { class: 'tag', text: 'Пътуване' }), h('span', { class: 'tag', text: 'Музика' })), h('br'), h('button', { class: 'btn sm', type: 'button', text: 'Бутон' })),
             h('p', { class: 'hint', text: state.me ? 'Настройките се пазят в профила ти и те следват на всяко устройство.' : 'Настройките се пазят в този браузър.' }))),
-        state.me ? h('section', { class: 'win enter', style: '--i:2' }, h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: '🔐 Акаунт' })),
+        state.me && state.me.role !== 'admin' ? h('section', { class: 'win enter', style: '--i:2' }, h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: '🕶️ Поверителност' })),
+          h('div', { class: 'win-body' },
+            h('div', { class: 'checkline' }, h('input', { type: 'checkbox', id: 'pv-pause', checked: state.me.paused, onchange: async e => { try { state.me = (await api('PUT', '/api/me/settings', { paused: e.target.checked })).user; renderChrome(); toast(state.me.paused ? 'Профилът е на пауза.' : 'Профилът отново се вижда.'); } catch (x) { toast(x.message, true); e.target.checked = !e.target.checked; } } }), h('label', { for: 'pv-pause', text: 'Пауза: скрий профила ми от търсенето (разговорите ми остават)' })),
+            h('div', { class: 'checkline' }, h('input', { type: 'checkbox', id: 'pv-visits', checked: state.me.hideVisits, onchange: async e => { try { state.me = (await api('PUT', '/api/me/settings', { hideVisits: e.target.checked })).user; toast(state.me.hideVisits ? 'Посещенията ти вече не се записват.' : 'Посещенията ти се записват.'); } catch (x) { toast(x.message, true); e.target.checked = !e.target.checked; } } }), h('label', { for: 'pv-visits', text: 'Не записвай кога разглеждам чужди профили' })),
+            h('p', { class: 'hint', text: `Имейл: ${state.me.email || '—'}${state.me.emailVerified ? ' ✓ потвърден' : ''}. Виден е само на теб.` }))) : null,
+        state.me ? h('section', { class: 'win enter', style: '--i:3' }, h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: '🔐 Акаунт' })),
           h('div', { class: 'win-body' },
             h('form', { novalidate: true, onsubmit: async e => {
               e.preventDefault(); pErr.textContent = '';
@@ -1110,7 +1149,7 @@ function chatIcon() {
   svg.append(path);
   return svg;
 }
-const dockVisible = () => !!state.me && state.me.role !== 'admin' && currentRoute() !== 'messages';
+const dockVisible = () => !!state.me && state.me.emailVerified && state.me.role !== 'admin' && currentRoute() !== 'messages';
 
 function syncDock() {
   if (!dockVisible()) {
@@ -1253,13 +1292,136 @@ function viewMessages() {
   viewTimer = setInterval(() => { loadList(); if (chatWith) pane.reload(false); }, 5000);
 }
 
+/* ═══════════ Потвърждение на имейл, банери, обжалване ═══════════ */
+async function refreshMe() {
+  try { const r = await api('GET', '/api/me'); if (r.user) { state.me = r.user; renderChrome(); } } catch { /* ignore */ }
+}
+const fmtUntil = at => new Date(at).toLocaleString('bg-BG', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+const APPEAL = { pending: 'Обжалването ти се разглежда.', accepted: 'Обжалването е уважено.', rejected: 'Обжалването е отхвърлено.' };
+
+// Ленти най-горе: суспензия, предупреждение, пауза.
+function renderBanners() {
+  const box = $('#banners'); if (!box) return;
+  clear(box);
+  const me = state.me;
+  if (!me || !me.emailVerified) return;
+  const appealBtn = p => (p.appealStatus === 'none' ? h('button', { class: 'btn sm', type: 'button', text: 'Обжалвай', onclick: () => appealDialog(p) }) : h('span', { class: 'tag', text: APPEAL[p.appealStatus] }));
+  if (me.suspension) {
+    const s = me.suspension;
+    box.append(h('div', { class: 'banner danger', role: 'alert' }, h('span', { class: 'bico', 'aria-hidden': 'true', text: '⏸' }),
+      h('div', { class: 'btxt' }, h('b', { text: `Профилът ти е временно спрян до ${fmtUntil(s.until)}` }), h('span', { text: `Причина: ${s.reason}. Можеш да четеш, но не можеш да пишеш, харесваш и качваш. Не се показваш в търсенето.` }), s.appealNote ? h('span', { class: 'dim', text: `Коментар по обжалването: ${s.appealNote}` }) : null),
+      appealBtn(s)));
+  }
+  if (me.warning) {
+    const w = me.warning;
+    box.append(h('div', { class: 'banner warn', role: 'alert' }, h('span', { class: 'bico', 'aria-hidden': 'true', text: '⚠️' }),
+      h('div', { class: 'btxt' }, h('b', { text: 'Получи предупреждение от администратор' }), h('span', { text: `Причина: ${w.reason}. При повторни нарушения профилът може да бъде спрян или дерегистриран.` })),
+      appealBtn(w), h('button', { class: 'btn ghost sm', type: 'button', text: 'Разбрах', onclick: async () => { try { state.me = (await api('POST', `/api/me/penalties/${w.id}/ack`)).user; renderBanners(); } catch (x) { toast(x.message, true); } } })));
+  }
+  if (me.paused) {
+    box.append(h('div', { class: 'banner info' }, h('span', { class: 'bico', 'aria-hidden': 'true', text: '😴' }),
+      h('div', { class: 'btxt' }, h('b', { text: 'Профилът ти е на пауза' }), h('span', { text: 'Не се показваш в търсенето, но разговорите ти работят нормално.' })),
+      h('button', { class: 'btn sm', type: 'button', text: 'Покажи профила', onclick: async () => { try { state.me = (await api('PUT', '/api/me/settings', { paused: false })).user; renderChrome(); toast('Профилът ти отново се вижда.'); } catch (x) { toast(x.message, true); } } })));
+  }
+}
+
+function appealDialog(p) {
+  const err = h('div', { class: 'err', role: 'alert' });
+  const text = h('textarea', { id: 'ap-text', maxlength: '500', placeholder: 'Опиши защо смяташ, че наказанието е неправилно…', style: 'min-height:7rem' });
+  const btn = h('button', { class: 'btn', type: 'submit', text: 'Изпрати обжалване' });
+  openModal(h('form', { novalidate: true, onsubmit: async e => {
+    e.preventDefault(); err.textContent = ''; btn.disabled = true;
+    try { state.me = (await api('POST', `/api/me/penalties/${p.id}/appeal`, { text: text.value })).user; closeModal(); renderBanners(); toast('Обжалването е изпратено. Администратор ще го прегледа.'); }
+    catch (x) { err.textContent = x.message; btn.disabled = false; }
+  } },
+    h('p', {}, h('b', { text: p.kind === 'suspension' ? 'Суспензия' : 'Предупреждение' }), `: ${p.reason}`),
+    h('div', { class: 'field' }, h('label', { for: 'ap-text', text: 'Твоето обяснение' }), text),
+    h('p', { class: 'hint', text: 'Можеш да обжалваш всяко наказание веднъж. Решението е на администратор и ти ще го видиш тук.' }),
+    err, h('div', { class: 'actions' }, btn, h('button', { class: 'btn ghost', type: 'button', text: 'Отказ', onclick: closeModal }))),
+  { narrow: true, title: 'Обжалване' });
+}
+
+// Екран, докато имейлът не е потвърден.
+function viewVerify() {
+  const v = clear($('#view')), me = state.me;
+  const err = h('div', { class: 'err', role: 'alert' }), info = h('div', { class: 'ok', role: 'status' });
+  const code = h('input', { id: 'vf-code', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '7', placeholder: '______', class: 'codeinput', 'aria-label': 'Код за потвърждение' });
+  const btn = h('button', { class: 'btn block', type: 'submit', text: 'Потвърди' });
+  const resend = h('button', { class: 'btn ghost sm', type: 'button', text: 'Изпрати нов код' });
+  const mailBox = h('div');
+  let timer = null, left = 0;
+  const tick = () => { left = Math.max(0, left - 1); resend.disabled = left > 0; resend.textContent = left > 0 ? `Нов код след ${left} с.` : 'Изпрати нов код'; if (!left) { clearInterval(timer); timer = null; } };
+  const cool = sec => { left = sec; resend.disabled = true; clearInterval(timer); timer = setInterval(tick, 1000); tick(); };
+  const showDev = () => {
+    clear(mailBox);
+    const dm = state.devMail;
+    if (dm && dm.mode === 'dev' && dm.devCode) {
+      mailBox.append(h('div', { class: 'devmail' }, h('b', { text: '📬 Демо поща' }), h('p', { class: 'dim', text: 'Този сайт е в демо режим и не праща истински имейли. Ето писмото, което щеше да получиш:' }),
+        h('div', { class: 'mailcard' }, h('small', { class: 'dim', text: `До: ${me.email}` }), h('b', { text: 'Spark: код за потвърждение' }), h('span', {}, 'Твоят код е: ', h('b', { class: 'bigcode', text: dm.devCode }))),
+        h('button', { class: 'btn ghost sm', type: 'button', text: 'Попълни кода', onclick: () => { code.value = dm.devCode; code.focus(); } })));
+    }
+  };
+  showDev();
+  cool(60);
+
+  const change = h('form', { novalidate: true, class: 'changemail', onsubmit: async e => {
+    e.preventDefault(); err.textContent = '';
+    try { const r = await api('POST', '/api/verify/change-email', { email: nem.value, password: npw.value }); state.me = r.user; state.devMail = r.mail; toast('Имейлът е сменен. Пратихме нов код.'); route(); }
+    catch (x) { err.textContent = x.message; }
+  } });
+  const nem = h('input', { id: 'vf-new', type: 'email', autocomplete: 'email', placeholder: 'правилния имейл', 'aria-label': 'Нов имейл' });
+  const npw = h('input', { id: 'vf-pass', type: 'password', autocomplete: 'current-password', placeholder: 'паролата ти (за сигурност)', 'aria-label': 'Парола' });
+  change.append(h('div', { class: 'row' }, nem, npw), h('button', { class: 'btn ghost sm', type: 'submit', text: 'Смени имейла' }));
+
+  resend.addEventListener('click', async () => {
+    err.textContent = ''; info.textContent = '';
+    try { const r = await api('POST', '/api/verify/resend'); state.devMail = r.mail; showDev(); info.textContent = 'Изпратихме нов код.'; cool(60); }
+    catch (x) { err.textContent = x.message; if (x.data && x.data.retryAfter) cool(Math.min(x.data.retryAfter, 3600)); }
+  });
+  v.append(h('div', { class: 'verifywrap' }, h('section', { class: 'win enter' },
+    h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: '✉️ Потвърди имейла си' })),
+    h('div', { class: 'win-body' },
+      h('p', {}, 'Пратихме 6-цифрен код на ', h('b', { text: me.emailMasked || me.email }), '. Въведи го, за да отключиш сайта. Така пазим профилите от ботове и спам.'),
+      mailBox,
+      h('form', { novalidate: true, onsubmit: async e => {
+        e.preventDefault(); err.textContent = ''; info.textContent = ''; btn.disabled = true;
+        try { const r = await api('POST', '/api/verify/email', { code: code.value }); state.me = r.user; state.devMail = null; toast('Имейлът е потвърден ✔'); location.hash = '#/profile'; route(); }
+        catch (x) { err.textContent = x.message; if (x.code === 'too_many_attempts' || x.code === 'code_expired') info.textContent = 'Поискай нов код.'; } finally { btn.disabled = false; }
+      } }, h('div', { class: 'field' }, h('label', { for: 'vf-code', text: 'Код' }), code), err, info, btn),
+      h('div', { class: 'actions', style: 'margin-top:1rem' }, resend, h('button', { class: 'btn ghost sm', type: 'button', text: 'Изход', onclick: logout })),
+      h('details', { class: 'wrongmail' }, h('summary', { text: 'Грешен имейл?' }), h('p', { class: 'hint', text: 'Въведи правилния имейл и паролата си. Непотвърдените профили се изтриват след 7 дни.' }), change)))));
+  code.focus();
+}
+
+/* ═══════════ Активност: харесали те, взаимни, посетители ═══════════ */
+function viewActivity() {
+  const v = clear($('#view'));
+  let tab = 'likedMe', data = null;
+  const body = h('div', { class: 'stack' }), tabs = h('div', { class: 'tabs', role: 'tablist', style: 'max-width:34rem' });
+  v.append(h('h1', { text: 'Активност' }), h('p', { class: 'dim', text: 'Кой те е харесал, с кого се харесвате взаимно и кой е разглеждал профила ти през последните 30 дни.' }), tabs, body);
+  function paint() {
+    clear(tabs).append(...[['likedMe', '💙 Харесват те'], ['mutual', '✨ Взаимни'], ['visitors', '👀 Посетители']].map(([k, t]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(tab === k), text: `${t}${data ? ` (${data[k].length})` : ''}`, onclick: () => { tab = k; paint(); } })));
+    clear(body);
+    if (!data) { body.append(h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Зареждане' })); return; }
+    const list = data[tab], empty = { likedMe: ['💙', 'Още никой не те е харесал', 'Допълни профила си и качи снимки – така те забелязват по-лесно.'], mutual: ['✨', 'Още нямаш взаимни харесвания', 'Харесай хора от „Открий хора“. Когато те харесат обратно, ще ги видиш тук.'], visitors: ['👀', 'Още никой не е гледал профила ти', 'Посетителите се показват тук. Ако ти не искаш да се записваш в чужди профили, изключи го от настройките.'] }[tab];
+    if (!list.length) { body.append(h('div', { class: 'win' }, h('div', { class: 'empty-state' }, h('div', { class: 'big', text: empty[0] }), h('h3', { text: empty[1] }), h('p', { text: empty[2] }), h('a', { class: 'btn', href: '#/discover', text: 'Открий хора' })))); return; }
+    body.append(h('div', { class: 'grid' }, list.map((p, i) => profileCard(p, i, tab === 'visitors' ? `Гледа те: ${fmtDate(p.at)}` : tab === 'likedMe' ? `Хареса те: ${fmtDate(p.at)}` : ''))));
+  }
+  paint();
+  api('GET', '/api/activity').then(r => { data = r; paint(); }).catch(x => toast(x.message, true));
+}
+
 /* ═══════════ Администрация ═══════════ */
+let adminRefresh = () => {};
 function viewAdmin() {
   const v = clear($('#view'));
   const head = t => h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: t }));
   const tiles = h('div', { class: 'tiles' });
   const bars = h('div', { class: 'bars' });
   const repBox = h('div', { class: 'replist' });
+  const dosBox = h('div', { class: 'replist' });
+  const dosFilters = h('div', { class: 'chips', style: 'margin-bottom:.7rem', role: 'group', 'aria-label': 'Филтър на досиетата' });
+  let dosFilter = 'all', dosQuery = '';
   const repFilters = h('div', { class: 'chips', style: 'margin-bottom:.9rem', role: 'group', 'aria-label': 'Филтър на докладите' });
   let repFilter = 'open';
   const tbody = h('tbody');
@@ -1276,7 +1438,10 @@ function viewAdmin() {
     h('section', { class: 'win enter', style: '--i:3', id: 'reportsWin' }, head('🚩 Доклади'), h('div', { class: 'win-body' },
       h('p', { class: 'dim', text: 'Разговорът се вижда само към доклад (снимка от момента на докладването). Всяко отваряне се записва в журнал.' }),
       repFilters, repBox)),
-    h('section', { class: 'win enter', style: '--i:4' }, head('👥 Потребители'), h('div', { class: 'win-body' },
+    h('section', { class: 'win enter', style: '--i:4', id: 'dossiersWin' }, head('📁 Досиета'), h('div', { class: 'win-body' },
+      h('p', { class: 'dim', text: 'Досие има само за докладван профил. Тук са историята му, наказанията и бележките. Наказания и дерегистрация се налагат от досието.' }),
+      dosFilters, h('input', { type: 'search', placeholder: 'Търси по никнейм', 'aria-label': 'Търсене в досиетата', style: 'max-width:22rem;margin:.2rem 0 .9rem', oninput: debounce(e => { dosQuery = e.target.value; loadDossiers(); }, 250) }), dosBox)),
+    h('section', { class: 'win enter', style: '--i:5' }, head('👥 Потребители'), h('div', { class: 'win-body' },
       h('div', { class: 'citybar' }, h('input', { type: 'search', placeholder: 'Търси по никнейм или потребителско име', 'aria-label': 'Търсене на потребители', style: 'max-width:26rem',
         oninput: debounce(e => loadUsers(e.target.value), 250) }), count),
       h('div', { class: 'tblwrap' }, h('table', { class: 'tbl' },
@@ -1285,7 +1450,7 @@ function viewAdmin() {
   async function loadStats() {
     try {
       const st = await api('GET', '/api/admin/stats');
-      clear(tiles).append(...[['Профили', st.users], ['Реални', st.real], ['Демо', st.demo], ['Снимки', st.photos], ['Харесвания', st.likes], ['Отворени доклади', st.openReports], ['Онлайн', st.online], ['Нови за 24ч', st.newToday]]
+      clear(tiles).append(...[['Профили', st.users], ['Реални', st.real], ['Демо', st.demo], ['Снимки', st.photos], ['Харесвания', st.likes], ['Отворени доклади', st.openReports], ['Обжалвания', st.openAppeals], ['Спрени профили', st.suspended], ['Досиета', st.dossiers], ['Онлайн', st.online], ['Нови за 24ч', st.newToday]]
         .map(([l, n]) => h('div', { class: 'tile' }, h('b', { text: String(n) }), h('span', { text: l }))));
       const max = Math.max(1, ...st.byRegion.map(c => c.count));
       clear(bars).append(...st.byRegion.slice(0, 12).map(c => h('div', { class: 'bar' },
@@ -1327,12 +1492,148 @@ function viewAdmin() {
           h('span', { class: 'tag', text: x.reasonLabel }),
           h('span', { class: 'dim', text: `${fmtWhen(x.createdAt)} · 💬 ${x.messages}` }),
           h('span', { class: 'tag st-' + x.status, text: STATUS[x.status] }),
-          h('button', { class: 'btn sm', type: 'button', text: 'Разгледай', onclick: () => openCase(x.id, () => { loadReports(); loadStats(); refreshBadges(); }) })));
+          h('button', { class: 'btn sm', type: 'button', text: 'Разгледай', onclick: () => openCase(x.id, () => { loadReports(); loadStats(); loadDossiers(); refreshBadges(); }) })));
       }
     } catch (x) { toast(x.message, true); }
   }
 
-  loadStats(); loadReports(); loadUsers();
+  async function loadDossiers() {
+    try {
+      const { dossiers } = await api('GET', `/api/admin/dossiers?status=${dosFilter}&q=${encodeURIComponent(dosQuery.trim())}`);
+      clear(dosFilters).append(...[['all', 'Всички'], ['active', 'Активни'], ['suspended', 'Спрени'], ['appeals', 'С обжалване'], ['deregistered', 'Дерегистрирани']]
+        .map(([k, t]) => h('button', { class: 'chip', type: 'button', text: t, 'aria-pressed': String(dosFilter === k), onclick: () => { dosFilter = k; loadDossiers(); } })));
+      clear(dosBox);
+      if (!dossiers.length) dosBox.append(h('p', { class: 'dim', text: 'Няма досиета в тази група.' }));
+      for (const d of dossiers) {
+        const st = d.status === 'deregistered' ? h('span', { class: 'pill bad', text: 'Дерегистриран' }) : d.suspendedUntil ? h('span', { class: 'pill warn', text: `Спрян до ${fmtUntil(d.suspendedUntil)}` }) : d.status === 'closed' ? h('span', { class: 'pill muted', text: 'Затворено' }) : h('span', { class: 'pill good', text: 'Активен' });
+        dosBox.append(h('div', { class: 'rep' },
+          h('div', { class: 'who' }, h('b', { text: d.nickname }), h('span', { class: 'dim', text: ` · ${d.reports} ${d.reports === 1 ? 'доклад' : 'доклада'}${d.openReports ? ` (${d.openReports} отворен${d.openReports === 1 ? '' : 'и'})` : ''}` })),
+          st,
+          h('span', { class: 'pill ' + (d.strikes >= d.strikeLimit ? 'bad' : d.strikes ? 'warn' : 'muted'), title: 'Предупреждения и суспензии', text: `Страйкове ${d.strikes}/${d.strikeLimit}` }),
+          d.appeals ? h('span', { class: 'pill warn', text: `⚖️ ${d.appeals} обжалване` }) : null,
+          h('button', { class: 'btn sm', type: 'button', text: 'Отвори досие', onclick: () => openDossier(d.id, refreshAll) })));
+      }
+    } catch (x) { toast(x.message, true); }
+  }
+  const refreshAll = () => { loadStats(); loadReports(); loadDossiers(); refreshBadges(); };
+  adminRefresh = refreshAll;
+  loadStats(); loadReports(); loadDossiers(); loadUsers();
+}
+
+// ── Досие: история, наказания, бележки ──
+const KIND = { warning: ['⚠️ Предупреждение', 'warn'], suspension: ['⏸ Суспензия', 'warn'], deregistration: ['⛔ Дерегистрация', 'bad'] };
+async function openDossier(id, changed) {
+  let d;
+  try { d = await api('GET', `/api/admin/dossiers/${id}`); } catch (x) { toast(x.message, true); return; }
+  const sub = d.subject, alive = sub.alive && d.dossier.status === 'active';
+  const reload = () => { closeModal(); openDossier(id, changed); changed && changed(); };
+  const err = h('div', { class: 'err', role: 'alert' });
+
+  const facts = h('dl', { class: 'facts' },
+    h('dt', { text: 'Статус' }), h('dd', {}, d.dossier.status === 'deregistered' ? h('span', { class: 'pill bad', text: 'Дерегистриран' }) : d.dossier.status === 'closed' ? h('span', { class: 'pill muted', text: 'Затворено (профилът е изтрит от потребителя)' }) : h('span', { class: 'pill good', text: 'Активен' })),
+    h('dt', { text: 'Страйкове' }), h('dd', {}, h('span', { class: 'pill ' + (d.strikes >= d.strikeLimit ? 'bad' : d.strikes ? 'warn' : 'muted'), text: `${d.strikes} от ${d.strikeLimit}` })),
+    sub.age ? [h('dt', { text: 'Профил' }), h('dd', { text: `${sub.age} г. · ${sub.city || ''}${sub.regionName && sub.regionName !== sub.city ? ', обл. ' + sub.regionName : ''}` })] : null,
+    sub.joinedAt ? [h('dt', { text: 'Регистриран' }), h('dd', { text: fmtDate(sub.joinedAt) })] : null,
+    sub.emailMasked ? [h('dt', { text: 'Имейл' }), h('dd', { text: `${sub.emailMasked}${sub.emailVerified === false ? ' (непотвърден)' : sub.emailVerified ? ' ✓' : ''}` })] : null,
+    h('dt', { text: 'Заведено' }), h('dd', { text: fmtWhen(d.dossier.createdAt) }),
+    d.dossier.closedAt ? [h('dt', { text: 'Закрито' }), h('dd', { text: `${fmtWhen(d.dossier.closedAt)} · ${d.dossier.closedReason}` })] : null,
+    d.emailBanned ? [h('dt', { text: 'Имейл' }), h('dd', { text: '🚫 Забранен за нова регистрация' })] : null);
+
+  const pens = h('div', { class: 'timeline' });
+  if (!d.penalties.length) pens.append(h('p', { class: 'dim', text: 'Още няма наказания.' }));
+  for (const p of d.penalties) {
+    const [label, tone] = KIND[p.kind];
+    const row = h('div', { class: 'tl' },
+      h('div', { class: 'tlhead' }, h('span', { class: 'pill ' + tone, text: label + (p.days ? ` · ${p.days} дни` : '') }),
+        p.kind === 'suspension' ? h('span', { class: 'pill ' + (p.active ? 'warn' : 'muted'), text: p.liftedAt ? 'вдигната' : p.active ? `до ${fmtUntil(p.until)}` : 'изтекла' }) : null,
+        h('small', { class: 'dim', text: `${fmtWhen(p.at)} · ${p.issuedNick}` })),
+      h('p', { class: 'bio', text: p.reason }), p.note ? h('p', { class: 'hint', text: `🔒 Вътрешна бележка: ${p.note}` }) : null,
+      p.liftedNote && p.liftedAt ? h('p', { class: 'hint', text: `Вдигната: ${p.liftedNote}` }) : null);
+    if (p.appealStatus !== 'none') {
+      const box = h('div', { class: 'appeal' }, h('b', { text: `⚖️ Обжалване (${p.appealStatus === 'pending' ? 'чака решение' : p.appealStatus === 'accepted' ? 'уважено' : 'отхвърлено'})` }), h('p', { class: 'bio', text: p.appealText }), p.appealNote ? h('p', { class: 'hint', text: `Решение: ${p.appealNote}` }) : null);
+      if (p.appealStatus === 'pending') {
+        const note = h('input', { 'aria-label': 'Коментар към решението', placeholder: 'Коментар към решението (по желание)', maxlength: '300' });
+        const decide = async dec => { try { await api('POST', `/api/admin/penalties/${p.id}/appeal`, { decision: dec, note: note.value }); toast(dec === 'accepted' ? 'Обжалването е уважено, наказанието е отменено.' : 'Обжалването е отхвърлено.'); reload(); } catch (x) { err.textContent = x.message; } };
+        box.append(note, h('div', { class: 'actions' }, h('button', { class: 'btn sm', type: 'button', text: '✔ Уважи (отмени наказанието)', onclick: () => decide('accepted') }), h('button', { class: 'btn ghost sm', type: 'button', text: '✖ Отхвърли', onclick: () => decide('rejected') })));
+      }
+      row.append(box);
+    }
+    if (p.kind === 'suspension' && p.active) row.append(h('div', { class: 'actions' }, h('button', { class: 'btn ghost sm', type: 'button', text: 'Вдигни суспензията', onclick: async () => { try { await api('POST', `/api/admin/penalties/${p.id}/lift`, { note: 'Вдигната ръчно' }); toast('Суспензията е вдигната.'); reload(); } catch (x) { err.textContent = x.message; } } })));
+    pens.append(row);
+  }
+
+  const reps = h('div', { class: 'timeline' });
+  if (!d.reports.length) reps.append(h('p', { class: 'dim', text: 'Няма доклади.' }));
+  for (const r of d.reports) reps.append(h('div', { class: 'tl' }, h('div', { class: 'tlhead' }, h('span', { class: 'tag', text: r.reasonLabel }), h('span', { class: 'pill ' + (r.status === 'open' ? 'warn' : r.status === 'upheld' ? 'bad' : 'good'), text: r.status === 'open' ? 'Отворен' : r.status === 'upheld' ? 'Основателен' : 'Неоснователен' }),
+      h('small', { class: 'dim', text: `${fmtWhen(r.createdAt)} · от ${r.reporterNick}${r.convTitle ? ` · група „${r.convTitle}“` : ''}` })),
+    r.details ? h('p', { class: 'bio', text: r.details }) : null,
+    h('button', { class: 'btn ghost sm', type: 'button', text: 'Отвори казуса', onclick: () => { closeModal(); openCase(r.id, changed); } })));
+
+  const noteIn = h('textarea', { id: 'dos-note', maxlength: '1000', placeholder: 'Вътрешна бележка (виждат я само администратори)…', style: 'min-height:4.5rem' });
+  const notes = h('div', { class: 'timeline' }, d.notes.length ? d.notes.map(n => h('div', { class: 'tl' }, h('small', { class: 'dim', text: `${fmtWhen(n.at)} · ${n.admin}` }), h('p', { class: 'bio', text: n.note }))) : h('p', { class: 'dim', text: 'Няма бележки.' }));
+
+  const actions = h('div', { class: 'actions' });
+  if (alive) {
+    actions.append(h('button', { class: 'btn', type: 'button', text: '⚖️ Наложи наказание…', onclick: () => penaltyDialog(d, reload) }),
+      h('button', { class: 'btn danger', type: 'button', text: '⛔ Дерегистрирай…', onclick: () => deregisterDialog(d, reload) }));
+  }
+  openModal(h('div', {},
+    d.recommendDeregister ? h('div', { class: 'banner danger', style: 'margin-bottom:1rem' }, h('span', { class: 'bico', text: '⚠️' }), h('div', { class: 'btxt' }, h('b', { text: `Достигнат е лимитът от ${d.strikeLimit} наказания` }), h('span', { text: 'При повторни нарушения се препоръчва дерегистрация. Решението е твое.' }))) : null,
+    h('div', { class: 'two' }, h('div', {}, facts, sub.bio ? [h('h3', { text: 'Био' }), h('p', { class: 'bio', text: sub.bio })] : null, actions, err),
+      h('div', {}, h('h3', { style: 'margin-top:0', text: 'Наказания' }), pens)),
+    h('div', { class: 'two', style: 'margin-top:1.2rem' }, h('div', {}, h('h3', { text: `Доклади (${d.reports.length})` }), reps),
+      h('div', {}, h('h3', { text: 'Бележки' }), notes, h('div', { class: 'field', style: 'margin-top:.6rem' }, noteIn, h('div', { class: 'actions' }, h('button', { class: 'btn ghost sm', type: 'button', text: 'Добави бележка', onclick: async () => {
+        if (noteIn.value.trim().length < 2) { err.textContent = 'Напиши бележка.'; return; }
+        try { await api('POST', `/api/admin/dossiers/${d.dossier.id}/notes`, { note: noteIn.value }); reload(); } catch (x) { err.textContent = x.message; } } }))))),
+    h('p', { class: 'hint', text: 'Отварянето на досие и всяко действие в него се записват в журнала.' })),
+  { title: `Досие: ${d.dossier.nickname}` });
+}
+
+function penaltyDialog(d, done) {
+  const err = h('div', { class: 'err', role: 'alert' });
+  const kind = h('select', { id: 'pn-kind', onchange: () => { daysField.hidden = kind.value !== 'suspension'; } }, h('option', { value: 'warning', text: '⚠️ Предупреждение (без ограничения)' }), h('option', { value: 'suspension', text: '⏸ Временна суспензия' }));
+  const days = h('select', { id: 'pn-days' }, d.suspendDays.map(n => h('option', { value: String(n), text: `${n} ${n === 1 ? 'ден' : 'дни'}` })));
+  const daysField = h('div', { class: 'field', hidden: true }, h('label', { for: 'pn-days', text: 'За колко време' }), days);
+  const reason = h('textarea', { id: 'pn-reason', maxlength: '300', placeholder: 'Напр.: Тормоз на други потребители в лични съобщения.', style: 'min-height:5rem' });
+  const note = h('input', { id: 'pn-note', maxlength: '500', placeholder: 'Вътрешна бележка (по желание)' });
+  const btn = h('button', { class: 'btn', type: 'submit', text: 'Наложи наказанието' });
+  const next = d.strikes + 1;
+  openModal(h('form', { novalidate: true, onsubmit: async e => {
+    e.preventDefault(); err.textContent = ''; btn.disabled = true;
+    try {
+      const r = await api('POST', `/api/admin/dossiers/${d.dossier.id}/penalties`, { kind: kind.value, days: Number(days.value), reason: reason.value, note: note.value });
+      closeModal(); toast(r.recommendDeregister ? `Наложено. Страйкове: ${r.strikes}/${r.strikeLimit} – обмисли дерегистрация.` : 'Наказанието е наложено. Потребителят е уведомен.'); done();
+    } catch (x) { err.textContent = x.message; btn.disabled = false; }
+  } },
+    h('p', {}, 'Към ', h('b', { text: d.dossier.nickname }), `. Това ще е наказание № ${next} от ${d.strikeLimit}.`),
+    h('div', { class: 'field' }, h('label', { for: 'pn-kind', text: 'Вид' }), kind), daysField,
+    h('div', { class: 'field' }, h('label', { for: 'pn-reason', text: 'Причина (показва се на потребителя)' }), reason),
+    h('div', { class: 'field' }, h('label', { for: 'pn-note', text: 'Вътрешна бележка' }), note),
+    h('p', { class: 'hint notice', text: 'Потребителят получава известие с причината и може да обжалва. При суспензия не може да пише, харесва и качва и се скрива от търсенето.' }),
+    err, h('div', { class: 'actions' }, btn, h('button', { class: 'btn ghost', type: 'button', text: 'Отказ', onclick: closeModal }))),
+  { narrow: true, title: 'Налагане на наказание' });
+}
+
+function deregisterDialog(d, done) {
+  const err = h('div', { class: 'err', role: 'alert' });
+  const reason = h('textarea', { id: 'dr-reason', maxlength: '300', placeholder: 'Причина (изпраща се на потребителя): напр. Системен тормоз и заплахи.', style: 'min-height:5rem' });
+  const note = h('input', { id: 'dr-note', maxlength: '500', placeholder: 'Вътрешна бележка (по желание)' });
+  const btn = h('button', { class: 'btn danger', type: 'submit', text: 'Дерегистрирай завинаги' });
+  let armed = false;
+  openModal(h('form', { novalidate: true, onsubmit: async e => {
+    e.preventDefault(); err.textContent = '';
+    if (reason.value.trim().length < 5) { err.textContent = 'Напиши причина (поне 5 символа).'; return; }
+    if (!armed) { armed = true; btn.textContent = 'Сигурен ли си? Натисни пак'; setTimeout(() => { armed = false; btn.textContent = 'Дерегистрирай завинаги'; }, 4000); return; }
+    btn.disabled = true;
+    try { await api('POST', `/api/admin/dossiers/${d.dossier.id}/deregister`, { reason: reason.value, note: note.value }); closeModal(); toast(`${d.dossier.nickname} е дерегистриран. Имейлът му е забранен.`); done(); }
+    catch (x) { err.textContent = x.message; btn.disabled = false; }
+  } },
+    h('div', { class: 'banner danger', style: 'margin-bottom:1rem' }, h('span', { class: 'bico', text: '⛔' }), h('div', { class: 'btxt' }, h('b', { text: 'Необратимо действие' }),
+      h('span', { text: 'Профилът, снимките и личните му разговори се изтриват. С неговия имейл (и негови варианти с точки и +етикет) няма да може да се регистрира отново. Досието и доказателствата в докладите остават.' }))),
+    h('div', { class: 'field' }, h('label', { for: 'dr-reason', text: 'Причина' }), reason),
+    h('div', { class: 'field' }, h('label', { for: 'dr-note', text: 'Вътрешна бележка' }), note),
+    err, h('div', { class: 'actions' }, btn, h('button', { class: 'btn ghost', type: 'button', text: 'Отказ', onclick: closeModal }))),
+  { narrow: true, title: `Дерегистрация: ${d.dossier.nickname}` });
 }
 
 // Казус: данни за доклада + снимка на разговора + решение на администратора.
@@ -1393,6 +1694,7 @@ async function openCase(id, changed) {
       r.status !== 'upheld' ? h('button', { class: 'btn', type: 'button', text: '✔ Основателен', onclick: () => decide('upheld') }) : null,
       r.status !== 'dismissed' ? h('button', { class: 'btn ghost', type: 'button', text: '✖ Неоснователен', onclick: () => decide('dismissed') }) : null,
       r.status !== 'open' ? h('button', { class: 'btn ghost', type: 'button', text: '↺ Върни като отворен', onclick: () => decide('open') }) : null,
+      r.dossierId ? h('button', { class: 'btn ghost', type: 'button', text: '📁 Досие и наказания', onclick: () => { closeModal(); openDossier(r.dossierId, changed); } }) : null,
       rep && d.reported ? delBtn : null),
     h('p', { class: 'hint', text: 'Отварянето на този доклад е записано в журнала.' })),
   { title: `Доклад #${r.id}` });
@@ -1401,7 +1703,7 @@ async function openCase(id, changed) {
 /* ═══════════ Маршрутизация ═══════════ */
 function currentRoute() {
   const r = (location.hash || '#/').replace(/^#\/?/, '').split('?')[0];
-  return ['discover', 'profile', 'settings', 'admin', 'messages'].includes(r) ? r : '';
+  return ['discover', 'profile', 'settings', 'admin', 'messages', 'activity'].includes(r) ? r : '';
 }
 function route() {
   closeModal();
@@ -1410,14 +1712,17 @@ function route() {
   if (!state.me && r !== 'settings') r = '';
   if (r === 'admin' && !(state.me && state.me.role === 'admin')) r = state.me ? 'discover' : '';
   if (r === 'messages' && !(state.me && state.me.role !== 'admin')) r = state.me ? 'discover' : '';
+  if (r === 'activity' && !(state.me && state.me.role !== 'admin')) r = state.me ? 'discover' : '';
+  // Непотвърден имейл → само екранът за потвърждение (и изход).
+  if (state.me && !state.me.emailVerified) { stopBadges(); renderChrome(); if (state.meta) { viewVerify(); document.title = 'Потвърди имейла · Spark'; } return; }
   if (state.me) startBadges(); else stopBadges();
   if (state.me && r === '') { r = 'discover'; history.replaceState(null, '', '#/discover'); }
   renderChrome();
   if (!state.meta) return;
-  ({ '': viewLanding, discover: viewDiscover, profile: viewProfile, settings: viewSettings, admin: viewAdmin, messages: viewMessages })[r]();
+  ({ '': viewLanding, discover: viewDiscover, profile: viewProfile, settings: viewSettings, admin: viewAdmin, messages: viewMessages, activity: viewActivity })[r]();
   window.scrollTo(0, 0);
   const main = $('#view'); if (main) main.focus({ preventScroll: true });
-  document.title = ({ '': 'Spark — запознанства', discover: 'Открий хора · Spark', profile: 'Моят профил · Spark', settings: 'Дизайн и настройки · Spark', admin: 'Админ · Spark', messages: 'Съобщения · Spark' })[r];
+  document.title = ({ '': 'Spark — запознанства', discover: 'Открий хора · Spark', profile: 'Моят профил · Spark', settings: 'Дизайн и настройки · Spark', admin: 'Админ · Spark', messages: 'Съобщения · Spark', activity: 'Активност · Spark' })[r];
   applyTitleBadge();
 }
 

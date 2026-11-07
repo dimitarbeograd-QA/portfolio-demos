@@ -82,4 +82,11 @@ const TEST_GROUPS = [
     ['me', 'Аз съм! :smile:', 685], ['Явор', 'И аз идвам, ще нося китарата :cool: :heart:', 14]] },
 ];
 
-module.exports = { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS, TEST_GROUPS };
+// Примерни наказания (за да има история в досието): ago е в минути, ends се изчислява от days.
+const SAMPLE_PENALTIES = [
+  { target: 'Сашо', kind: 'warning', reason: 'Спам: реклама на „инвестиции“ в лични съобщения.', note: 'Първи сигнал от Краси. Разговорът потвърждава спама.', ago: 20 * 1440,
+    appeal: { text: 'Не знаех, че е забранено. Повече няма да го правя.', ago: 19 * 1440 } },
+  { target: 'Сашо', kind: 'suspension', days: 3, reason: 'Повторен спам след предупреждението.', note: 'Суспендиран за 3 дни.', ago: 12 * 1440 },
+];
+
+module.exports = { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS, TEST_GROUPS, SAMPLE_PENALTIES };

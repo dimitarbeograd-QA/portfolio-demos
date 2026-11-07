@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const D = window.__SPARK_PREVIEW__; // { places, interests, people, ... }
-  const KEY = 'spark.preview.v2', FKEY = 'spark.preview.files.v2';
+  const KEY = 'spark.preview.v3', FKEY = 'spark.preview.files.v2';
   window.confirm = () => true; // в прегледа диалозите са недостъпни
   const MIN_AGE = 18, MAX_PHOTOS = 6;
   // ── Области и населени места (ЕКАТТЕ на НСИ) ──
@@ -20,10 +20,11 @@
     const a = [], b = []; for (const p of list) { const i = p.key.indexOf(term); if (i === 0) a.push(p); else if (i > 0) b.push(p); }
     return a.concat(b).slice(0, limit);
   }
-  let db = { users: [], likes: [], seq: 1000, session: null, convs: [], messages: [], blocks: [], reports: null, rseq: 0 };
+  let db = { users: [], likes: [], seq: 1000, session: null, convs: [], messages: [], blocks: [], reports: null, rseq: 0, dossiers: [], penalties: [], notes: [], visits: [], banned: [], dereg: [], verif: {} };
   let files = {}; // id -> { id, name, size, kind, url (data URL) } – пазят се отделно, защото са големи
   try { const raw = localStorage.getItem(KEY); if (raw) db = JSON.parse(raw); } catch { /* без storage */ }
   db.messages = db.messages || []; db.blocks = db.blocks || []; db.convs = db.convs || [];
+  for (const k of ['dossiers', 'penalties', 'notes', 'visits', 'banned', 'dereg']) db[k] = db[k] || []; db.verif = db.verif || {};
   try { files = JSON.parse(localStorage.getItem(FKEY) || '{}'); } catch { files = {}; }
   const saveFiles = () => { try { localStorage.setItem(FKEY, JSON.stringify(files)); } catch { /* квотата е пълна – файловете остават само в тази сесия */ } };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* ignore */ } };
@@ -42,29 +43,56 @@
   const ok = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
   const bad = (msg, status = 400) => ok({ error: msg }, status);
   const meUser = () => db.users.find(u => u.id === db.session);
+  const errc = (msg, status, code, extra = {}) => ok({ error: msg, code, ...extra }, status);
+
+  // ── Имейл (същите правила като на сървъра) ──
+  const DISPOSABLE = new Set(['mailinator.com', 'guerrillamail.com', 'sharklasers.com', '10minutemail.com', 'tempmail.com', 'temp-mail.org', 'yopmail.com', 'trashmail.com', 'getnada.com', 'maildrop.cc', 'dispostable.com', 'fakeinbox.com']);
+  function parseEmail(raw) {
+    const email = String(raw || '').trim();
+    if (!email || email.length > 254 || !/^[^\s@<>()[\]\\,;:"]+@[^\s@<>()[\]\\,;:"]+\.[A-Za-z]{2,}$/.test(email)) return { ok: false, reason: 'invalid' };
+    let [local, domain] = email.toLowerCase().split('@');
+    if (domain === 'googlemail.com') domain = 'gmail.com';
+    if (DISPOSABLE.has(domain)) return { ok: false, reason: 'disposable' };
+    local = local.split('+')[0]; if (domain === 'gmail.com') local = local.replace(/\./g, '');
+    return local ? { ok: true, email, key: `${local}@${domain}` } : { ok: false, reason: 'invalid' };
+  }
+  const maskEmail = e => { const [l, d] = String(e || '').split('@'); if (!d) return ''; const dot = d.lastIndexOf('.'); return `${l.slice(0, 2)}${'*'.repeat(Math.max(1, Math.min(l.length - 2, 5)))}@${d[0]}${'*'.repeat(Math.max(1, Math.min(dot - 1, 5)))}${d.slice(dot)}`; };
+  const isVerified = u => !!(u.isDemo || u.role === 'admin' || u.verified);
+  const activeSusp = uid => db.penalties.filter(p => p.userId === uid && p.kind === 'suspension' && !p.liftedAt && p.endsAt > Date.now()).sort((a, b) => b.endsAt - a.endsAt)[0] || null;
+  const visible = u => !u.paused && isVerified(u) && !activeSusp(u.id);
+  const penView = p => (p ? { id: p.id, kind: p.kind, reason: p.reason, days: p.days || null, at: iso(p.at), until: p.endsAt ? iso(p.endsAt) : null, appealStatus: p.appealStatus, appealText: p.appealText, appealNote: p.appealNote } : null);
+  const GOALS = D.goals;
+  const completeness = u => {
+    const steps = [['photo', 'Добави основна снимка', 25, u.photos.length >= 1], ['photos3', 'Добави поне 3 снимки', 15, u.photos.length >= 3], ['bio', 'Напиши био (поне 40 символа)', 20, (u.bio || '').length >= 40],
+      ['interests', 'Избери поне 3 интереса', 15, u.interests.length >= 3], ['goal', 'Кажи какво търсиш', 10, !!u.goal], ['email', 'Потвърди имейла си', 15, isVerified(u)]];
+    return { pct: steps.reduce((n, x) => n + (x[3] ? x[2] : 0), 0), steps: steps.map(([key, label, points, done]) => ({ key, label, points, done })) };
+  };
 
   function pub(u, viewer) {
     const likes = db.likes.filter(l => l.to === u.id).length + (u.likesBase || 0);
     return {
       id: u.id, nickname: u.nickname, age: u.isDemo ? u.age : ageFrom(u.birthDate), gender: u.gender, lookingFor: u.lookingFor, ...placeFields(u),
-      bio: u.bio, interests: [...u.interests].sort(), photos: u.photos.map(p => ({ id: p.id, url: p.url })), isDemo: !!u.isDemo,
+      bio: u.bio, goal: u.goal || '', goalLabel: GOALS[u.goal] || '', interests: [...u.interests].sort(), photos: u.photos.map(p => ({ id: p.id, url: p.url })), isDemo: !!u.isDemo,
       online: u.isDemo ? u.lastMin < 5 : true, liked: db.likes.some(l => l.from === viewer && l.to === u.id),
       likedMe: db.likes.some(l => l.from === u.id && l.to === viewer), likes, isMe: u.id === viewer,
     };
   }
-  const full = u => ({ ...pub(u, u.id), username: u.username, birthDate: u.birthDate, theme: u.theme || null, role: u.role || 'user' });
+  const full = u => ({ ...pub(u, u.id), username: u.username, birthDate: u.birthDate, theme: u.theme || null, role: u.role || 'user',
+    email: u.email || '', emailMasked: maskEmail(u.email), emailVerified: isVerified(u), paused: !!u.paused, hideVisits: !!u.hideVisits,
+    suspension: penView(activeSusp(u.id)), warning: penView(db.penalties.filter(p => p.userId === u.id && p.kind === 'warning' && !p.ackedAt && !p.liftedAt).sort((a, b) => b.id - a.id)[0]),
+    completeness: completeness(u) });
 
   const routes = [];
   const route = (m, re, fn) => routes.push([m, re, fn]);
 
   route('GET', /^\/api\/meta$/, () => ok({
-    regions: REGIONS.map(r => ({ code: r.code, name: r.name, count: people().filter(u => u.placeId && BY_ID.get(u.placeId).region === r.code).length })),
-    interests: D.interests, minAge: MIN_AGE, maxPhotos: MAX_PHOTOS, total: people().length, demoAdmin: true, reportReasons: D.reportReasons,
+    regions: REGIONS.map(r => ({ code: r.code, name: r.name, count: people().filter(u => visible(u) && u.placeId && BY_ID.get(u.placeId).region === r.code).length })),
+    interests: D.interests, minAge: MIN_AGE, maxPhotos: MAX_PHOTOS, total: people().filter(visible).length, demoAdmin: true, goals: GOALS, mailDev: true, reportReasons: D.reportReasons,
   }));
   route('GET', /^\/api\/places$/, ({ q }) => {
     const region = q.get('region') || ''; if (!REGION_NAME.has(region)) return bad('Изберете област.');
     const limit = Math.min(60, Math.max(1, parseInt(q.get('limit'), 10) || 30));
-    const counts = new Map(); people().forEach(u => { if (u.placeId && BY_ID.get(u.placeId).region === region) counts.set(u.placeId, (counts.get(u.placeId) || 0) + 1); });
+    const counts = new Map(); people().filter(visible).forEach(u => { if (u.placeId && BY_ID.get(u.placeId).region === region) counts.set(u.placeId, (counts.get(u.placeId) || 0) + 1); });
     const list = q.get('populated') === '1'
       ? [...counts.keys()].map(id => BY_ID.get(id)).sort((a, b) => counts.get(b.id) - counts.get(a.id) || a.name.localeCompare(b.name, 'bg'))
       : searchPlaces(region, q.get('q'), limit);
@@ -72,10 +100,29 @@
   });
   route('GET', /^\/api\/me$/, () => ok({ user: meUser() ? full(meUser()) : null }));
 
+  // ── Потвърждаване на имейл (демо поща: кодът се връща на интерфейса) ──
+  const newCode = () => String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
+  function issueCode(u) {
+    const v = db.verif[u.id] || { hourStart: Date.now(), hourCount: 0 };
+    if (Date.now() - v.hourStart > 3600e3) { v.hourStart = Date.now(); v.hourCount = 0; }
+    const code = newCode();
+    db.verif[u.id] = { ...v, code, expires: Date.now() + 15 * 60e3, attempts: 0, sentAt: Date.now(), hourCount: v.hourCount + 1 };
+    return { mode: 'dev', devCode: code };
+  }
+  function checkEmail(raw, exceptId) {
+    const pe = parseEmail(raw);
+    if (!pe.ok) return { err: bad(pe.reason === 'disposable' ? 'Не се приемат временни имейл адреси. Използвай личен имейл.' : 'Въведи валиден имейл адрес.') };
+    if (db.banned.includes(pe.key)) return { err: bad('Този имейл не може да се използва за регистрация.', 403) };
+    const taken = db.users.find(u => u.emailKey === pe.key);
+    if (taken && taken.id !== exceptId) return { err: bad('Този имейл вече е регистриран.', 409) };
+    return { pe };
+  }
   route('POST', /^\/api\/register$/, ({ body: b }) => {
+    if (b.website) return bad('Невалидна заявка.');
     const username = String(b.username || '').trim(), nickname = String(b.nickname || '').trim().replace(/\s+/g, ' '), password = String(b.password || '');
     if (!USER.test(username)) return bad('Потребителското име трябва да е 3–30 символа: латински букви, цифри, . _ -');
     if (!NICK.test(nickname)) return bad('Никнеймът трябва да е 3–20 символа (букви, цифри, интервал, . _ -).');
+    const em = checkEmail(b.email); if (em.err) return em.err;
     if (password.length < 8) return bad('Паролата трябва да е поне 8 символа.');
     if (!b.birthDate || isNaN(new Date(b.birthDate))) return bad('Невалидна дата на раждане.');
     const age = ageFrom(b.birthDate);
@@ -84,22 +131,49 @@
     if (!['male', 'female', 'other'].includes(b.gender)) return bad('Изберете пол.');
     const place = BY_ID.get(String(b.placeId || '')); if (!place) return bad('Изберете област и населено място от списъка.');
     if (db.users.some(u => u.username.toLowerCase() === username.toLowerCase())) return bad('Това потребителско име е заето.', 409);
+    if (db.dereg.includes(username.toLowerCase())) return bad('Това потребителско име не е достъпно.', 409);
     if (all().some(u => u.nickname.toLowerCase() === nickname.toLowerCase())) return bad('Този никнейм е зает.', 409);
     const u = { id: ++db.seq, username, pw: hash(password), nickname, birthDate: b.birthDate, gender: b.gender, lookingFor: ['male', 'female', 'any'].includes(b.lookingFor) ? b.lookingFor : 'any',
-      placeId: place.id, bio: '', interests: [], photos: [], theme: null, created: 1000 + db.seq };
-    db.users.push(u); db.session = u.id; save();
-    return ok({ user: full(u) }, 201);
+      placeId: place.id, bio: '', interests: [], photos: [], theme: null, goal: '', email: em.pe.email, emailKey: em.pe.key, verified: false, paused: false, hideVisits: false, created: 1000 + db.seq };
+    db.users.push(u); db.session = u.id; const mail = issueCode(u); save();
+    return ok({ user: full(u), mail }, 201);
   });
+  const sessionOnly = fn => args => (meUser() ? fn({ ...args, me: meUser() }) : bad('Трябва да влезете в профила си.', 401));
+  route('POST', /^\/api\/verify\/email$/, sessionOnly(({ body: b, me }) => {
+    if (isVerified(me)) return ok({ user: full(me) });
+    const v = db.verif[me.id]; if (!v) return bad('Няма изпратен код. Поискай нов.');
+    if (v.expires < Date.now()) return errc('Кодът е изтекъл. Поискай нов.', 400, 'code_expired');
+    if (v.attempts >= 5) return errc('Твърде много грешни опити. Поискай нов код.', 429, 'too_many_attempts');
+    if (String(b.code || '').replace(/\s/g, '') !== v.code) { v.attempts++; save(); return bad(`Грешен код. Остават ${Math.max(0, 5 - v.attempts)} опита.`); }
+    me.verified = true; delete db.verif[me.id]; save(); return ok({ user: full(me) });
+  }));
+  const resendWait = id => { const v = db.verif[id]; if (!v) return 0; const since = (Date.now() - v.sentAt) / 1000; if (since < 60) return Math.ceil(60 - since); return v.hourCount >= 5 && Date.now() - v.hourStart < 3600e3 ? 3600 : 0; };
+  route('POST', /^\/api\/verify\/resend$/, sessionOnly(({ me }) => {
+    if (isVerified(me)) return bad('Имейлът вече е потвърден.');
+    const w = resendWait(me.id); if (w) return errc(w >= 3600 ? 'Достигнахте лимита за кодове. Опитайте след час.' : `Изчакай ${w} сек. преди нов код.`, 429, 'wait', { retryAfter: w });
+    const mail = issueCode(me); save(); return ok({ mail });
+  }));
+  route('POST', /^\/api\/verify\/change-email$/, sessionOnly(({ body: b, me }) => {
+    if (isVerified(me)) return bad('Имейлът вече е потвърден.');
+    if (me.pw !== hash(String(b.password || ''))) return bad('Паролата е грешна.', 403);
+    const em = checkEmail(b.email, me.id); if (em.err) return em.err;
+    const w = resendWait(me.id); if (w) return errc(`Изчакай ${Math.min(w, 3600)} сек. преди нов код.`, 429, 'wait', { retryAfter: w });
+    me.email = em.pe.email; me.emailKey = em.pe.key; const mail = issueCode(me); save(); return ok({ user: full(me), mail });
+  }));
   route('POST', /^\/api\/login$/, ({ body: b }) => {
     const u = db.users.find(x => x.username.toLowerCase() === String(b.username || '').trim().toLowerCase());
+    if (!u && db.dereg.includes(String(b.username || '').trim().toLowerCase())) return errc('Този профил е дерегистриран заради нарушение на правилата на сайта.', 403, 'deregistered');
     if (!u || u.pw !== hash(String(b.password || ''))) return bad('Грешно потребителско име или парола.', 401);
     db.session = u.id; save(); return ok({ user: full(u) });
   });
   route('POST', /^\/api\/logout$/, () => { db.session = null; save(); return ok({ ok: true }); });
 
-  const authed = fn => args => meUser() ? fn({ ...args, me: meUser() }) : bad('Трябва да влезете в профила си.', 401);
+  // Нива: sessionOnly (само вход) → authed (+потвърден имейл) → active (+без суспензия)
+  const authed = fn => sessionOnly(args => (isVerified(args.me) ? fn(args) : errc('Потвърди имейла си, за да продължиш.', 403, 'email_unverified')));
+  const fmtBg = ms => new Date(ms).toLocaleString('bg-BG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const active = fn => authed(args => { const sp = activeSusp(args.me.id); return sp ? errc(`Профилът ти е временно спрян до ${fmtBg(sp.endsAt)}. Причина: ${sp.reason}`, 403, 'suspended', { until: iso(sp.endsAt), penaltyId: sp.id }) : fn(args); });
 
-  route('PUT', /^\/api\/me$/, authed(({ body: b, me }) => {
+  route('PUT', /^\/api\/me$/, active(({ body: b, me }) => {
     if (b.nickname !== undefined) {
       const n = String(b.nickname).trim().replace(/\s+/g, ' ');
       if (!NICK.test(n)) return bad('Никнеймът трябва да е 3–20 символа (букви, цифри, интервал, . _ -).');
@@ -109,37 +183,40 @@
     if (['male', 'female', 'other'].includes(b.gender)) me.gender = b.gender;
     if (['male', 'female', 'any'].includes(b.lookingFor)) me.lookingFor = b.lookingFor;
     if (b.placeId !== undefined) { if (!BY_ID.has(String(b.placeId))) return bad('Изберете област и населено място от списъка.'); me.placeId = String(b.placeId); }
+    if (b.goal !== undefined) { if (b.goal !== '' && !GOALS[b.goal]) return bad('Невалидна стойност за „Какво търся“.'); me.goal = b.goal; }
     if (b.bio !== undefined) { if (String(b.bio).length > 600) return bad('Биото може да е до 600 символа.'); me.bio = String(b.bio).trim(); }
     if (Array.isArray(b.interests)) me.interests = [...new Set(b.interests.filter(x => D.interests.includes(x)))].slice(0, 8);
     save(); return ok({ user: full(me) });
   }));
-  route('PUT', /^\/api\/me\/password$/, authed(({ body: b, me }) => {
+  route('PUT', /^\/api\/me\/settings$/, authed(({ body: b, me }) => { if (b.paused !== undefined) me.paused = !!b.paused; if (b.hideVisits !== undefined) me.hideVisits = !!b.hideVisits; save(); return ok({ user: full(me) }); }));
+  route('PUT', /^\/api\/me\/password$/, sessionOnly(({ body: b, me }) => {
     if (me.pw !== hash(String(b.current || ''))) return bad('Текущата парола е грешна.', 403);
     if (String(b.next || '').length < 8) return bad('Новата парола трябва да е 8–72 символа.');
     me.pw = hash(b.next); save(); return ok({ ok: true });
   }));
-  route('PUT', /^\/api\/me\/theme$/, authed(({ body: b, me }) => { me.theme = b.theme || null; save(); return ok({ theme: me.theme }); }));
-  route('DELETE', /^\/api\/me$/, authed(({ body: b, me }) => {
+  route('PUT', /^\/api\/me\/theme$/, sessionOnly(({ body: b, me }) => { me.theme = b.theme || null; save(); return ok({ theme: me.theme }); }));
+  route('DELETE', /^\/api\/me$/, sessionOnly(({ body: b, me }) => {
     if (me.pw !== hash(String(b.password || ''))) return bad('Паролата е грешна.', 403);
     db.users = db.users.filter(u => u.id !== me.id); db.likes = db.likes.filter(l => l.from !== me.id && l.to !== me.id); db.session = null; save(); return ok({ ok: true });
   }));
 
-  route('POST', /^\/api\/me\/photos$/, authed(({ body: b, me }) => {
+  route('POST', /^\/api\/me\/photos$/, active(({ body: b, me }) => {
     if (!/^data:image\/(jpeg|png|webp);base64,/.test(String(b.dataUrl || ''))) return bad('Невалиден файл. Позволени са JPG, PNG и WebP.');
     if (me.photos.length >= MAX_PHOTOS) return bad(`Можете да качите най-много ${MAX_PHOTOS} снимки.`);
     me.photos.push({ id: ++db.seq, url: b.dataUrl }); save(); return ok({ user: full(me) }, 201);
   }));
-  route('DELETE', /^\/api\/me\/photos\/(\d+)$/, authed(({ m, me }) => {
+  route('DELETE', /^\/api\/me\/photos\/(\d+)$/, active(({ m, me }) => {
     const i = me.photos.findIndex(p => p.id === Number(m[1])); if (i < 0) return bad('Снимката не е намерена.', 404);
     me.photos.splice(i, 1); save(); return ok({ user: full(me) });
   }));
-  route('PUT', /^\/api\/me\/photos\/(\d+)\/main$/, authed(({ m, me }) => {
+  route('PUT', /^\/api\/me\/photos\/(\d+)\/main$/, active(({ m, me }) => {
     const i = me.photos.findIndex(p => p.id === Number(m[1])); if (i < 0) return bad('Снимката не е намерена.', 404);
     me.photos.unshift(me.photos.splice(i, 1)[0]); save(); return ok({ user: full(me) });
   }));
 
   route('GET', /^\/api\/profiles$/, authed(({ q, me }) => {
-    let list = people().filter(u => u.id !== me.id && !blocked(u.id, me.id));
+    let list = people().filter(u => u.id !== me.id && !blocked(u.id, me.id) && visible(u));
+    if (q.get('goal')) { if (!GOALS[q.get('goal')]) return bad('Непозната цел.'); list = list.filter(u => u.goal === q.get('goal')); }
     if (q.get('region')) { if (!REGION_NAME.has(q.get('region'))) return bad('Непозната област.'); list = list.filter(u => (BY_ID.get(u.placeId) || {}).region === q.get('region')); }
     if (q.get('place')) { if (!BY_ID.has(q.get('place'))) return bad('Непознато населено място.'); list = list.filter(u => u.placeId === q.get('place')); }
     if (q.get('gender')) list = list.filter(u => u.gender === q.get('gender'));
@@ -157,14 +234,25 @@
     return ok({ total: list.length, offset, profiles: list.slice(offset, offset + limit).map(u => pub(u, me.id)) });
   }));
   route('GET', /^\/api\/profiles\/(\d+)$/, authed(({ m, me }) => {
-    const u = people().find(x => x.id === Number(m[1])); return u && !blocked(u.id, me.id) ? ok({ profile: pub(u, me.id) }) : bad('Профилът не е намерен.', 404);
+    const u = people().find(x => x.id === Number(m[1]));
+    if (u && u.id !== me.id && !blocked(u.id, me.id) && !me.hideVisits) { const day = new Date().toISOString().slice(0, 10); if (!db.visits.some(v => v.v === me.id && v.t === u.id && v.day === day)) { db.visits.push({ v: me.id, t: u.id, day }); save(); } }
+    return u && !blocked(u.id, me.id) ? ok({ profile: pub(u, me.id) }) : bad('Профилът не е намерен.', 404);
   }));
-  route('POST', /^\/api\/profiles\/(\d+)\/like$/, authed(({ m, me }) => {
+  route('GET', /^\/api\/activity$/, authed(({ me }) => {
+    const okU = id => { const u = people().find(x => x.id === id); return u && visible(u) && !blocked(u.id, me.id) ? u : null; };
+    const mine = new Set(db.likes.filter(l => l.from === me.id).map(l => l.to));
+    const liked = db.likes.filter(l => l.to === me.id).map(l => ({ u: okU(l.from), at: l.at })).filter(x => x.u).reverse().map(x => ({ ...pub(x.u, me.id), at: x.at || new Date().toISOString() }));
+    const cut = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10), seen = new Map();
+    db.visits.filter(v => v.t === me.id && v.day >= cut && okU(v.v)).forEach(v => { if (!seen.has(v.v) || seen.get(v.v) < v.day) seen.set(v.v, v.day); });
+    const visitors = [...seen].sort((a, b) => b[1].localeCompare(a[1])).map(([id, day]) => ({ ...pub(okU(id), me.id), at: day }));
+    return ok({ likedMe: liked.filter(p => !mine.has(p.id)), mutual: liked.filter(p => mine.has(p.id)), visitors });
+  }));
+  route('POST', /^\/api\/profiles\/(\d+)\/like$/, active(({ m, me }) => {
     const id = Number(m[1]), u = people().find(x => x.id === id);
     if (!u || blocked(id, me.id)) return bad('Профилът не е намерен.', 404);
     if (id === me.id) return bad('Не можете да харесате себе си.');
     const i = db.likes.findIndex(l => l.from === me.id && l.to === id);
-    if (i >= 0) db.likes.splice(i, 1); else db.likes.push({ from: me.id, to: id });
+    if (i >= 0) db.likes.splice(i, 1); else db.likes.push({ from: me.id, to: id, at: new Date().toISOString() });
     // Демо профил „отвръща“ на харесване, за да се види взаимността.
     if (u.isDemo && i < 0 && id % 3 === 0 && !db.likes.some(l => l.from === id && l.to === me.id)) db.likes.push({ from: id, to: me.id });
     save(); return ok({ profile: pub(u, me.id) });
@@ -183,7 +271,7 @@
     const ps = people(), real = ps.filter(u => !u.isDemo), by = {};
     ps.forEach(u => { const n = REGION_NAME.get((BY_ID.get(u.placeId) || {}).region) || '—'; by[n] = (by[n] || 0) + 1; });
     const g = {}; ps.forEach(u => { g[u.gender] = (g[u.gender] || 0) + 1; });
-    return ok({ users: ps.length, real: real.length, demo: ps.length - real.length, openReports: (db.reports || []).filter(r => r.status === 'open').length, photos: ps.reduce((n, u) => n + u.photos.length, 0), likes: db.likes.length,
+    return ok({ users: ps.length, real: real.length, demo: ps.length - real.length, openReports: (db.reports || []).filter(r => r.status === 'open').length, openAppeals: db.penalties.filter(p => p.appealStatus === 'pending').length, suspended: new Set(db.penalties.filter(p => p.kind === 'suspension' && !p.liftedAt && p.endsAt > Date.now()).map(p => p.userId)).size, dossiers: db.dossiers.length, photos: ps.reduce((n, u) => n + u.photos.length, 0), likes: db.likes.length,
       online: ps.filter(u => !u.isDemo || u.lastMin < 5).length, newToday: real.length,
       byRegion: Object.entries(by).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([region, count]) => ({ region, count })), byGender: g });
   }));
@@ -236,6 +324,26 @@
     }));
     db.rseq = db.reports.length; save();
   }
+  const ensureDossier = (uid, nick) => {
+    let d = db.dossiers.find(x => x.userId === uid);
+    if (!d) { d = { id: ++db.seq, userId: uid, nickname: nick, status: 'active', snapshot: null, closedReason: '', createdAt: Date.now(), closedAt: null }; db.dossiers.push(d); }
+    return d;
+  };
+  // Досие за всеки докладван профил + примерни наказания (веднъж)
+  if (!db.dossiersSeeded) {
+    db.reports.forEach(r => { r.dossierId = ensureDossier(r.reportedId, r.reportedNick).id; });
+    for (const p of D.samplePenalties) {
+      const d = db.dossiers.find(x => x.nickname === p.target); if (!d) continue;
+      const at = Date.now() - p.ago * 60000;
+      const pen = { id: ++db.seq, dossierId: d.id, userId: d.userId, kind: p.kind, reason: p.reason, note: p.note, days: p.days || null, reportId: null, issuedNick: 'Админ', at, endsAt: p.days ? at + p.days * 864e5 : null,
+        liftedAt: null, liftedNote: '', ackedAt: p.kind === 'warning' ? Date.now() : null, appealText: '', appealAt: null, appealStatus: 'none', appealNote: '', appealDecidedAt: null };
+      if (p.appeal) { pen.appealText = p.appeal.text; pen.appealStatus = 'pending'; pen.appealAt = Date.now() - p.appeal.ago * 60000; }
+      db.penalties.push(pen);
+    }
+    db.dossiersSeeded = true; save();
+  }
+  const STRIKE_LIMIT = D.strikeLimit;
+  const strikesOf = did => db.penalties.filter(p => p.dossierId === did && ['warning', 'suspension'].includes(p.kind) && p.appealStatus !== 'accepted').length;
 
   // ── Тестов обикновен потребител с готови разговори и група ──
   const TEST_ID = 998;
@@ -244,7 +352,7 @@
     if (!t) {
       const T = D.testUser, born = new Date(); born.setFullYear(born.getFullYear() - T.age); born.setMonth(5, 15);
       t = { id: TEST_ID, username: T.username, pw: hash(Math.random() + ''), nickname: T.nickname, birthDate: born.toISOString().slice(0, 10), gender: T.gender, lookingFor: T.lookingFor, placeId: T.placeId,
-        bio: T.bio, interests: [...T.interests], photos: [], theme: null, role: 'user', created: 1000 };
+        bio: T.bio, interests: [...T.interests], photos: [], theme: null, role: 'user', verified: true, created: 1000 };
       db.users.push(t);
       const demoId = nick => (demo.find(d => d.nickname === nick) || {}).id;
       for (const c of D.testChats) {
@@ -274,7 +382,8 @@
   const canSend = me => { const now = Date.now(); rate[me.id] = (rate[me.id] || []).filter(t => now - t < 60000); if (rate[me.id].length >= 20) return false; rate[me.id].push(now); return true; };
   route('GET', /^\/api\/chats\/unread$/, authed(({ me }) => ok({
     unread: db.convs.filter(c => memberOf(c, me.id)).reduce((n, c) => n + unreadOf(c, me.id), 0),
-    openReports: me.role === 'admin' ? db.reports.filter(r => r.status === 'open').length : 0 })));
+    openReports: me.role === 'admin' ? db.reports.filter(r => r.status === 'open').length : 0,
+    openAppeals: me.role === 'admin' ? db.penalties.filter(p => p.appealStatus === 'pending').length : 0 })));
   route('GET', /^\/api\/chats\/contacts$/, authed(({ me }) => ok({ contacts: contactsOf(me).map(u => pub(u, me.id)) })));
   route('GET', /^\/api\/chats$/, authed(({ me }) => {
     const chats = [];
@@ -300,7 +409,7 @@
     const allowed = new Set(contactsOf(me).map(u => u.id));
     return { ids: ids.filter(i => !existing.includes(i)), invalid: ids.some(i => !allowed.has(i)) };
   };
-  route('POST', /^\/api\/chats\/groups$/, authed(({ body: b, me }) => {
+  route('POST', /^\/api\/chats\/groups$/, active(({ body: b, me }) => {
     if (me.role === 'admin') return bad('Администраторът не води разговори.', 403);
     const title = cleanTitle(b.title); if (title.length < 2 || title.length > 40) return bad('Името на групата трябва да е 2–40 символа.');
     const { ids, invalid } = pickMembers(me, b.memberIds);
@@ -322,7 +431,7 @@
     if (c.kind === 'direct' && !peerUser(c, me)) return bad('Разговорът не е намерен.', 404);
     const t = threadOf(c, me); memberOf(c, me.id).read = lastId(c); save(); return ok(t);
   }));
-  route('POST', /^\/api\/chats\/(\d+)\/messages$/, authed(({ m, body: b, me }) => {
+  route('POST', /^\/api\/chats\/(\d+)\/messages$/, active(({ m, body: b, me }) => {
     const c = convById(Number(m[1])); if (!memberOf(c, me.id)) return bad('Разговорът не е намерен.', 404);
     if (c.kind === 'direct' && !peerUser(c, me)) return bad('Не можете да пишете на този профил.', 403);
     const text = String(b.body || '').trim(); if (text.length > 1000) return bad('Съобщението може да е до 1000 символа.');
@@ -339,7 +448,7 @@
   }));
   const BLOCKED_EXT = new Set(['exe', 'bat', 'cmd', 'com', 'scr', 'msi', 'ps1', 'vbs', 'js', 'mjs', 'jar', 'sh', 'app', 'apk', 'dll', 'lnk', 'html', 'htm', 'xhtml', 'svg', 'hta', 'reg']);
   const readBlob = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
-  route('POST', /^\/api\/chats\/(\d+)\/attachments$/, authed(async ({ m, blob, headers, me }) => {
+  route('POST', /^\/api\/chats\/(\d+)\/attachments$/, active(async ({ m, blob, headers, me }) => {
     const c = convById(Number(m[1])); if (!memberOf(c, me.id)) return bad('Разговорът не е намерен.', 404);
     if (c.kind === 'direct' && !peerUser(c, me)) return bad('Не можете да пишете на този профил.', 403);
     if (!blob || !blob.size) return bad('Празен файл.');
@@ -355,12 +464,12 @@
     return ok({ attachment: { id: f.id, name, size: f.size, kind, url } }, 201);
   }));
   const ownerOnly = (m, me) => { const c = convById(Number(m[1])); if (!c || c.kind !== 'group' || !memberOf(c, me.id)) return [null, bad('Групата не е намерена.', 404)]; if (memberOf(c, me.id).role !== 'owner') return [null, bad('Само създателят на групата може да прави това.', 403)]; return [c, null]; };
-  route('PUT', /^\/api\/chats\/(\d+)$/, authed(({ m, body: b, me }) => {
+  route('PUT', /^\/api\/chats\/(\d+)$/, active(({ m, body: b, me }) => {
     const [c, err] = ownerOnly(m, me); if (err) return err;
     const title = cleanTitle(b.title); if (title.length < 2 || title.length > 40) return bad('Името на групата трябва да е 2–40 символа.');
     c.title = title; addSystem(c, me.id, `Групата беше преименувана на „${title}“`); save(); return ok({ ok: true });
   }));
-  route('POST', /^\/api\/chats\/(\d+)\/members$/, authed(({ m, body: b, me }) => {
+  route('POST', /^\/api\/chats\/(\d+)\/members$/, active(({ m, body: b, me }) => {
     const [c, err] = ownerOnly(m, me); if (err) return err;
     const { ids, invalid } = pickMembers(me, b.userIds, c.members.map(x => x.id));
     if (invalid) return bad('Може да добавяш само хора, с които си писал.');
@@ -381,7 +490,7 @@
   }));
 
   // ── Доклади ──
-  route('POST', /^\/api\/profiles\/(\d+)\/report$/, authed(({ m, body: b, me }) => {
+  route('POST', /^\/api\/profiles\/(\d+)\/report$/, active(({ m, body: b, me }) => {
     const id = Number(m[1]);
     if (id === me.id) return bad('Не можете да докладвате себе си.');
     const target = people().find(u => u.id === id); if (!target) return bad('Профилът не е намерен.', 404);
@@ -394,12 +503,12 @@
     const msgs = c ? msgsOf(c).filter(x => x.id >= memberOf(c, me.id).from).slice(-200).map(x => ({
       role: x.kind === 'system' ? 'system' : x.from === me.id ? 'reporter' : x.from === id ? 'reported' : 'other', from: x.kind === 'system' ? '' : nickOf(x.from), body: x.body, at: x.at, att: x.att })) : [];
     db.reports.push({ id: ++db.rseq, reporterId: me.id, reportedId: id, reporterNick: me.nickname, reportedNick: target.nickname, reason: b.reason, details, status: 'open', note: '', created: Date.now(), resolvedAt: null, views: 0,
-      convTitle: c && c.kind === 'group' ? c.title : '', msgs });
+      convTitle: c && c.kind === 'group' ? c.title : '', msgs, dossierId: ensureDossier(id, target.nickname).id });
     if (b.block && !blocked(me.id, id)) db.blocks.push({ from: me.id, to: id });
     save(); return ok({ ok: true, blocked: !!b.block }, 201);
   }));
   const LABEL = k => D.reportReasons[k] || k;
-  const rrow = r => ({ id: r.id, reporterNick: r.reporterNick, reportedNick: r.reportedNick, reason: r.reason, reasonLabel: LABEL(r.reason), status: r.status, createdAt: iso(r.created), resolvedAt: r.resolvedAt ? iso(r.resolvedAt) : null });
+  const rrow = r => ({ id: r.id, dossierId: r.dossierId, reporterNick: r.reporterNick, reportedNick: r.reportedNick, reason: r.reason, reasonLabel: LABEL(r.reason), status: r.status, createdAt: iso(r.created), resolvedAt: r.resolvedAt ? iso(r.resolvedAt) : null });
   route('GET', /^\/api\/admin\/reports$/, adminOnly(({ q }) => {
     const st = ['open', 'upheld', 'dismissed'].includes(q.get('status')) ? q.get('status') : null;
     const counts = { open: 0, upheld: 0, dismissed: 0 }; db.reports.forEach(r => counts[r.status]++);
@@ -421,6 +530,102 @@
     if (!['open', 'upheld', 'dismissed'].includes(b.status)) return bad('Невалиден статус.');
     const note = String(b.note || '').trim(); if (note.length > 500) return bad('Бележката може да е до 500 символа.');
     r.status = b.status; r.note = note; r.resolvedAt = b.status === 'open' ? null : Date.now(); save(); return ok({ ok: true });
+  }));
+
+  // ── Досиета, наказания, обжалвания (същата логика като на сървъра) ──
+  const adminPen = p => ({ ...penView(p), note: p.note, issuedNick: p.issuedNick, liftedAt: p.liftedAt ? iso(p.liftedAt) : null, liftedNote: p.liftedNote,
+    appealAt: p.appealAt ? iso(p.appealAt) : null, appealDecidedAt: p.appealDecidedAt ? iso(p.appealDecidedAt) : null, reportId: p.reportId, active: p.kind === 'suspension' && !p.liftedAt && p.endsAt > Date.now() });
+  const clean = (v, max) => String(v || '').trim().slice(0, max);
+  const eraseUser = id => {
+    db.users = db.users.filter(u => u.id !== id); db.likes = db.likes.filter(l => l.from !== id && l.to !== id); db.blocks = db.blocks.filter(b => b.from !== id && b.to !== id); delete db.verif[id];
+    for (const c of db.convs.slice()) {
+      if (!memberOf(c, id)) continue;
+      if (c.kind === 'direct') { db.convs = db.convs.filter(x => x !== c); db.messages = db.messages.filter(m => m.cid !== c.id); }
+      else { c.members = c.members.filter(m => m.id !== id); if (!c.members.length) { db.convs = db.convs.filter(x => x !== c); db.messages = db.messages.filter(m => m.cid !== c.id); } else if (!c.members.some(m => m.role === 'owner')) c.members[0].role = 'owner'; }
+    }
+    if (db.session === id) db.session = null;
+  };
+  route('GET', /^\/api\/admin\/dossiers$/, adminOnly(({ q }) => {
+    const status = q.get('status') || 'all', term = (q.get('q') || '').trim().toLowerCase();
+    let list = db.dossiers.slice().map(d => {
+      const reps = db.reports.filter(r => r.dossierId === d.id), sp = d.userId ? activeSusp(d.userId) : null;
+      return { id: d.id, nickname: d.nickname, status: d.status, reports: reps.length, openReports: reps.filter(r => r.status === 'open').length, strikes: strikesOf(d.id), strikeLimit: STRIKE_LIMIT,
+        suspendedUntil: sp ? iso(sp.endsAt) : null, appeals: db.penalties.filter(p => p.dossierId === d.id && p.appealStatus === 'pending').length,
+        lastReportAt: reps.length ? iso(Math.max(...reps.map(r => r.created))) : null, createdAt: iso(d.createdAt), _t: reps.length ? Math.max(...reps.map(r => r.created)) : 0 };
+    }).sort((a, b) => (b.openReports > 0) - (a.openReports > 0) || b._t - a._t);
+    list.forEach(d => delete d._t);
+    if (term) list = list.filter(d => d.nickname.toLowerCase().includes(term));
+    if (status === 'suspended') list = list.filter(d => d.suspendedUntil); else if (status === 'deregistered') list = list.filter(d => d.status === 'deregistered');
+    else if (status === 'appeals') list = list.filter(d => d.appeals > 0); else if (status === 'active') list = list.filter(d => d.status === 'active');
+    return ok({ dossiers: list });
+  }));
+  route('GET', /^\/api\/admin\/dossiers\/(\d+)$/, adminOnly(({ m }) => {
+    const d = db.dossiers.find(x => x.id === Number(m[1])); if (!d) return bad('Досието не е намерено.', 404);
+    const u = d.userId ? all().find(x => x.id === d.userId) : null;
+    const subject = u ? { alive: true, id: u.id, nickname: u.nickname, age: ageOf(u), ...placeFields(u), gender: u.gender, bio: u.bio, goal: u.goal || '', isDemo: !!u.isDemo, paused: !!u.paused, joinedAt: iso(Date.now() - (u.created || 0) * 1000),
+      lastSeen: iso(Date.now()), emailMasked: maskEmail(u.email), emailVerified: isVerified(u), photos: u.photos.length } : { alive: false, nickname: d.nickname, ...(d.snapshot || {}) };
+    const strikes = strikesOf(d.id);
+    return ok({
+      dossier: { id: d.id, nickname: d.nickname, status: d.status, createdAt: iso(d.createdAt), closedAt: d.closedAt ? iso(d.closedAt) : null, closedReason: d.closedReason }, subject,
+      reports: db.reports.filter(r => r.dossierId === d.id).sort((a, b) => b.id - a.id).map(r => ({ ...rrow(r), details: r.details, adminNote: r.note, convTitle: r.convTitle })),
+      penalties: db.penalties.filter(p => p.dossierId === d.id).sort((a, b) => b.id - a.id).map(adminPen),
+      notes: db.notes.filter(n => n.dossierId === d.id).sort((a, b) => b.id - a.id).map(n => ({ id: n.id, note: n.note, admin: n.admin, at: iso(n.at) })),
+      strikes, strikeLimit: STRIKE_LIMIT, recommendDeregister: strikes >= STRIKE_LIMIT && d.status === 'active', suspendDays: D.suspendDays, emailBanned: d.status === 'deregistered' });
+  }));
+  route('POST', /^\/api\/admin\/dossiers\/(\d+)\/notes$/, adminOnly(({ m, body: b }) => {
+    const d = db.dossiers.find(x => x.id === Number(m[1])); if (!d) return bad('Досието не е намерено.', 404);
+    const note = clean(b.note, 1000); if (note.length < 2) return bad('Напиши бележка.');
+    db.notes.push({ id: ++db.seq, dossierId: d.id, note, admin: 'Админ', at: Date.now() }); save(); return ok({ ok: true }, 201);
+  }));
+  route('POST', /^\/api\/admin\/dossiers\/(\d+)\/penalties$/, adminOnly(({ m, body: b }) => {
+    const d = db.dossiers.find(x => x.id === Number(m[1])); if (!d) return bad('Досието не е намерено.', 404);
+    if (!d.userId || d.status !== 'active') return bad('Профилът вече не е активен.', 409);
+    if (!['warning', 'suspension'].includes(b.kind)) return bad('Избери вид наказание.');
+    const days = b.kind === 'suspension' ? Number(b.days) : null;
+    if (b.kind === 'suspension' && !D.suspendDays.includes(days)) return bad(`Суспензията е ${D.suspendDays.join(', ')} дни.`);
+    const reason = clean(b.reason, 300); if (reason.length < 5) return bad('Напиши причина (поне 5 символа) – показва се на потребителя.');
+    const now = Date.now();
+    const pen = { id: ++db.seq, dossierId: d.id, userId: d.userId, kind: b.kind, reason, note: clean(b.note, 500), days, reportId: null, issuedNick: 'Админ', at: now, endsAt: days ? now + days * 864e5 : null,
+      liftedAt: null, liftedNote: '', ackedAt: null, appealText: '', appealAt: null, appealStatus: 'none', appealNote: '', appealDecidedAt: null };
+    db.penalties.push(pen); save();
+    const strikes = strikesOf(d.id);
+    return ok({ penalty: adminPen(pen), strikes, strikeLimit: STRIKE_LIMIT, recommendDeregister: strikes >= STRIKE_LIMIT }, 201);
+  }));
+  route('POST', /^\/api\/admin\/penalties\/(\d+)\/lift$/, adminOnly(({ m, body: b }) => {
+    const p = db.penalties.find(x => x.id === Number(m[1])); if (!p || p.kind === 'deregistration') return bad('Наказанието не е намерено.', 404);
+    if (p.liftedAt) return bad('Наказанието вече е вдигнато.', 409);
+    p.liftedAt = Date.now(); p.liftedNote = clean(b.note, 300); save(); return ok({ ok: true });
+  }));
+  route('POST', /^\/api\/admin\/penalties\/(\d+)\/appeal$/, adminOnly(({ m, body: b }) => {
+    const p = db.penalties.find(x => x.id === Number(m[1])); if (!p || p.appealStatus !== 'pending') return bad('Няма чакащо обжалване.', 404);
+    if (!['accepted', 'rejected'].includes(b.decision)) return bad('Невалидно решение.');
+    p.appealStatus = b.decision; p.appealNote = clean(b.note, 300); p.appealDecidedAt = Date.now();
+    if (b.decision === 'accepted' && !p.liftedAt) { p.liftedAt = Date.now(); p.liftedNote = 'Уважено обжалване'; }
+    save(); return ok({ ok: true });
+  }));
+  route('POST', /^\/api\/admin\/dossiers\/(\d+)\/deregister$/, adminOnly(({ m, body: b }) => {
+    const d = db.dossiers.find(x => x.id === Number(m[1])); if (!d) return bad('Досието не е намерено.', 404);
+    if (!d.userId || d.status !== 'active') return bad('Профилът вече не е активен.', 409);
+    const reason = clean(b.reason, 300); if (reason.length < 5) return bad('Напиши причина (поне 5 символа).');
+    const u = all().find(x => x.id === d.userId); if (!u || u.role === 'admin') return bad('Администраторски акаунт не може да се дерегистрира.', 403);
+    d.snapshot = { age: ageOf(u), ...placeFields(u), gender: u.gender, joinedAt: iso(Date.now() - (u.created || 0) * 1000), lastSeen: iso(Date.now()), isDemo: !!u.isDemo, emailMasked: maskEmail(u.email) };
+    if (u.emailKey && !db.banned.includes(u.emailKey)) db.banned.push(u.emailKey);
+    if (u.username) db.dereg.push(u.username.toLowerCase());
+    db.penalties.push({ id: ++db.seq, dossierId: d.id, userId: null, kind: 'deregistration', reason, note: clean(b.note, 500), days: null, reportId: null, issuedNick: 'Админ', at: Date.now(), endsAt: null, liftedAt: null, liftedNote: '', ackedAt: null, appealText: '', appealAt: null, appealStatus: 'none', appealNote: '', appealDecidedAt: null });
+    d.status = 'deregistered'; d.closedReason = reason; d.closedAt = Date.now(); d.userId = null;
+    if (u.isDemo) { demo.splice(demo.indexOf(u), 1); db.gone.push(u.id); db.likes = db.likes.filter(l => l.from !== u.id && l.to !== u.id); } else eraseUser(u.id);
+    save(); return ok({ ok: true });
+  }));
+  // За самия потребител: прочитане и обжалване
+  route('POST', /^\/api\/me\/penalties\/(\d+)\/ack$/, authed(({ m, me }) => {
+    const p = db.penalties.find(x => x.id === Number(m[1]) && x.userId === me.id && x.kind === 'warning'); if (!p) return bad('Не е намерено.', 404);
+    p.ackedAt = Date.now(); save(); return ok({ user: full(me) });
+  }));
+  route('POST', /^\/api\/me\/penalties\/(\d+)\/appeal$/, authed(({ m, body: b, me }) => {
+    const p = db.penalties.find(x => x.id === Number(m[1]) && x.userId === me.id && ['warning', 'suspension'].includes(x.kind)); if (!p) return bad('Не е намерено.', 404);
+    if (p.appealStatus !== 'none') return bad('Вече си обжалвал това наказание.', 409);
+    const text = clean(b.text, 500); if (text.length < 10) return bad('Опиши защо смяташ, че е грешка (поне 10 символа).');
+    p.appealText = text; p.appealAt = Date.now(); p.appealStatus = 'pending'; save(); return ok({ user: full(me) });
   }));
 
   const realFetch = window.fetch.bind(window);

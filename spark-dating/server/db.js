@@ -34,6 +34,12 @@ db.exec(`
     bio           TEXT NOT NULL DEFAULT '',
     theme         TEXT,                     -- JSON с персонални цветове/шрифт
     is_demo       INTEGER NOT NULL DEFAULT 0,
+    email         TEXT,                     -- адресът за потвърждение и известия (виден само на потребителя и в маскиран вид на админ)
+    email_key     TEXT,                     -- нормализиран (без точки и +етикет) – за уникалност
+    email_verified_at TEXT,                 -- NULL = още не е потвърден → профилът е ограничен
+    paused        INTEGER NOT NULL DEFAULT 0,   -- скрит от търсенето, но с достъп до разговорите
+    hide_visits   INTEGER NOT NULL DEFAULT 0,   -- не записва посещенията му в чужди профили
+    goal          TEXT NOT NULL DEFAULT '',     -- какво търси: serious | dating | friends | open
     role          TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user','admin')),
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     last_seen     TEXT NOT NULL DEFAULT (datetime('now'))
@@ -125,7 +131,8 @@ db.exec(`
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     resolved_at   TEXT,
     conversation_id INTEGER,                        -- разговорът, от който е снимката (личен или група)
-    conv_title      TEXT NOT NULL DEFAULT ''
+    conv_title      TEXT NOT NULL DEFAULT '',
+    dossier_id      INTEGER REFERENCES dossiers(id) ON DELETE SET NULL
   );
   CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, id);
 
@@ -150,6 +157,80 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- Досие = история на ДОКЛАДВАН профил (създава се при първия доклад). Остава, дори профилът да бъде дерегистриран.
+  CREATE TABLE IF NOT EXISTS dossiers (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    nickname      TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','deregistered','closed')),
+    snapshot      TEXT,                             -- JSON: данни към момента на дерегистрация (възраст, място, дата на регистрация…)
+    closed_reason TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    closed_at     TEXT
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_dossier_user ON dossiers(user_id) WHERE user_id IS NOT NULL;
+  CREATE TABLE IF NOT EXISTS dossier_notes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    dossier_id INTEGER NOT NULL REFERENCES dossiers(id) ON DELETE CASCADE,
+    admin_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    admin_nick TEXT NOT NULL DEFAULT '',
+    note       TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  -- Наказания: предупреждение, временна суспензия или дерегистрация. Потребителят вижда причината и може да обжалва.
+  CREATE TABLE IF NOT EXISTS penalties (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    dossier_id   INTEGER NOT NULL REFERENCES dossiers(id) ON DELETE CASCADE,
+    user_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    kind         TEXT NOT NULL CHECK (kind IN ('warning','suspension','deregistration')),
+    reason       TEXT NOT NULL,                     -- показва се на наказания
+    note         TEXT NOT NULL DEFAULT '',          -- вътрешна бележка (само за администратори)
+    days         INTEGER,
+    report_id    INTEGER,
+    issued_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    issued_nick  TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    ends_at      TEXT,
+    lifted_at    TEXT,
+    lifted_note  TEXT NOT NULL DEFAULT '',
+    acked_at     TEXT,
+    appeal_text  TEXT NOT NULL DEFAULT '',
+    appeal_at    TEXT,
+    appeal_status TEXT NOT NULL DEFAULT 'none' CHECK (appeal_status IN ('none','pending','accepted','rejected')),
+    appeal_note  TEXT NOT NULL DEFAULT '',
+    appeal_decided_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_pen_user ON penalties(user_id, kind, lifted_at, ends_at);
+  CREATE INDEX IF NOT EXISTS idx_pen_dossier ON penalties(dossier_id);
+  -- Забранени имейли след дерегистрация. Пази се САМО хеш (HMAC) на нормализирания имейл, не самият адрес.
+  CREATE TABLE IF NOT EXISTS banned_emails (
+    hash       TEXT PRIMARY KEY,
+    dossier_id INTEGER REFERENCES dossiers(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  -- За да получи дерегистриран потребител ясно съобщение при опит за вход.
+  CREATE TABLE IF NOT EXISTS deregistered (
+    username_key TEXT PRIMARY KEY,
+    dossier_id   INTEGER REFERENCES dossiers(id) ON DELETE SET NULL,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS email_verifications (
+    user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    code_hash  TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    sent_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    hour_start TEXT NOT NULL DEFAULT (datetime('now')),
+    hour_count INTEGER NOT NULL DEFAULT 1
+  );
+  CREATE TABLE IF NOT EXISTS visits (
+    visitor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    visited_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    day        TEXT NOT NULL,
+    PRIMARY KEY (visitor_id, visited_id, day)
+  );
+  CREATE INDEX IF NOT EXISTS idx_visits_visited ON visits(visited_id, day);
+
   CREATE TABLE IF NOT EXISTS sessions (
     sid     TEXT PRIMARY KEY,
     data    TEXT NOT NULL,
@@ -167,6 +248,37 @@ for (const [table, col, ddl] of [
 ]) {
   if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === col)) db.exec(ddl);
 }
+
+// Миграции за бази, създадени преди имейл потвърждението, досиетата и новите настройки.
+for (const [col, ddl] of [
+  ['email', 'ALTER TABLE users ADD COLUMN email TEXT'],
+  ['email_key', 'ALTER TABLE users ADD COLUMN email_key TEXT'],
+  ['email_verified_at', 'ALTER TABLE users ADD COLUMN email_verified_at TEXT'],
+  ['paused', 'ALTER TABLE users ADD COLUMN paused INTEGER NOT NULL DEFAULT 0'],
+  ['hide_visits', 'ALTER TABLE users ADD COLUMN hide_visits INTEGER NOT NULL DEFAULT 0'],
+  ['goal', "ALTER TABLE users ADD COLUMN goal TEXT NOT NULL DEFAULT ''"],
+]) {
+  if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === col)) {
+    db.exec(ddl);
+    // Съществуващите акаунти (без имейл) се водят потвърдени, за да не бъдат заключени.
+    if (col === 'email_verified_at') db.exec("UPDATE users SET email_verified_at = created_at WHERE email_verified_at IS NULL");
+  }
+}
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email_key) WHERE email_key IS NOT NULL');
+if (!db.prepare('PRAGMA table_info(reports)').all().some(c => c.name === 'dossier_id')) db.exec('ALTER TABLE reports ADD COLUMN dossier_id INTEGER REFERENCES dossiers(id) ON DELETE SET NULL');
+// Досие за всеки вече докладван профил.
+db.transaction(() => {
+  const mk = db.prepare('INSERT INTO dossiers (user_id, nickname, status, created_at) VALUES (?, ?, ?, ?)');
+  for (const r of db.prepare('SELECT DISTINCT reported_id id, reported_nick nick, MIN(created_at) at FROM reports WHERE dossier_id IS NULL AND reported_id IS NOT NULL GROUP BY reported_id').all()) {
+    let d = db.prepare('SELECT id FROM dossiers WHERE user_id = ?').get(r.id);
+    if (!d) d = { id: mk.run(r.id, r.nick, 'active', r.at).lastInsertRowid };
+    db.prepare('UPDATE reports SET dossier_id = ? WHERE reported_id = ? AND dossier_id IS NULL').run(d.id, r.id);
+  }
+  for (const r of db.prepare('SELECT reported_nick nick, MIN(created_at) at FROM reports WHERE dossier_id IS NULL AND reported_id IS NULL GROUP BY reported_nick').all()) {
+    const id = mk.run(null, r.nick, 'closed', r.at).lastInsertRowid;
+    db.prepare('UPDATE reports SET dossier_id = ? WHERE reported_nick = ? AND dossier_id IS NULL AND reported_id IS NULL').run(id, r.nick);
+  }
+})();
 
 // Старите съобщения (от → към) стават лични разговори; непрочетените остават непрочетени.
 if (legacyMessages) {

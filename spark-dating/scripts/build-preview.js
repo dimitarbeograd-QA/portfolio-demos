@@ -3,10 +3,10 @@
 // Употреба: node scripts/build-preview.js [изходен/файл.html]
 const fs = require('node:fs');
 const path = require('node:path');
-const { INTERESTS, REPORT_REASONS } = require('../server/constants');
+const { INTERESTS, REPORT_REASONS, GOALS, SUSPEND_DAYS } = require('../server/constants');
 const places = require('../server/places');
 const placesData = require('../server/places.json');
-const { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS, TEST_GROUPS } = require('../server/seed-data');
+const { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS, TEST_GROUPS, SAMPLE_PENALTIES } = require('../server/seed-data');
 
 const root = path.join(__dirname, '..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8');
@@ -41,11 +41,12 @@ html, body { height: auto; }
     <div id="userbox"></div>
   </div>
 </header>
+<div id="banners" class="banners"></div>
 <main id="view" tabindex="-1"></main>
 <footer class="foot"><span>© Spark · само за лица над 18 години</span><span class="dim">Профилите с значка „демо“ са примерни.</span></footer>
 <div id="modalRoot"></div>
 <div id="toasts" role="status" aria-live="polite"></div>
-<script>window.__SPARK_PREVIEW__ = ${safe(JSON.stringify({ places: { regions: placesData.regions, obshtini: placesData.obshtini, places: placesData.places }, adminPlaceId: placeIdOf('София'), interests: INTERESTS, people, reportReasons: REPORT_REASONS, sampleReports: SAMPLE_REPORTS, testUser: { ...TEST_USER, placeId: placeIdOf(TEST_USER.city) }, testChats: TEST_CHATS, testGroups: TEST_GROUPS }))};</script>
+<script>window.__SPARK_PREVIEW__ = ${safe(JSON.stringify({ places: { regions: placesData.regions, obshtini: placesData.obshtini, places: placesData.places }, adminPlaceId: placeIdOf('София'), interests: INTERESTS, people, reportReasons: REPORT_REASONS, sampleReports: SAMPLE_REPORTS, testUser: { ...TEST_USER, placeId: placeIdOf(TEST_USER.city) }, testChats: TEST_CHATS, testGroups: TEST_GROUPS, samplePenalties: SAMPLE_PENALTIES, goals: GOALS, suspendDays: SUSPEND_DAYS, strikeLimit: 3 }))};</script>
 <script>
 ${safe(read('preview/mock-api.js'))}
 </script>

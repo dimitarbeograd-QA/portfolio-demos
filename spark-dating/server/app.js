@@ -7,7 +7,11 @@ const fs = require('node:fs');
 const db = require('./db');
 const SqliteStore = require('./session-store');
 const places = require('./places');
-const { INTERESTS, GENDERS, LOOKING, MIN_AGE, MAX_PHOTOS, REPORT_REASONS } = require('./constants');
+const emailutil = require('./emailutil');
+const mailer = require('./mailer');
+const STRIKE_LIMIT = Number(process.env.STRIKE_LIMIT) || 3;   // при толкова наказания се препоръчва дерегистрация
+
+const { GOALS, SUSPEND_DAYS, INTERESTS, GENDERS, LOOKING, MIN_AGE, MAX_PHOTOS, REPORT_REASONS } = require('./constants');
 
 const isProd = process.env.NODE_ENV === 'production';
 if (isProd && !process.env.SESSION_SECRET) {
@@ -55,6 +59,7 @@ app.use(session({
 // ── Помощни функции ──
 const wrap = fn => (req, res, next) => { try { fn(req, res, next); } catch (e) { next(e); } };
 const bad = (res, msg, code = 400) => res.status(code).json({ error: msg });
+const badc = (res, msg, status, code, extra = {}) => res.status(status).json({ error: msg, code, ...extra });
 
 function ageFrom(birth) {
   const b = new Date(birth + 'T00:00:00Z');
@@ -143,6 +148,8 @@ function publicProfiles(rows, viewerId) {
     bio: r.bio,
     interests: ints.get(r.id),
     photos: photos.get(r.id),
+    goal: r.goal || '',
+    goalLabel: GOALS[r.goal] || '',
     isDemo: !!r.is_demo,
     online: isOnline(r.last_seen),
     liked: liked.has(r.id),
@@ -151,29 +158,72 @@ function publicProfiles(rows, viewerId) {
     isMe: r.id === viewerId,
   }));
 }
+const penaltyView = p => !p ? null : ({ id: p.id, kind: p.kind, reason: p.reason, days: p.days, at: iso(p.created_at), until: p.ends_at ? iso(p.ends_at) : null,
+  appealStatus: p.appeal_status, appealText: p.appeal_text, appealNote: p.appeal_note });
+// Колко е попълнен профилът (за малкия индикатор „Профил 70%“).
+function completenessOf(r, photos, interests) {
+  const steps = [
+    ['photo', 'Добави основна снимка', 25, photos >= 1],
+    ['photos3', 'Добави поне 3 снимки', 15, photos >= 3],
+    ['bio', 'Напиши био (поне 40 символа)', 20, (r.bio || '').length >= 40],
+    ['interests', 'Избери поне 3 интереса', 15, interests >= 3],
+    ['goal', 'Кажи какво търсиш', 10, !!r.goal],
+    ['email', 'Потвърди имейла си', 15, !!r.email_verified_at],
+  ];
+  return { pct: steps.reduce((n, x) => n + (x[3] ? x[2] : 0), 0), steps: steps.map(([key, label, points, done]) => ({ key, label, points, done })) };
+}
 function meOf(id) {
   const r = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (!r) return null;
   const p = publicProfiles([r], id)[0];
   let theme = null;
   try { theme = r.theme ? JSON.parse(r.theme) : null; } catch { /* повреден JSON → игнорира се */ }
-  return { ...p, username: r.username, birthDate: r.birth_date, theme, role: r.role };
+  const susp = activeSuspension(id);
+  // Последно непотвърдено предупреждение, или суспензия с нерешено/решено обжалване – показва се на потребителя.
+  const warn = db.prepare("SELECT * FROM penalties WHERE user_id = ? AND kind = 'warning' AND acked_at IS NULL AND lifted_at IS NULL ORDER BY id DESC LIMIT 1").get(id);
+  return { ...p, username: r.username, birthDate: r.birth_date, theme, role: r.role,
+    email: r.email || '', emailMasked: emailutil.maskEmail(r.email), emailVerified: !!r.email_verified_at,
+    paused: !!r.paused, hideVisits: !!r.hide_visits,
+    suspension: penaltyView(susp), warning: penaltyView(warn),
+    completeness: completenessOf(r, p.photos.length, p.interests.length) };
 }
 
 // ── Auth middleware ──
 const touch = db.prepare("UPDATE users SET last_seen = datetime('now') WHERE id = ?");
-function requireAuth(req, res, next) {
+// Три нива на достъп:
+//  requireAny    – само вход (потвърждаване на имейл, настройки на акаунта)
+//  requireAuth   – вход + потвърден имейл (по подразбиране)
+//  requireActive – + без активна суспензия (за всичко, което „пише“: съобщения, харесвания, снимки, доклади)
+const bgDate = new Intl.DateTimeFormat('bg-BG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Sofia' });
+const fmtBg = t => bgDate.format(new Date(t.replace(' ', 'T') + 'Z'));
+function activeSuspension(uid) {
+  return db.prepare("SELECT * FROM penalties WHERE user_id = ? AND kind = 'suspension' AND lifted_at IS NULL AND ends_at > datetime('now') ORDER BY ends_at DESC LIMIT 1").get(uid);
+}
+function sessionUser(req, res) {
   const id = req.session.userId;
-  if (!id) return bad(res, 'Трябва да влезете в профила си.', 401);
-  const exists = db.prepare('SELECT 1 FROM users WHERE id = ?').get(id);
-  if (!exists) { req.session.destroy(() => bad(res, 'Сесията е невалидна.', 401)); return; }
+  if (!id) { bad(res, 'Трябва да влезете в профила си.', 401); return null; }
+  const u = db.prepare('SELECT id, role, email_verified_at FROM users WHERE id = ?').get(id);
+  if (!u) { req.session.destroy(() => bad(res, 'Сесията е невалидна.', 401)); return null; }
   const now = Date.now();
-  if (!req.session.touched || now - req.session.touched > 60000) {
-    req.session.touched = now;
-    touch.run(id);
-  }
+  if (!req.session.touched || now - req.session.touched > 60000) { req.session.touched = now; touch.run(id); }
+  return u;
+}
+function requireAny(req, res, next) { if (sessionUser(req, res)) next(); }
+function requireAuth(req, res, next) {
+  const u = sessionUser(req, res);
+  if (!u) return;
+  if (!u.email_verified_at) return badc(res, 'Потвърди имейла си, за да продължиш.', 403, 'email_unverified');
   next();
 }
+function requireActive(req, res, next) {
+  requireAuth(req, res, () => {
+    const s = activeSuspension(req.session.userId);
+    if (s) return badc(res, `Профилът ти е временно спрян до ${fmtBg(s.ends_at)}. Причина: ${s.reason}`, 403, 'suspended', { until: iso(s.ends_at), penaltyId: s.id });
+    next();
+  });
+}
+// Кой се вижда в търсенето: потвърден имейл, непаузиран, без активна суспензия.
+const VISIBLE_SQL = `u.paused = 0 AND u.email_verified_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM penalties pn WHERE pn.user_id = u.id AND pn.kind = 'suspension' AND pn.lifted_at IS NULL AND pn.ends_at > datetime('now'))`;
 
 // ── Ограничаване на опитите за вход ──
 const attempts = new Map(); // key -> {n, first}
@@ -195,16 +245,18 @@ const DUMMY_HASH = bcrypt.hashSync('dummy-password-for-timing', 10);
 // ── Публични маршрути ──
 app.get('/api/meta', (req, res) => {
   const counts = new Map(
-    db.prepare("SELECT region, COUNT(*) c FROM users WHERE role <> 'admin' GROUP BY region").all().map(r => [r.region, r.c])
+    db.prepare(`SELECT region, COUNT(*) c FROM users u WHERE u.role <> 'admin' AND ${VISIBLE_SQL} GROUP BY region`).all().map(r => [r.region, r.c])
   );
   res.json({
     regions: places.REGIONS.map(r => ({ code: r.code, name: r.name, count: counts.get(r.code) || 0 })),
     interests: INTERESTS,
     minAge: MIN_AGE,
     maxPhotos: MAX_PHOTOS,
-    total: db.prepare("SELECT COUNT(*) c FROM users WHERE role <> 'admin'").get().c,
+    total: db.prepare(`SELECT COUNT(*) c FROM users u WHERE u.role <> 'admin' AND ${VISIBLE_SQL}`).get().c,
     demoAdmin: demoAdminOn(),
     reportReasons: REPORT_REASONS,
+    goals: GOALS,
+    mailDev: mailer.mode === 'dev',
   });
 });
 
@@ -214,7 +266,7 @@ app.get('/api/places', wrap((req, res) => {
   const region = String(req.query.region || '');
   if (!places.REGION_BY_CODE.has(region)) return bad(res, 'Изберете област.');
   const limit = Math.min(60, Math.max(1, parseInt(req.query.limit, 10) || 30));
-  const counts = new Map(db.prepare("SELECT place_id, COUNT(*) c FROM users WHERE region = ? AND role <> 'admin' GROUP BY place_id").all(region).map(r => [r.place_id, r.c]));
+  const counts = new Map(db.prepare(`SELECT place_id, COUNT(*) c FROM users u WHERE u.region = ? AND u.role <> 'admin' AND ${VISIBLE_SQL} GROUP BY place_id`).all(region).map(r => [r.place_id, r.c]));
   let list;
   if (req.query.populated === '1') {
     list = [...counts.keys()].map(id => places.BY_ID.get(id)).filter(Boolean)
@@ -225,13 +277,45 @@ app.get('/api/places', wrap((req, res) => {
   res.json({ places: list.slice(0, limit).map(p => ({ ...places.describe(p), count: counts.get(p.id) || 0 })), total: list.length });
 }));
 
+// Регистрации: най-много 10 на час от един адрес (срещу автоматични регистрации).
+const regLog = new Map();
+function regAllowed(ip) {
+  const now = Date.now(), arr = (regLog.get(ip) || []).filter(t => now - t < 3600e3);
+  if (arr.length >= (Number(process.env.REG_PER_HOUR) || 10)) { regLog.set(ip, arr); return false; }
+  arr.push(now); regLog.set(ip, arr); return true;
+}
+// Нов 6-цифрен код (15 мин валидност). В dev режим кодът се връща на интерфейса, иначе се изпраща по имейл.
+function issueCode(userId, email) {
+  const code = emailutil.newCode();
+  db.prepare(`INSERT INTO email_verifications (user_id, code_hash, expires_at, attempts, sent_at, hour_start, hour_count)
+    VALUES (?, ?, datetime('now', '+15 minutes'), 0, datetime('now'), datetime('now'), 1)
+    ON CONFLICT(user_id) DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at, attempts = 0, sent_at = datetime('now'),
+      hour_count = CASE WHEN hour_start < datetime('now', '-1 hour') THEN 1 ELSE hour_count + 1 END,
+      hour_start = CASE WHEN hour_start < datetime('now', '-1 hour') THEN datetime('now') ELSE hour_start END`).run(userId, emailutil.codeHash(code, userId));
+  mailer.send({ to: email, subject: 'Spark: код за потвърждение', text: `Твоят код за потвърждение е: ${code}\n\nВалиден е 15 минути. Ако не си се регистрирал в Spark, просто игнорирай това писмо.` });
+  return mailer.mode === 'dev' ? { mode: 'dev', devCode: code } : { mode: 'smtp' };
+}
+// Проверка на имейл при регистрация и смяна: валиден, неедноразов, незабранен и неизползван.
+function checkEmail(raw, exceptUserId) {
+  const pe = emailutil.parseEmail(raw);
+  if (!pe.ok) return { err: pe.reason === 'disposable' ? 'Не се приемат временни имейл адреси. Използвай личен имейл.' : 'Въведи валиден имейл адрес.', status: 400 };
+  if (db.prepare('SELECT 1 FROM banned_emails WHERE hash = ?').get(emailutil.emailHash(pe.key))) return { err: 'Този имейл не може да се използва за регистрация.', status: 403 };
+  const taken = db.prepare('SELECT id FROM users WHERE email_key = ?').get(pe.key);
+  if (taken && taken.id !== exceptUserId) return { err: 'Този имейл вече е регистриран.', status: 409 };
+  return { pe };
+}
+
 app.post('/api/register', wrap((req, res) => {
   const b = req.body || {};
+  if (b.website) return bad(res, 'Невалидна заявка.');                   // honeypot: скритото поле се попълва само от ботове
+  if (!regAllowed(req.ip)) return bad(res, 'Твърде много регистрации от този адрес. Опитайте по-късно.', 429);
   const username = String(b.username || '').trim();
   const nickname = String(b.nickname || '').trim().replace(/\s+/g, ' ');
   const password = String(b.password || '');
   if (!USER_RE.test(username)) return bad(res, 'Потребителското име трябва да е 3–30 символа: латински букви, цифри, . _ -');
   if (!NICK_RE.test(nickname)) return bad(res, 'Никнеймът трябва да е 3–20 символа (букви, цифри, интервал, . _ -).');
+  const em = checkEmail(b.email);
+  if (em.err) return bad(res, em.err, em.status);
   if (password.length < 8) return bad(res, 'Паролата трябва да е поне 8 символа.');
   if (Buffer.byteLength(password) > 72) return bad(res, 'Паролата е твърде дълга (макс. 72 байта).');
   if (!validBirth(b.birthDate)) return bad(res, 'Невалидна дата на раждане.');
@@ -244,17 +328,69 @@ app.post('/api/register', wrap((req, res) => {
   if (!place) return bad(res, 'Изберете област и населено място от списъка.');
 
   if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(username)) return bad(res, 'Това потребителско име е заето.', 409);
+  if (db.prepare('SELECT 1 FROM deregistered WHERE username_key = ?').get(username.toLowerCase())) return bad(res, 'Това потребителско име не е достъпно.', 409);
   if (db.prepare('SELECT 1 FROM users WHERE nickname_key = ?').get(nickKey(nickname))) return bad(res, 'Този никнейм е зает.', 409);
 
   const id = db.prepare(
-    'INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, place_id, region) VALUES (?,?,?,?,?,?,?,?,?,?)'
-  ).run(username, bcrypt.hashSync(password, 10), nickname, nickKey(nickname), b.birthDate, b.gender, looking, place.label, place.id, place.region).lastInsertRowid;
+    'INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, place_id, region, email, email_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).run(username, bcrypt.hashSync(password, 10), nickname, nickKey(nickname), b.birthDate, b.gender, looking, place.label, place.id, place.region, em.pe.email, em.pe.key).lastInsertRowid;
+  const mail = issueCode(id, em.pe.email);
 
   req.session.regenerate(err => {
     if (err) return bad(res, 'Грешка при създаване на сесия.', 500);
     req.session.userId = id;
-    res.status(201).json({ user: meOf(id) });
+    res.status(201).json({ user: meOf(id), mail });
   });
+}));
+
+// ── Потвърждаване на имейл ──
+app.post('/api/verify/email', requireAny, wrap((req, res) => {
+  const id = req.session.userId, code = String((req.body || {}).code || '').replace(/\s/g, '');
+  const me = db.prepare('SELECT email_verified_at FROM users WHERE id = ?').get(id);
+  if (me.email_verified_at) return res.json({ user: meOf(id) });
+  const v = db.prepare("SELECT *, expires_at < datetime('now') AS expired FROM email_verifications WHERE user_id = ?").get(id);
+  if (!v) return bad(res, 'Няма изпратен код. Поискай нов.', 400);
+  if (v.expired) return badc(res, 'Кодът е изтекъл. Поискай нов.', 400, 'code_expired');
+  if (v.attempts >= 5) return badc(res, 'Твърде много грешни опити. Поискай нов код.', 429, 'too_many_attempts');
+  if (!/^\d{6}$/.test(code) || !emailutil.safeEqual(emailutil.codeHash(code, id), v.code_hash)) {
+    db.prepare('UPDATE email_verifications SET attempts = attempts + 1 WHERE user_id = ?').run(id);
+    return bad(res, `Грешен код. Остават ${Math.max(0, 4 - v.attempts)} опита.`, 400);
+  }
+  db.transaction(() => {
+    db.prepare("UPDATE users SET email_verified_at = datetime('now') WHERE id = ?").run(id);
+    db.prepare('DELETE FROM email_verifications WHERE user_id = ?').run(id);
+  })();
+  res.json({ user: meOf(id) });
+}));
+
+function resendLimits(id) {
+  const v = db.prepare(`SELECT *, CAST((julianday('now') - julianday(sent_at)) * 86400 AS INTEGER) AS since,
+    hour_start >= datetime('now', '-1 hour') AS in_hour FROM email_verifications WHERE user_id = ?`).get(id);
+  if (!v) return null;
+  if (v.since < 60) return { wait: 60 - v.since };
+  if (v.in_hour && v.hour_count >= 5) return { wait: 3600 };
+  return null;
+}
+app.post('/api/verify/resend', requireAny, wrap((req, res) => {
+  const id = req.session.userId, u = db.prepare('SELECT email, email_verified_at FROM users WHERE id = ?').get(id);
+  if (u.email_verified_at) return bad(res, 'Имейлът вече е потвърден.');
+  if (!u.email) return bad(res, 'Няма имейл за потвърждение.');
+  const lim = resendLimits(id);
+  if (lim) return badc(res, lim.wait >= 3600 ? 'Достигнахте лимита за кодове. Опитайте след час.' : `Изчакай ${lim.wait} сек. преди нов код.`, 429, 'wait', { retryAfter: lim.wait });
+  res.json({ mail: issueCode(id, u.email) });
+}));
+// Сгрешен имейл при регистрация: сменя се само докато не е потвърден, и с паролата.
+app.post('/api/verify/change-email', requireAny, wrap((req, res) => {
+  const id = req.session.userId, b = req.body || {};
+  const u = db.prepare('SELECT password_hash, email_verified_at FROM users WHERE id = ?').get(id);
+  if (u.email_verified_at) return bad(res, 'Имейлът вече е потвърден.');
+  if (typeof b.password !== 'string' || !bcrypt.compareSync(b.password, u.password_hash)) return bad(res, 'Паролата е грешна.', 403);
+  const em = checkEmail(b.email, id);
+  if (em.err) return bad(res, em.err, em.status);
+  const lim = resendLimits(id);
+  if (lim) return badc(res, `Изчакай ${Math.min(lim.wait, 3600)} сек. преди нов код.`, 429, 'wait', { retryAfter: lim.wait });
+  db.prepare('UPDATE users SET email = ?, email_key = ? WHERE id = ?').run(em.pe.email, em.pe.key, id);
+  res.json({ user: meOf(id), mail: issueCode(id, em.pe.email) });
 }));
 
 app.post('/api/login', wrap((req, res) => {
@@ -267,7 +403,12 @@ app.post('/api/login', wrap((req, res) => {
   const row = db.prepare('SELECT id, password_hash, is_demo FROM users WHERE username = ?').get(username.trim());
   // Винаги правим bcrypt сравнение – не издаваме дали името съществува по време на отговора.
   const ok = bcrypt.compareSync(password, row ? row.password_hash : DUMMY_HASH) && row && !row.is_demo;
-  if (!ok) { noteFail(key); return bad(res, 'Грешно потребителско име или парола.', 401); }
+  if (!ok) {
+    if (!row && db.prepare('SELECT 1 FROM deregistered WHERE username_key = ?').get(username.trim().toLowerCase())) {
+      return badc(res, 'Този профил е дерегистриран заради нарушение на правилата на сайта.', 403, 'deregistered');
+    }
+    noteFail(key); return bad(res, 'Грешно потребителско име или парола.', 401);
+  }
   attempts.delete(key);
   req.session.regenerate(err => {
     if (err) return bad(res, 'Грешка при създаване на сесия.', 500);
@@ -289,7 +430,7 @@ app.get('/api/me', (req, res) => {
 });
 
 // ── Профил ──
-app.put('/api/me', requireAuth, wrap((req, res) => {
+app.put('/api/me', requireActive, wrap((req, res) => {
   const b = req.body || {};
   const id = req.session.userId;
   const cur = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
@@ -315,14 +456,18 @@ app.put('/api/me', requireAuth, wrap((req, res) => {
     if (!place) return bad(res, 'Изберете област и населено място от списъка.');
     next.city = place.label; next.place_id = place.id; next.region = place.region;
   }
+  if (b.goal !== undefined) {
+    if (b.goal !== '' && !GOALS[b.goal]) return bad(res, 'Невалидна стойност за „Какво търся“.');
+    next.goal = b.goal;
+  }
   if (b.bio !== undefined) {
     const bio = String(b.bio).trim();
     if (bio.length > 600) return bad(res, 'Биото може да е до 600 символа.');
     next.bio = bio;
   }
   db.transaction(() => {
-    db.prepare('UPDATE users SET nickname=?, nickname_key=?, gender=?, looking_for=?, city=?, place_id=?, region=?, bio=? WHERE id=?')
-      .run(next.nickname, nickKey(next.nickname), next.gender, next.looking_for, next.city, next.place_id, next.region, next.bio, id);
+    db.prepare('UPDATE users SET nickname=?, nickname_key=?, gender=?, looking_for=?, city=?, place_id=?, region=?, bio=?, goal=? WHERE id=?')
+      .run(next.nickname, nickKey(next.nickname), next.gender, next.looking_for, next.city, next.place_id, next.region, next.bio, next.goal, id);
     if (b.interests !== undefined) {
       db.prepare('DELETE FROM user_interests WHERE user_id = ?').run(id);
       const ins = db.prepare('INSERT INTO user_interests (user_id, interest) VALUES (?, ?)');
@@ -332,7 +477,14 @@ app.put('/api/me', requireAuth, wrap((req, res) => {
   res.json({ user: meOf(id) });
 }));
 
-app.put('/api/me/password', requireAuth, wrap((req, res) => {
+app.put('/api/me/settings', requireAuth, wrap((req, res) => {
+  const b = req.body || {}, id = req.session.userId;
+  if (b.paused !== undefined) db.prepare('UPDATE users SET paused = ? WHERE id = ?').run(b.paused ? 1 : 0, id);
+  if (b.hideVisits !== undefined) db.prepare('UPDATE users SET hide_visits = ? WHERE id = ?').run(b.hideVisits ? 1 : 0, id);
+  res.json({ user: meOf(id) });
+}));
+
+app.put('/api/me/password', requireAny, wrap((req, res) => {
   const { current, next } = req.body || {};
   const id = req.session.userId;
   if (typeof current !== 'string' || typeof next !== 'string') return bad(res, 'Липсват данни.');
@@ -358,24 +510,29 @@ function cleanTheme(t) {
   if (typeof t.animations === 'boolean') out.animations = t.animations;
   return out;
 }
-app.put('/api/me/theme', requireAuth, wrap((req, res) => {
+app.put('/api/me/theme', requireAny, wrap((req, res) => {
   const theme = cleanTheme(req.body && req.body.theme);
   db.prepare('UPDATE users SET theme = ? WHERE id = ?').run(theme ? JSON.stringify(theme) : null, req.session.userId);
   res.json({ theme });
 }));
 
-app.delete('/api/me', requireAuth, wrap((req, res) => {
+// Пълно изтриване на акаунт: разговори и файлове, снимки, сесии. Доказателствата в доклади остават.
+function eraseUser(id) {
+  const photoFiles = db.prepare('SELECT filename FROM photos WHERE user_id = ?').all(id);
+  cleanupBeforeUserDelete(id);
+  db.prepare('DELETE FROM users WHERE id = ?').run(id);
+  repairGroups();
+  db.prepare("DELETE FROM sessions WHERE json_extract(data, '$.userId') = ?").run(id);
+  photoFiles.forEach(f => fs.rm(path.join(db.UPLOAD_DIR, f.filename), { force: true }, () => {}));
+}
+app.delete('/api/me', requireAny, wrap((req, res) => {
   const id = req.session.userId;
-  const files = db.prepare('SELECT filename FROM photos WHERE user_id = ?').all(id);
   const { password } = req.body || {};
   const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(id);
   if (typeof password !== 'string' || !bcrypt.compareSync(password, row.password_hash)) {
     return bad(res, 'Паролата е грешна.', 403);
   }
-  cleanupBeforeUserDelete(id);
-  db.prepare('DELETE FROM users WHERE id = ?').run(id);
-  repairGroups();
-  files.forEach(f => fs.rm(path.join(db.UPLOAD_DIR, f.filename), { force: true }, () => {}));
+  eraseUser(id);
   req.session.destroy(() => { res.clearCookie('spark.sid'); res.json({ ok: true }); });
 }));
 
@@ -386,7 +543,7 @@ function sniff(buf) {
   if (buf.length > 12 && buf.subarray(0, 4).toString() === 'RIFF' && buf.subarray(8, 12).toString() === 'WEBP') return 'webp';
   return null;
 }
-app.post('/api/me/photos', requireAuth, bigJson, wrap((req, res) => {
+app.post('/api/me/photos', requireActive, bigJson, wrap((req, res) => {
   const id = req.session.userId;
   const m = /^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String((req.body || {}).dataUrl || ''));
   if (!m) return bad(res, 'Невалиден файл. Позволени са JPG, PNG и WebP.');
@@ -403,7 +560,7 @@ app.post('/api/me/photos', requireAuth, bigJson, wrap((req, res) => {
   res.status(201).json({ user: meOf(id) });
 }));
 
-app.delete('/api/me/photos/:pid', requireAuth, wrap((req, res) => {
+app.delete('/api/me/photos/:pid', requireActive, wrap((req, res) => {
   const id = req.session.userId;
   const row = db.prepare('SELECT id, filename FROM photos WHERE id = ? AND user_id = ?').get(Number(req.params.pid), id);
   if (!row) return bad(res, 'Снимката не е намерена.', 404);
@@ -412,7 +569,7 @@ app.delete('/api/me/photos/:pid', requireAuth, wrap((req, res) => {
   res.json({ user: meOf(id) });
 }));
 
-app.put('/api/me/photos/:pid/main', requireAuth, wrap((req, res) => {
+app.put('/api/me/photos/:pid/main', requireActive, wrap((req, res) => {
   const id = req.session.userId;
   const row = db.prepare('SELECT id FROM photos WHERE id = ? AND user_id = ?').get(Number(req.params.pid), id);
   if (!row) return bad(res, 'Снимката не е намерена.', 404);
@@ -432,7 +589,7 @@ const SORTS = {
 };
 app.get('/api/profiles', requireAuth, wrap((req, res) => {
   const q = req.query;
-  const where = ['u.id <> ?', "u.role <> 'admin'",
+  const where = ['u.id <> ?', "u.role <> 'admin'", VISIBLE_SQL,
     'NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = ?))'];
   const args = [req.session.userId, req.session.userId, req.session.userId];
 
@@ -452,6 +609,10 @@ app.get('/api/profiles', requireAuth, wrap((req, res) => {
   const aMax = q.ageMax ? Math.min(99, parseInt(q.ageMax, 10) || 99) : null;
   if (aMin) { where.push('u.birth_date <= ?'); args.push(dateYearsAgo(aMin)); }
   if (aMax) { where.push('u.birth_date > ?'); args.push(dateYearsAgo(aMax + 1)); }
+  if (q.goal) {
+    if (!GOALS[q.goal]) return bad(res, 'Непозната цел.');
+    where.push('u.goal = ?'); args.push(q.goal);
+  }
   if (q.withPhoto === '1') where.push('EXISTS (SELECT 1 FROM photos p WHERE p.user_id = u.id)');
   if (q.online === '1') where.push("u.last_seen >= datetime('now', '-5 minutes')");
   if (q.lookingForMe === '1') {
@@ -480,10 +641,28 @@ app.get('/api/profiles', requireAuth, wrap((req, res) => {
 app.get('/api/profiles/:id', requireAuth, wrap((req, res) => {
   const row = db.prepare("SELECT * FROM users WHERE id = ? AND role <> 'admin'").get(Number(req.params.id));
   if (!row || blockedBetween(req.session.userId, row.id)) return bad(res, 'Профилът не е намерен.', 404);
-  res.json({ profile: publicProfiles([row], req.session.userId)[0] });
+  const me = req.session.userId;
+  // Посещението се записва (веднъж на ден), освен ако посетителят не е изключил това в настройките си.
+  if (row.id !== me && !db.prepare('SELECT hide_visits FROM users WHERE id = ?').get(me).hide_visits) {
+    db.prepare("INSERT OR IGNORE INTO visits (visitor_id, visited_id, day) VALUES (?, ?, date('now'))").run(me, row.id);
+  }
+  res.json({ profile: publicProfiles([row], me)[0] });
 }));
 
-app.post('/api/profiles/:id/like', requireAuth, wrap((req, res) => {
+// Активност: кой те е харесал, взаимни харесвания и кой е гледал профила ти (последните 30 дни).
+app.get('/api/activity', requireAuth, wrap((req, res) => {
+  const me = req.session.userId;
+  const ok = `u.role <> 'admin' AND ${VISIBLE_SQL} AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = ?))`;
+  const liked = db.prepare(`SELECT u.*, l.created_at AS at FROM likes l JOIN users u ON u.id = l.from_id WHERE l.to_id = ? AND ${ok} ORDER BY l.created_at DESC LIMIT 60`).all(me, me, me);
+  const mine = new Set(db.prepare('SELECT to_id FROM likes WHERE from_id = ?').all(me).map(r => r.to_id));
+  const visitors = db.prepare(`SELECT u.*, MAX(v.day) AS at FROM visits v JOIN users u ON u.id = v.visitor_id
+    WHERE v.visited_id = ? AND v.day >= date('now', '-30 days') AND ${ok} GROUP BY u.id ORDER BY at DESC LIMIT 60`).all(me, me, me);
+  const withAt = rows => { const ps = publicProfiles(rows, me); return ps.map((p, i) => ({ ...p, at: rows[i].at })); };
+  const all = withAt(liked);
+  res.json({ likedMe: all.filter(p => !mine.has(p.id)), mutual: all.filter(p => mine.has(p.id)), visitors: withAt(visitors) });
+}));
+
+app.post('/api/profiles/:id/like', requireActive, wrap((req, res) => {
   const to = Number(req.params.id), from = req.session.userId;
   if (to === from) return bad(res, 'Не можете да харесате себе си.');
   if (!db.prepare("SELECT 1 FROM users WHERE id = ? AND role <> 'admin'").get(to) || blockedBetween(from, to)) return bad(res, 'Профилът не е намерен.', 404);
@@ -599,7 +778,7 @@ function repairGroups() {
   }
 }
 
-app.post('/api/chats/:id/attachments', requireAuth, express.raw({ type: () => true, limit: MAX_FILE + 1024 }), wrap((req, res) => {
+app.post('/api/chats/:id/attachments', requireActive, express.raw({ type: () => true, limit: MAX_FILE + 1024 }), wrap((req, res) => {
   const me = req.session.userId, cid = Number(req.params.id);
   if (!memberRow(cid, me)) return bad(res, 'Разговорът не е намерен.', 404);
   const conv = convRow(cid);
@@ -651,7 +830,8 @@ function unreadTotal(uid) {
 app.get('/api/chats/unread', requireAuth, wrap((req, res) => {
   const id = req.session.userId;
   const isAdmin = db.prepare('SELECT role FROM users WHERE id = ?').get(id).role === 'admin';
-  res.json({ unread: unreadTotal(id), openReports: isAdmin ? db.prepare("SELECT COUNT(*) c FROM reports WHERE status = 'open'").get().c : 0 });
+  const cnt = sql => (isAdmin ? db.prepare(sql).get().c : 0);
+  res.json({ unread: unreadTotal(id), openReports: cnt("SELECT COUNT(*) c FROM reports WHERE status = 'open'"), openAppeals: cnt("SELECT COUNT(*) c FROM penalties WHERE appeal_status = 'pending'") });
 }));
 
 // Хората, с които си писал (за нова група и за добавяне към група).
@@ -716,7 +896,7 @@ function groupMemberIds(me, raw, existing = []) {
 }
 const cleanTitle = t => String(t || '').trim().replace(/\s+/g, ' ');
 
-app.post('/api/chats/groups', requireAuth, wrap((req, res) => {
+app.post('/api/chats/groups', requireActive, wrap((req, res) => {
   const me = req.session.userId, b = req.body || {};
   if (db.prepare('SELECT role FROM users WHERE id = ?').get(me).role === 'admin') return bad(res, 'Администраторът не води разговори.', 403);
   const title = cleanTitle(b.title);
@@ -766,7 +946,7 @@ app.get('/api/chats/:id', requireAuth, wrap((req, res) => {
   res.json(t);
 }));
 
-app.post('/api/chats/:id/messages', requireAuth, wrap((req, res) => {
+app.post('/api/chats/:id/messages', requireActive, wrap((req, res) => {
   const me = req.session.userId, cid = Number(req.params.id), b = req.body || {};
   if (!memberRow(cid, me)) return bad(res, 'Разговорът не е намерен.', 404);
   const conv = convRow(cid);
@@ -794,7 +974,7 @@ function groupOwnerOnly(req, res) {
   if (mine.role !== 'owner') { bad(res, 'Само създателят на групата може да прави това.', 403); return null; }
   return { me, cid, conv };
 }
-app.put('/api/chats/:id', requireAuth, wrap((req, res) => {
+app.put('/api/chats/:id', requireActive, wrap((req, res) => {
   const g = groupOwnerOnly(req, res); if (!g) return;
   const title = cleanTitle((req.body || {}).title);
   if (title.length < 2 || title.length > 40) return bad(res, 'Името на групата трябва да е 2–40 символа.');
@@ -802,7 +982,7 @@ app.put('/api/chats/:id', requireAuth, wrap((req, res) => {
   addSystem(g.cid, g.me, `Групата беше преименувана на „${title}“`);
   res.json({ ok: true });
 }));
-app.post('/api/chats/:id/members', requireAuth, wrap((req, res) => {
+app.post('/api/chats/:id/members', requireActive, wrap((req, res) => {
   const g = groupOwnerOnly(req, res); if (!g) return;
   const current = membersOf(g.cid).map(m => m.user_id);
   const { ids, invalid } = groupMemberIds(g.me, (req.body || {}).userIds, current);
@@ -841,7 +1021,7 @@ app.delete('/api/chats/:id/members/:uid', requireAuth, wrap((req, res) => {
 }));
 
 // Доклад за профил. Към него се прикача снимка на разговора (личния между двамата или групата), за да може администраторът да прецени казуса.
-app.post('/api/profiles/:id/report', requireAuth, wrap((req, res) => {
+app.post('/api/profiles/:id/report', requireActive, wrap((req, res) => {
   const me = req.session.userId, id = Number(req.params.id), b = req.body || {};
   if (id === me) return bad(res, 'Не можете да докладвате себе си.');
   const target = findPeer(id);
@@ -867,8 +1047,9 @@ app.post('/api/profiles/:id/report', requireAuth, wrap((req, res) => {
   const reporter = db.prepare('SELECT nickname FROM users WHERE id = ?').get(me);
   db.transaction(() => {
     const conv = cid ? convRow(cid) : null;
-    const rid = db.prepare('INSERT INTO reports (reporter_id, reported_id, reporter_nick, reported_nick, reason, details, conversation_id, conv_title) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(me, id, reporter.nickname, target.nickname, b.reason, details, cid, conv && conv.kind === 'group' ? conv.title : '').lastInsertRowid;
+    const dossierId = ensureDossier(id, target.nickname);
+    const rid = db.prepare('INSERT INTO reports (reporter_id, reported_id, reporter_nick, reported_nick, reason, details, conversation_id, conv_title, dossier_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(me, id, reporter.nickname, target.nickname, b.reason, details, cid, conv && conv.kind === 'group' ? conv.title : '', dossierId).lastInsertRowid;
     if (cid) {
       const from = memberRow(cid, me).from_msg_id;
       const msgs = db.prepare(`SELECT m.*, u.nickname FROM messages m LEFT JOIN users u ON u.id = m.sender_id
@@ -929,6 +1110,9 @@ app.get('/api/admin/stats', requireAdmin, wrap((req, res) => {
     likes: one('SELECT COUNT(*) c FROM likes'),
     online: one("SELECT COUNT(*) c FROM users WHERE role <> 'admin' AND last_seen >= datetime('now', '-5 minutes')"),
     openReports: one("SELECT COUNT(*) c FROM reports WHERE status = 'open'"),
+    openAppeals: one("SELECT COUNT(*) c FROM penalties WHERE appeal_status = 'pending'"),
+    suspended: one("SELECT COUNT(DISTINCT user_id) c FROM penalties WHERE kind = 'suspension' AND lifted_at IS NULL AND ends_at > datetime('now')"),
+    dossiers: one('SELECT COUNT(*) c FROM dossiers'),
     newToday: one("SELECT COUNT(*) c FROM users WHERE role <> 'admin' AND is_demo = 0 AND created_at >= datetime('now', '-1 day')"),
     byRegion: byRegion.map(r => ({ region: (places.REGION_BY_CODE.get(r.region) || { name: '—' }).name, count: r.c })),
     byGender: Object.fromEntries(byGender.map(r => [r.gender, r.c])),
@@ -954,11 +1138,7 @@ app.delete('/api/admin/users/:id', requireAdmin, wrap((req, res) => {
   const row = db.prepare('SELECT id, role FROM users WHERE id = ?').get(id);
   if (!row) return bad(res, 'Потребителят не е намерен.', 404);
   if (row.role === 'admin') return bad(res, 'Администраторски акаунт не може да се изтрива.', 403);
-  const files = db.prepare('SELECT filename FROM photos WHERE user_id = ?').all(id);
-  cleanupBeforeUserDelete(id);
-  db.prepare('DELETE FROM users WHERE id = ?').run(id);
-  repairGroups();
-  files.forEach(f => fs.rm(path.join(db.UPLOAD_DIR, f.filename), { force: true }, () => {}));
+  eraseUser(id);
   res.json({ ok: true });
 }));
 
@@ -967,7 +1147,7 @@ app.delete('/api/admin/users/:id', requireAdmin, wrap((req, res) => {
 // не може да разглежда произволни чатове. Всяко отваряне се записва в журнала.
 const REPORT_STATUSES = ['open', 'upheld', 'dismissed'];
 const reportRow = r => ({
-  id: r.id, reporterNick: r.reporter_nick, reportedNick: r.reported_nick, reason: r.reason, reasonLabel: REPORT_REASONS[r.reason] || r.reason,
+  id: r.id, dossierId: r.dossier_id, reporterNick: r.reporter_nick, reportedNick: r.reported_nick, reason: r.reason, reasonLabel: REPORT_REASONS[r.reason] || r.reason,
   status: r.status, createdAt: iso(r.created_at), resolvedAt: r.resolved_at ? iso(r.resolved_at) : null,
 });
 
@@ -1022,6 +1202,164 @@ app.put('/api/admin/reports/:id', requireAdmin, wrap((req, res) => {
   res.json({ ok: true });
 }));
 
+// ── Досиета, наказания, обжалвания ──
+// Досие се създава само за ДОКЛАДВАН профил. Наказания се налагат само към профили с досие.
+function ensureDossier(uid, nickname) {
+  const ex = db.prepare('SELECT id FROM dossiers WHERE user_id = ?').get(uid);
+  if (ex) return ex.id;
+  return db.prepare('INSERT INTO dossiers (user_id, nickname) VALUES (?, ?)').run(uid, nickname).lastInsertRowid;
+}
+// „Страйкове“ = предупреждения и суспензии, освен уважените обжалвания.
+const strikesOf = did => db.prepare("SELECT COUNT(*) c FROM penalties WHERE dossier_id = ? AND kind IN ('warning', 'suspension') AND appeal_status <> 'accepted'").get(did).c;
+const adminPenalty = p => ({ ...penaltyView(p), note: p.note, issuedNick: p.issued_nick, liftedAt: p.lifted_at ? iso(p.lifted_at) : null, liftedNote: p.lifted_note,
+  appealAt: p.appeal_at ? iso(p.appeal_at) : null, appealDecidedAt: p.appeal_decided_at ? iso(p.appeal_decided_at) : null, reportId: p.report_id,
+  active: p.kind === 'suspension' && !p.lifted_at && p.ends_at && p.ends_at > new Date().toISOString().slice(0, 19).replace('T', ' ') });
+const clean = (v, max) => String(v || '').trim().slice(0, max);
+const adminNick = id => (db.prepare('SELECT nickname FROM users WHERE id = ?').get(id) || {}).nickname || 'Админ';
+
+function notifyPenalty(uid, subject, text) {
+  const u = db.prepare('SELECT email FROM users WHERE id = ?').get(uid);
+  if (u && u.email) mailer.send({ to: u.email, subject, text });
+}
+
+app.get('/api/admin/dossiers', requireAdmin, wrap((req, res) => {
+  const status = String(req.query.status || 'all'), term = String(req.query.q || '').trim().toLowerCase();
+  const rows = db.prepare(`SELECT d.*,
+      (SELECT COUNT(*) FROM reports r WHERE r.dossier_id = d.id) AS reports,
+      (SELECT COUNT(*) FROM reports r WHERE r.dossier_id = d.id AND r.status = 'open') AS open_reports,
+      (SELECT MAX(created_at) FROM reports r WHERE r.dossier_id = d.id) AS last_report,
+      (SELECT COUNT(*) FROM penalties p WHERE p.dossier_id = d.id AND p.appeal_status = 'pending') AS appeals
+    FROM dossiers d ORDER BY (open_reports > 0) DESC, last_report DESC LIMIT 300`).all();
+  let list = rows.map(d => {
+    const susp = d.user_id ? activeSuspension(d.user_id) : null;
+    return { id: d.id, nickname: d.nickname, status: d.status, reports: d.reports, openReports: d.open_reports, strikes: strikesOf(d.id), strikeLimit: STRIKE_LIMIT,
+      suspendedUntil: susp ? iso(susp.ends_at) : null, appeals: d.appeals, lastReportAt: d.last_report ? iso(d.last_report) : null, createdAt: iso(d.created_at) };
+  });
+  if (term) list = list.filter(d => d.nickname.toLowerCase().includes(term));
+  if (status === 'suspended') list = list.filter(d => d.suspendedUntil);
+  else if (status === 'deregistered') list = list.filter(d => d.status === 'deregistered');
+  else if (status === 'appeals') list = list.filter(d => d.appeals > 0);
+  else if (status === 'active') list = list.filter(d => d.status === 'active');
+  res.json({ dossiers: list });
+}));
+
+app.get('/api/admin/dossiers/:id', requireAdmin, wrap((req, res) => {
+  const d = db.prepare('SELECT * FROM dossiers WHERE id = ?').get(Number(req.params.id));
+  if (!d) return bad(res, 'Досието не е намерено.', 404);
+  db.prepare("INSERT INTO audit_log (admin_id, action, report_id) VALUES (?, 'view_dossier', NULL)").run(req.session.userId);
+  let subject = null;
+  if (d.user_id) {
+    const u = db.prepare('SELECT * FROM users WHERE id = ?').get(d.user_id);
+    if (u) subject = { alive: true, id: u.id, nickname: u.nickname, age: ageFrom(u.birth_date), ...placeFields(u), gender: u.gender, bio: u.bio, goal: u.goal, isDemo: !!u.is_demo, paused: !!u.paused,
+      joinedAt: iso(u.created_at), lastSeen: iso(u.last_seen), emailMasked: emailutil.maskEmail(u.email), emailVerified: !!u.email_verified_at,
+      photos: db.prepare('SELECT COUNT(*) c FROM photos WHERE user_id = ?').get(u.id).c };
+  }
+  if (!subject) { let snap = {}; try { snap = JSON.parse(d.snapshot || '{}'); } catch { /* ignore */ } subject = { alive: false, nickname: d.nickname, ...snap }; }
+  const reports = db.prepare('SELECT * FROM reports WHERE dossier_id = ? ORDER BY id DESC').all(d.id).map(r => ({ ...reportRow(r), details: r.details, adminNote: r.admin_note, convTitle: r.conv_title }));
+  const penalties = db.prepare('SELECT * FROM penalties WHERE dossier_id = ? ORDER BY id DESC').all(d.id).map(adminPenalty);
+  const notes = db.prepare('SELECT * FROM dossier_notes WHERE dossier_id = ? ORDER BY id DESC').all(d.id).map(n => ({ id: n.id, note: n.note, admin: n.admin_nick, at: iso(n.created_at) }));
+  const strikes = strikesOf(d.id);
+  res.json({
+    dossier: { id: d.id, nickname: d.nickname, status: d.status, createdAt: iso(d.created_at), closedAt: d.closed_at ? iso(d.closed_at) : null, closedReason: d.closed_reason },
+    subject, reports, penalties, notes, strikes, strikeLimit: STRIKE_LIMIT, recommendDeregister: strikes >= STRIKE_LIMIT && d.status === 'active', suspendDays: SUSPEND_DAYS,
+    emailBanned: d.status === 'deregistered',
+  });
+}));
+
+app.post('/api/admin/dossiers/:id/notes', requireAdmin, wrap((req, res) => {
+  const d = db.prepare('SELECT id FROM dossiers WHERE id = ?').get(Number(req.params.id));
+  if (!d) return bad(res, 'Досието не е намерено.', 404);
+  const note = clean((req.body || {}).note, 1000);
+  if (note.length < 2) return bad(res, 'Напиши бележка.');
+  db.prepare('INSERT INTO dossier_notes (dossier_id, admin_id, admin_nick, note) VALUES (?, ?, ?, ?)').run(d.id, req.session.userId, adminNick(req.session.userId), note);
+  res.status(201).json({ ok: true });
+}));
+
+app.post('/api/admin/dossiers/:id/penalties', requireAdmin, wrap((req, res) => {
+  const d = db.prepare('SELECT * FROM dossiers WHERE id = ?').get(Number(req.params.id)), b = req.body || {};
+  if (!d) return bad(res, 'Досието не е намерено.', 404);
+  if (!d.user_id || d.status !== 'active') return bad(res, 'Профилът вече не е активен.', 409);
+  if (!['warning', 'suspension'].includes(b.kind)) return bad(res, 'Избери вид наказание.');
+  const days = b.kind === 'suspension' ? Number(b.days) : null;
+  if (b.kind === 'suspension' && !SUSPEND_DAYS.includes(days)) return bad(res, `Суспензията е ${SUSPEND_DAYS.join(', ')} дни.`);
+  const reason = clean(b.reason, 300);
+  if (reason.length < 5) return bad(res, 'Напиши причина (поне 5 символа) – показва се на потребителя.');
+  const reportId = b.reportId && db.prepare('SELECT 1 FROM reports WHERE id = ? AND dossier_id = ?').get(Number(b.reportId), d.id) ? Number(b.reportId) : null;
+  const admin = req.session.userId;
+  const r = db.prepare(`INSERT INTO penalties (dossier_id, user_id, kind, reason, note, days, report_id, issued_by, issued_nick, ends_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${days ? "datetime('now', ?)" : 'NULL'})`)
+    .run(...[d.id, d.user_id, b.kind, reason, clean(b.note, 500), days, reportId, admin, adminNick(admin)].concat(days ? [`+${days} days`] : [])).lastInsertRowid;
+  db.prepare('INSERT INTO audit_log (admin_id, action, report_id) VALUES (?, ?, ?)').run(admin, 'penalty_' + b.kind, reportId);
+  notifyPenalty(d.user_id, b.kind === 'warning' ? 'Spark: предупреждение за профила ти' : 'Spark: профилът ти е временно спрян',
+    `${b.kind === 'warning' ? 'Получи предупреждение' : `Профилът ти е спрян за ${days} дни`}.\nПричина: ${reason}\n\nАко смяташ, че е грешка, можеш да обжалваш от профила си в сайта.`);
+  const strikes = strikesOf(d.id);
+  res.status(201).json({ penalty: adminPenalty(db.prepare('SELECT * FROM penalties WHERE id = ?').get(r)), strikes, strikeLimit: STRIKE_LIMIT, recommendDeregister: strikes >= STRIKE_LIMIT });
+}));
+
+app.post('/api/admin/penalties/:id/lift', requireAdmin, wrap((req, res) => {
+  const p = db.prepare('SELECT * FROM penalties WHERE id = ?').get(Number(req.params.id));
+  if (!p || p.kind === 'deregistration') return bad(res, 'Наказанието не е намерено.', 404);
+  if (p.lifted_at) return bad(res, 'Наказанието вече е вдигнато.', 409);
+  db.prepare("UPDATE penalties SET lifted_at = datetime('now'), lifted_note = ? WHERE id = ?").run(clean((req.body || {}).note, 300), p.id);
+  db.prepare("INSERT INTO audit_log (admin_id, action, report_id) VALUES (?, 'penalty_lift', ?)").run(req.session.userId, p.report_id);
+  res.json({ ok: true });
+}));
+
+app.post('/api/admin/penalties/:id/appeal', requireAdmin, wrap((req, res) => {
+  const p = db.prepare('SELECT * FROM penalties WHERE id = ?').get(Number(req.params.id)), b = req.body || {};
+  if (!p || p.appeal_status !== 'pending') return bad(res, 'Няма чакащо обжалване.', 404);
+  if (!['accepted', 'rejected'].includes(b.decision)) return bad(res, 'Невалидно решение.');
+  const note = clean(b.note, 300);
+  db.transaction(() => {
+    db.prepare("UPDATE penalties SET appeal_status = ?, appeal_note = ?, appeal_decided_at = datetime('now') WHERE id = ?").run(b.decision, note, p.id);
+    if (b.decision === 'accepted' && !p.lifted_at) db.prepare("UPDATE penalties SET lifted_at = datetime('now'), lifted_note = 'Уважено обжалване' WHERE id = ?").run(p.id);
+  })();
+  db.prepare('INSERT INTO audit_log (admin_id, action, report_id) VALUES (?, ?, ?)').run(req.session.userId, 'appeal_' + b.decision, p.report_id);
+  if (p.user_id) notifyPenalty(p.user_id, 'Spark: решение по обжалването ти', `Обжалването ти беше ${b.decision === 'accepted' ? 'уважено – наказанието е отменено' : 'отхвърлено'}.${note ? `\nКоментар: ${note}` : ''}`);
+  res.json({ ok: true });
+}));
+
+// Дерегистрация: профилът се изтрива, имейлът (само като хеш) се забранява за нова регистрация, досието остава.
+app.post('/api/admin/dossiers/:id/deregister', requireAdmin, wrap((req, res) => {
+  const d = db.prepare('SELECT * FROM dossiers WHERE id = ?').get(Number(req.params.id)), b = req.body || {};
+  if (!d) return bad(res, 'Досието не е намерено.', 404);
+  if (!d.user_id || d.status !== 'active') return bad(res, 'Профилът вече не е активен.', 409);
+  const reason = clean(b.reason, 300);
+  if (reason.length < 5) return bad(res, 'Напиши причина (поне 5 символа).');
+  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(d.user_id);
+  if (!u || u.role === 'admin') return bad(res, 'Администраторски акаунт не може да се дерегистрира.', 403);
+  const admin = req.session.userId, snapshot = JSON.stringify({ age: ageFrom(u.birth_date), ...placeFields(u), gender: u.gender, joinedAt: iso(u.created_at), lastSeen: iso(u.last_seen), isDemo: !!u.is_demo, emailMasked: emailutil.maskEmail(u.email) });
+  const email = u.email;
+  db.transaction(() => {
+    if (u.email_key) db.prepare('INSERT OR IGNORE INTO banned_emails (hash, dossier_id) VALUES (?, ?)').run(emailutil.emailHash(u.email_key), d.id);
+    db.prepare('INSERT OR IGNORE INTO deregistered (username_key, dossier_id) VALUES (?, ?)').run(u.username.toLowerCase(), d.id);
+    db.prepare(`INSERT INTO penalties (dossier_id, user_id, kind, reason, note, issued_by, issued_nick) VALUES (?, ?, 'deregistration', ?, ?, ?, ?)`)
+      .run(d.id, u.id, reason, clean(b.note, 500), admin, adminNick(admin));
+    db.prepare("UPDATE dossiers SET status = 'deregistered', snapshot = ?, closed_reason = ?, closed_at = datetime('now') WHERE id = ?").run(snapshot, reason, d.id);
+    eraseUser(u.id);               // FK: dossiers.user_id и penalties.user_id стават NULL
+  })();
+  db.prepare("INSERT INTO audit_log (admin_id, action, report_id) VALUES (?, 'deregister', NULL)").run(admin);
+  if (email) mailer.send({ to: email, subject: 'Spark: профилът ти е дерегистриран', text: `Профилът ти „${d.nickname}“ беше дерегистриран заради нарушение на правилата.\nПричина: ${reason}\n\nС този имейл не може да се създава нов профил. Ако смяташ, че е допусната грешка, отговори на това писмо.` });
+  res.json({ ok: true });
+}));
+
+// ── За самия потребител: прочитане на предупреждение и обжалване ──
+app.post('/api/me/penalties/:id/ack', requireAuth, wrap((req, res) => {
+  const p = db.prepare("SELECT id FROM penalties WHERE id = ? AND user_id = ? AND kind = 'warning'").get(Number(req.params.id), req.session.userId);
+  if (!p) return bad(res, 'Не е намерено.', 404);
+  db.prepare("UPDATE penalties SET acked_at = datetime('now') WHERE id = ?").run(p.id);
+  res.json({ user: meOf(req.session.userId) });
+}));
+app.post('/api/me/penalties/:id/appeal', requireAuth, wrap((req, res) => {
+  const me = req.session.userId, p = db.prepare("SELECT * FROM penalties WHERE id = ? AND user_id = ? AND kind IN ('warning', 'suspension')").get(Number(req.params.id), me);
+  if (!p) return bad(res, 'Не е намерено.', 404);
+  if (p.appeal_status !== 'none') return bad(res, 'Вече си обжалвал това наказание.', 409);
+  const text = clean((req.body || {}).text, 500);
+  if (text.length < 10) return bad(res, 'Опиши защо смяташ, че е грешка (поне 10 символа).');
+  db.prepare("UPDATE penalties SET appeal_text = ?, appeal_at = datetime('now'), appeal_status = 'pending' WHERE id = ?").run(text, p.id);
+  res.json({ user: meOf(me) });
+}));
+
 // ── Статика ──
 app.use('/uploads', express.static(db.UPLOAD_DIR, {
   index: false, dotfiles: 'deny', maxAge: '7d', immutable: true,
@@ -1038,5 +1376,12 @@ app.use((err, req, res, next) => {
   console.error(err);
   bad(res, 'Вътрешна грешка на сървъра.', 500);
 });
+
+// Непотвърдени акаунти се трият след 7 дни.
+function purgeUnverified() {
+  for (const u of db.prepare("SELECT id FROM users WHERE role = 'user' AND email_verified_at IS NULL AND created_at < datetime('now', '-7 days')").all()) eraseUser(u.id);
+}
+purgeUnverified();
+setInterval(purgeUnverified, 3600e3).unref();
 
 module.exports = app;

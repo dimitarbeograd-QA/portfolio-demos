@@ -14,9 +14,11 @@ const REPORT_REASONS = {
   underage: 'Изглежда непълнолетен',
   other: 'Друго',
 };
+const GOALS = { serious: 'Сериозна връзка', dating: 'Запознанства', friends: 'Приятелство', open: 'Отворен/а съм' };
+const SUSPEND_DAYS = [1, 3, 7, 30];
 const GENDERS = ['male', 'female', 'other'];
 const LOOKING = ['male', 'female', 'any'];
 const MIN_AGE = 18;
 const MAX_PHOTOS = 6;
 
-module.exports = { REPORT_REASONS, INTERESTS, GENDERS, LOOKING, MIN_AGE, MAX_PHOTOS };
+module.exports = { GOALS, SUSPEND_DAYS, REPORT_REASONS, INTERESTS, GENDERS, LOOKING, MIN_AGE, MAX_PHOTOS };

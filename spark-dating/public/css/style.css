@@ -332,6 +332,34 @@ input[type=color] { padding: 2px; height: 2.4rem; width: 3.4rem; cursor: pointer
 .lightbox { text-align: center; } .lightbox img { max-width: 100%; max-height: 68vh; border-radius: 12px; }
 .chatthread { padding: 0; } .dockpanel .chatpane { flex: 1; }
 
+/* ── Имейл потвърждение, банери, попълненост, активност ── */
+.hp { position: absolute !important; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.ok { color: var(--ok); font-weight: 600; margin: .4rem 0; min-height: 1.2em; }
+.verifywrap { max-width: 520px; margin: 2rem auto; }
+.codeinput { font-size: 1.8rem; letter-spacing: .5em; text-align: center; font-variant-numeric: tabular-nums; font-weight: 700; }
+.devmail { margin: .8rem 0 1.2rem; padding: .8rem 1rem; border: var(--bw) dashed var(--accent); border-radius: calc(var(--radius) * .7); background: var(--faint); }
+.mailcard { display: grid; gap: .25rem; padding: .7rem .9rem; margin: .5rem 0; border-radius: 12px; background: var(--surface); border: var(--bw) solid var(--border); }
+.bigcode { font-size: 1.5rem; letter-spacing: .25em; color: var(--accent); font-variant-numeric: tabular-nums; }
+.wrongmail { margin-top: 1rem; } .wrongmail summary { cursor: pointer; color: var(--accent); } .changemail { display: grid; gap: .6rem; margin-top: .6rem; }
+.banners { display: grid; gap: .5rem; padding: 0 1rem; max-width: 1240px; margin: .6rem auto 0; width: 100%; } .banners:empty { display: none; }
+.banner { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem 1rem; padding: .7rem 1rem; border-radius: var(--radius); border: var(--bw) solid var(--border); background: var(--surface); animation: fadeUp .4s var(--ease) both; }
+.banner .bico { font-size: 1.5rem; } .banner .btxt { display: grid; gap: .15rem; flex: 1 1 18rem; min-width: 0; } .banner .btxt b { color: var(--heading); }
+.banner.danger { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, var(--surface)); }
+.banner.warn { border-color: var(--alert); background: color-mix(in srgb, var(--alert) 14%, var(--surface)); }
+.banner.info { border-color: var(--accent); }
+.meter { height: .7rem; border-radius: 999px; background: var(--faint); overflow: hidden; margin-top: .5rem; } .meter i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 50%, white)); box-shadow: var(--glow-shadow); animation: grow .8s var(--ease) both; transform-origin: left; }
+.completeness { margin-bottom: 1.2rem; } .cmeta { display: flex; flex-wrap: wrap; gap: .3rem 1rem; align-items: baseline; justify-content: space-between; }
+.nudge { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: center; justify-content: space-between; padding: .6rem 1rem; margin-bottom: 1rem; border-radius: var(--radius); border: var(--bw) dashed var(--accent); background: var(--faint); }
+.tag.goal { border-color: var(--accent); color: var(--heading); } .card .meta .extra { color: var(--accent); font-size: .82rem; font-weight: 600; -webkit-line-clamp: 1; }
+.pill { display: inline-block; font-size: .78rem; padding: .1rem .6rem; border-radius: 999px; border: var(--bw) solid var(--border); white-space: nowrap; }
+.pill.good { color: var(--ok); border-color: var(--ok); } .pill.warn { color: var(--alert); border-color: var(--alert); } .pill.bad { color: var(--danger); border-color: var(--danger); } .pill.muted { color: var(--muted); }
+
+/* ── Досиета ── */
+.timeline { display: grid; gap: .6rem; }
+.tl { padding: .65rem .8rem; border: var(--bw) solid var(--border); border-radius: calc(var(--radius) * .6); background: var(--faint); }
+.tlhead { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; margin-bottom: .3rem; }
+.tl .bio { margin: .2rem 0; } .appeal { margin-top: .5rem; padding: .6rem .8rem; border-radius: 10px; border: 1px dashed var(--alert); } .appeal input { margin: .4rem 0; }
+
 /* ── Доклади ── */
 .replist { display: grid; gap: .6rem; }
 .rep { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; padding: .65rem .8rem; border: var(--bw) solid var(--border); border-radius: calc(var(--radius) * .6); background: var(--faint); }

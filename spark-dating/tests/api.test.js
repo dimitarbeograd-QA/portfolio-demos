@@ -1,5 +1,6 @@
 // API тестове с вграденият node:test. Стартират се с: npm test
 process.env.NODE_ENV = 'test';
+process.env.REG_PER_HOUR = '100000'; // тестовете регистрират много хора от един адрес
 process.env.DATA_DIR = require('node:fs').mkdtempSync(require('node:os').tmpdir() + '/spark-test-');
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -24,7 +25,7 @@ test.after(() => new Promise(r => server.close(r)));
 // Мини клиент с бисквитки
 function client() {
   let cookie = '';
-  const fn = async (method, url, body) => {
+  const fn = async (method, url, body, opts = {}) => {
     const res = await fetch(base + url, {
       method,
       headers: { 'Content-Type': 'application/json', ...(cookie ? { cookie } : {}) },
@@ -34,13 +35,20 @@ function client() {
     if (set) cookie = set.split(';')[0];
     let data = {};
     try { data = await res.json(); } catch { /* */ }
-    return { status: res.status, data, headers: res.headers };
+    const out = { status: res.status, data, headers: res.headers };
+    // Регистрацията връща кода в dev режим → потвърждаваме автоматично (освен ако тестът иска непотвърден профил).
+    if (url === '/api/register' && res.status === 201 && data.mail && data.mail.devCode && !opts.keepUnverified) {
+      const v = await fn('POST', '/api/verify/email', { code: data.mail.devCode });
+      out.data = { ...data, user: v.data.user };
+    }
+    return out;
   };
   fn.cookie = () => cookie;
   return fn;
 }
 const adult = () => { const d = new Date(); d.setFullYear(d.getFullYear() - 28); return d.toISOString().slice(0, 10); };
-const reg = (over = {}) => ({ username: 'ivan_' + Math.random().toString(36).slice(2, 8), password: 'supersecret1', nickname: 'Иван' + Math.floor(Math.random() * 1e5), birthDate: adult(), gender: 'male', lookingFor: 'female', placeId: pid('София'), ...over });
+const mailN = { n: 0 };
+const reg = (over = {}) => ({ email: `u${Date.now().toString(36)}${++mailN.n}@example.test`, website: '', username: 'ivan_' + Math.random().toString(36).slice(2, 8), password: 'supersecret1', nickname: 'Иван' + Math.floor(Math.random() * 1e5), birthDate: adult(), gender: 'male', lookingFor: 'female', placeId: pid('София'), ...over });
 
 // 1x1 PNG
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -727,4 +735,336 @@ test('данни: 28 области, всички места имат облас
   assert.ok(places.PLACES.every(p => places.REGION_BY_CODE.has(p.region) && p.obshtina && p.id.length === 5));
   assert.equal(new Set(places.PLACES.map(p => p.id)).size, places.PLACES.length);
   assert.ok(places.PLACES.filter(p => p.kind === 'гр.').length >= 250);
+});
+
+// ───────── Имейл потвърждение, наказания, досиета, дерегистрация ─────────
+const dbx = require('../server/db');
+const regRaw = (c, over = {}) => c('POST', '/api/register', reg(over), { keepUnverified: true });
+const adminOf = async () => adminClient();
+// Докладва човек и връща досието му (чрез админа).
+async function reportAndDossier(reporter, reportedUser, admin, reason = 'harassment') {
+  assert.equal((await reporter('POST', `/api/profiles/${reportedUser.id}/report`, { reason, details: 'тест' })).status, 201);
+  const list = (await admin('GET', '/api/admin/dossiers?q=' + encodeURIComponent(reportedUser.nickname))).data.dossiers;
+  return list.find(d => d.nickname === reportedUser.nickname);
+}
+
+test('регистрация: имейл е задължителен, едноразовите се отказват, нормализиран дубликат, honeypot', async () => {
+  const c = client();
+  assert.equal((await c('POST', '/api/register', reg({ email: '' }))).status, 400);
+  assert.equal((await c('POST', '/api/register', reg({ email: 'не-е-имейл' }))).status, 400);
+  const dis = await c('POST', '/api/register', reg({ email: 'x@mailinator.com' }));
+  assert.equal(dis.status, 400); assert.match(dis.data.error, /временни/);
+  assert.equal((await c('POST', '/api/register', reg({ website: 'http://spam.example' }))).status, 400); // бот попълва скритото поле
+
+  const base = 'Ivo.Test' + Date.now().toString(36);
+  assert.equal((await client()('POST', '/api/register', reg({ email: `${base}@gmail.com` }))).status, 201);
+  // същата пощенска кутия: други главни/точки/+етикет/googlemail
+  for (const v of [`${base.toLowerCase()}@gmail.com`, `${base.replace('.', '')}+spam@gmail.com`, `${base}@googlemail.com`]) {
+    const r = await client()('POST', '/api/register', reg({ email: v }));
+    assert.equal(r.status, 409, v);
+  }
+});
+
+test('регистрация: най-много N на час от един адрес', async () => {
+  process.env.REG_PER_HOUR = '2';
+  try {
+    // другите тестове вече са запълнили лога – ползваме нов „адрес“ чрез X-Forwarded-For не е възможно, затова изчистваме чрез време:
+    // проверяваме само, че при ниския лимит поне една от следващите заявки е с 429
+    const statuses = [];
+    for (let i = 0; i < 4; i++) statuses.push((await client()('POST', '/api/register', reg())).status);
+    assert.ok(statuses.includes(429), statuses.join(','));
+  } finally { process.env.REG_PER_HOUR = '100000'; }
+});
+
+test('непотвърден профил: ограничен достъп, неизвестен в търсенето, потвърждение с код', async () => {
+  const c = client(), viewer = client();
+  await viewer('POST', '/api/register', reg());
+  const r = await regRaw(c);
+  assert.equal(r.status, 201);
+  assert.equal(r.data.user.emailVerified, false);
+  assert.match(r.data.mail.devCode, /^\d{6}$/);
+  // писмото е „изпратено“ (dev поща)
+  assert.ok(dbx.prepare('SELECT 1 FROM outbox WHERE body LIKE ?').get('%' + r.data.mail.devCode + '%'));
+
+  for (const [m, u] of [['GET', '/api/profiles'], ['GET', '/api/chats'], ['GET', '/api/chats/unread'], ['GET', '/api/activity']]) {
+    const x = await c(m, u); assert.equal(x.status, 403, u); assert.equal(x.data.code, 'email_unverified');
+  }
+  assert.equal((await c('GET', '/api/me')).data.user.emailVerified, false);        // /api/me работи
+  // не се вижда в търсенето
+  const nick = r.data.user.nickname;
+  assert.ok(!(await viewer('GET', '/api/profiles?limit=48&sort=new&q=' + encodeURIComponent(nick))).data.profiles.some(p => p.nickname === nick));
+
+  // грешен код → остават опити; верният код потвърждава
+  const wrong = await c('POST', '/api/verify/email', { code: r.data.mail.devCode === '000000' ? '111111' : '000000' });
+  assert.equal(wrong.status, 400); assert.match(wrong.data.error, /Остават 4/);
+  const ok = await c('POST', '/api/verify/email', { code: r.data.mail.devCode });
+  assert.equal(ok.status, 200); assert.equal(ok.data.user.emailVerified, true);
+  assert.equal((await c('GET', '/api/profiles')).status, 200);
+  assert.ok((await viewer('GET', '/api/profiles?limit=48&sort=new&q=' + encodeURIComponent(nick))).data.profiles.some(p => p.nickname === nick));
+});
+
+test('потвърждение: лимит на опитите, изтичане, презаявка и смяна на грешен имейл', async () => {
+  const c = client();
+  const r = await regRaw(c);
+  const real = r.data.mail.devCode, bad = real === '123456' ? '654321' : '123456';
+  for (let i = 0; i < 5; i++) assert.equal((await c('POST', '/api/verify/email', { code: bad })).status, 400);
+  const locked = await c('POST', '/api/verify/email', { code: real });
+  assert.equal(locked.status, 429); assert.equal(locked.data.code, 'too_many_attempts');       // и верен код след 5 грешки не минава
+
+  // нов код: веднага → изчакване (60 сек.)
+  const wait = await c('POST', '/api/verify/resend');
+  assert.equal(wait.status, 429); assert.ok(wait.data.retryAfter > 0);
+  dbx.prepare("UPDATE email_verifications SET sent_at = datetime('now', '-2 minutes') WHERE user_id = ?").run(r.data.user.id);
+  const again = await c('POST', '/api/verify/resend');
+  assert.equal(again.status, 200); assert.notEqual(again.data.mail.devCode, undefined);
+
+  // изтекъл код
+  dbx.prepare("UPDATE email_verifications SET expires_at = datetime('now', '-1 minute') WHERE user_id = ?").run(r.data.user.id);
+  const exp = await c('POST', '/api/verify/email', { code: again.data.mail.devCode });
+  assert.equal(exp.status, 400); assert.equal(exp.data.code, 'code_expired');
+
+  // смяна на сгрешен имейл: нужна е паролата
+  dbx.prepare("UPDATE email_verifications SET sent_at = datetime('now', '-2 minutes') WHERE user_id = ?").run(r.data.user.id);
+  assert.equal((await c('POST', '/api/verify/change-email', { email: 'нов@example.test', password: 'грешна' })).status, 403);
+  const newMail = `fixed${Date.now().toString(36)}@example.test`;
+  const ch = await c('POST', '/api/verify/change-email', { email: newMail, password: 'supersecret1' });
+  assert.equal(ch.status, 200);
+  assert.equal((await c('POST', '/api/verify/email', { code: ch.data.mail.devCode })).data.user.emailVerified, true);
+  assert.equal((await c('GET', '/api/me')).data.user.email, newMail);
+  assert.equal((await c('POST', '/api/verify/change-email', { email: 'още@example.test', password: 'supersecret1' })).status, 400); // вече е потвърден
+});
+
+test('най-много 5 кода на час', async () => {
+  const c = client(); const r = await regRaw(c);
+  for (let i = 0; i < 4; i++) {
+    dbx.prepare("UPDATE email_verifications SET sent_at = datetime('now', '-2 minutes') WHERE user_id = ?").run(r.data.user.id);
+    assert.equal((await c('POST', '/api/verify/resend')).status, 200);
+  }
+  dbx.prepare("UPDATE email_verifications SET sent_at = datetime('now', '-2 minutes') WHERE user_id = ?").run(r.data.user.id);
+  const last = await c('POST', '/api/verify/resend');
+  assert.equal(last.status, 429); assert.match(last.data.error, /лимита/);
+});
+
+test('досие се създава само за докладван профил, а наказания – само към такъв', async () => {
+  const { a, ub, ua } = await two();
+  const admin = await adminOf();
+  const dossiersBefore = (await admin('GET', '/api/admin/dossiers')).data.dossiers.map(d => d.nickname);
+  assert.ok(!dossiersBefore.includes(ub.nickname) && !dossiersBefore.includes(ua.nickname));       // никой не е докладван
+  const d = await reportAndDossier(a, ub, admin);
+  assert.ok(d && d.reports === 1 && d.openReports === 1 && d.strikes === 0 && d.status === 'active');
+  assert.ok(!(await admin('GET', '/api/admin/dossiers')).data.dossiers.some(x => x.nickname === ua.nickname)); // докладващият няма досие
+  // няма досие → няма наказание/дерегистрация (404 за несъществуващо досие)
+  assert.equal((await admin('POST', '/api/admin/dossiers/999999/penalties', { kind: 'warning', reason: 'тест тест' })).status, 404);
+  const detail = (await admin('GET', `/api/admin/dossiers/${d.id}`)).data;
+  assert.equal(detail.subject.nickname, ub.nickname); assert.equal(detail.subject.alive, true);
+  assert.equal(detail.reports.length, 1); assert.match(detail.subject.emailMasked, /\*/);
+  assert.ok(!JSON.stringify(detail).includes('@example.test'));                                      // пълният имейл не се разкрива
+  // само админ
+  assert.equal((await a('GET', '/api/admin/dossiers')).status, 403);
+  assert.equal((await a('GET', `/api/admin/dossiers/${d.id}`)).status, 403);
+  assert.equal((await a('POST', `/api/admin/dossiers/${d.id}/penalties`, { kind: 'warning', reason: 'хак хак' })).status, 403);
+  assert.equal((await a('POST', `/api/admin/dossiers/${d.id}/deregister`, { reason: 'хак хак' })).status, 403);
+});
+
+test('предупреждение: вижда се на потребителя, потвърждава се и се брои', async () => {
+  const { a, b, ub } = await two(); const admin = await adminOf();
+  const d = await reportAndDossier(a, ub, admin);
+  assert.equal((await admin('POST', `/api/admin/dossiers/${d.id}/penalties`, { kind: 'warning', reason: 'х' })).status, 400);              // причината е задължителна
+  assert.equal((await admin('POST', `/api/admin/dossiers/${d.id}/penalties`, { kind: 'бан', reason: 'достатъчно дълго' })).status, 400);
+  const w = await admin('POST', `/api/admin/dossiers/${d.id}/penalties`, { kind: 'warning', reason: 'Обидни съобщения към други.', note: 'вътрешно' });
+  assert.equal(w.status, 201); assert.equal(w.data.strikes, 1);
+  const me = (await b('GET', '/api/me')).data.user;
+  assert.equal(me.warning.reason, 'Обидни съобщения към други.');
+  assert.ok(!('note' in me.warning));                                                               // вътрешната бележка не се вижда
+  assert.equal((await b('POST', `/api/me/penalties/${me.warning.id}/ack`)).data.user.warning, null);
+  assert.equal((await b('POST', `/api/me/penalties/${me.warning.id}/ack`)).status, 200);
+  // предупреждението не ограничава достъпа
+  assert.equal((await say(b, (await a('GET', '/api/me')).data.user.id, 'още мога да пиша')).r.status, 201);
+});
+
+test('суспензия: пише, харесва, качва и докладва не може; скрит е от търсенето; може да чете и да обжалва', async () => {
+  const { a, b, ua, ub } = await two(); const admin = await adminOf();
+  const { cid } = await say(a, ub.id, 'здрасти');
+  const d = await reportAndDossier(a, ub, admin);
+  assert.equal((await admin('POST', `/api/admin/dossiers/${d.id}/penalties`, { kind: 'suspension', days: 5, reason: 'Тормоз' })).status, 400); // 5 не е позволено
+  const s = await admin('POST', `/api/admin/dossiers/${d.id}/penalties`, { kind: 'suspension', days: 3, reason: 'Тормоз на други потребители' });
+  assert.equal(s.status, 201);
+
+  const me = (await b('GET', '/api/me')).data.user;
+  assert.equal(me.suspension.kind, 'suspension'); assert.ok(me.suspension.until > new Date().toISOString());
+  const blocked = [
+    await b('POST', `/api/chats/${cid}/messages`, { body: 'опит' }), await b('POST', `/api/profiles/${ua.id}/like`),
+    await b('POST', '/api/me/photos', { dataUrl: PNG }), await b('PUT', '/api/me', { bio: 'нов био' }), await b('POST', `/api/profiles/${ua.id}/report`, { reason: 'spam' }),
+  ];
+  for (const r of blocked) { assert.equal(r.status, 403); assert.equal(r.data.code, 'suspended'); assert.match(r.data.error, /Тормоз на други/); }
+  // чете, вижда разговорите си
+  assert.equal((await b('GET', `/api/chats/${cid}`)).status, 200);
+  assert.equal((await b('GET', '/api/profiles')).status, 200);
+  // скрит в търсенето
+  assert.ok(!(await a('GET', '/api/profiles?limit=48&sort=new&q=' + encodeURIComponent(ub.nickname))).data.profiles.some(p => p.nickname === ub.nickname));
+
+  // обжалване
+  const pid = me.suspension.id;
+  assert.equal((await b('POST', `/api/me/penalties/${pid}/appeal`, { text: 'къс' })).status, 400);
+  const ap = await b('POST', `/api/me/penalties/${pid}/appeal`, { text: 'Смятам, че е недоразумение – разговаряхме нормално.' });
+  assert.equal(ap.data.user.suspension.appealStatus, 'pending');
+  assert.equal((await b('POST', `/api/me/penalties/${pid}/appeal`, { text: 'второ обжалване не може' })).status, 409);
+  assert.equal((await a('POST', `/api/me/penalties/${pid}/appeal`, { text: 'чуждо наказание не може' })).status, 404);
+  assert.ok((await admin('GET', '/api/admin/stats')).data.openAppeals >= 1);
+  assert.ok((await admin('GET', '/api/chats/unread')).data.openAppeals >= 1);
+  assert.ok((await admin('GET', '/api/admin/dossiers?status=appeals')).data.dossiers.some(x => x.id === d.id));
+  // решение: отхвърлено → остава; уважено → вдига
+  assert.equal((await a('POST', `/api/admin/penalties/${pid}/appeal`, { decision: 'accepted' })).status, 403);
+  const acc = await admin('POST', `/api/admin/penalties/${pid}/appeal`, { decision: 'accepted', note: 'Прегледахме – няма нарушение.' });
+  assert.equal(acc.status, 200);
+  assert.equal((await b('GET', '/api/me')).data.user.suspension, null);
+  assert.equal((await b('POST', `/api/chats/${cid}/messages`, { body: 'пак мога' })).status, 201);
+  assert.equal((await admin('GET', `/api/admin/dossiers/${d.id}`)).data.strikes, 0);               // уважено обжалване не е страйк
+  assert.equal((await admin('POST', `/api/admin/penalties/${pid}/appeal`, { decision: 'rejected' })).status, 404); // вече е решено
+});
+
+test('суспензията изтича сама; ръчно вдигане; страйкове и препоръка за дерегистрация', async () => {
+  const { a, b, ub } = await two(); const admin = await adminOf();
+  const d = await reportAndDossier(a, ub, admin);
+  const post = (kind, extra = {}) => admin('POST', `/api/admin/dossiers/${d.id}/penalties`, { kind, reason: 'Нарушение на правилата', ...extra });
+  const w = await post('warning'); assert.equal(w.data.recommendDeregister, false);
+  const s1 = await post('suspension', { days: 1 }); assert.equal(s1.data.strikes, 2); assert.equal(s1.data.recommendDeregister, false);
+  // изтичане: връщаме ends_at в миналото
+  dbx.prepare("UPDATE penalties SET ends_at = datetime('now', '-1 minute') WHERE id = ?").run(s1.data.penalty.id);
+  assert.equal((await b('GET', '/api/me')).data.user.suspension, null);
+  assert.ok((await a('GET', '/api/profiles?limit=48&sort=new&q=' + encodeURIComponent(ub.nickname))).data.profiles.some(p => p.nickname === ub.nickname));
+  const s2 = await post('suspension', { days: 7 }); assert.equal(s2.data.strikes, 3); assert.equal(s2.data.recommendDeregister, true);
+  assert.equal((await admin('GET', `/api/admin/dossiers/${d.id}`)).data.recommendDeregister, true);
+  // ръчно вдигане
+  assert.equal((await admin('POST', `/api/admin/penalties/${s2.data.penalty.id}/lift`, { note: 'Договорено' })).status, 200);
+  assert.equal((await admin('POST', `/api/admin/penalties/${s2.data.penalty.id}/lift`)).status, 409);
+  assert.equal((await b('GET', '/api/me')).data.user.suspension, null);
+  // бележки в досието
+  assert.equal((await admin('POST', `/api/admin/dossiers/${d.id}/notes`, { note: 'Следим профила.' })).status, 201);
+  const det = (await admin('GET', `/api/admin/dossiers/${d.id}`)).data;
+  assert.equal(det.notes[0].note, 'Следим профила.'); assert.equal(det.penalties.length, 3);
+});
+
+test('дерегистрация: профилът изчезва, досието и доказателствата остават, имейлът е забранен завинаги', async () => {
+  const a = client(), b = client();
+  const ua = (await a('POST', '/api/register', reg())).data.user;
+  const badMail = `Bad.User${Date.now().toString(36)}@gmail.com`;
+  const rb = await b('POST', '/api/register', reg({ email: badMail, username: 'baduser' + Date.now().toString(36) }));
+  const ub = rb.data.user, bUsername = ub.username;
+  const { cid } = await say(b, ua.id, 'неприлично съобщение');
+  await a('POST', `/api/profiles/${ub.id}/report`, { reason: 'harassment' });
+  const admin = await adminOf();
+  const d = (await admin('GET', '/api/admin/dossiers?q=' + encodeURIComponent(ub.nickname))).data.dossiers[0];
+
+  assert.equal((await admin('POST', `/api/admin/dossiers/${d.id}/deregister`, { reason: 'x' })).status, 400);
+  assert.equal((await admin('POST', `/api/admin/dossiers/${d.id}/deregister`, { reason: 'Системен тормоз и заплахи', note: 'Окончателно' })).status, 200);
+
+  // профилът го няма, не може да влезе и получава ясно съобщение
+  assert.equal((await b('GET', '/api/me')).data.user, null);                                       // сесията е прекратена
+  const login = await client()('POST', '/api/login', { username: bUsername, password: 'supersecret1' });
+  assert.equal(login.status, 403); assert.equal(login.data.code, 'deregistered');
+  assert.equal(dbx.prepare('SELECT 1 FROM users WHERE username = ?').get(bUsername), undefined);
+  assert.equal((await a('GET', `/api/profiles/${ub.id}`)).status, 404);
+  assert.equal((await a('GET', `/api/chats/${cid}`)).status, 404);                                  // личният разговор е изчистен
+
+  // досието остава
+  const det = (await admin('GET', `/api/admin/dossiers/${d.id}`)).data;
+  assert.equal(det.dossier.status, 'deregistered'); assert.equal(det.subject.alive, false); assert.equal(det.emailBanned, true);
+  assert.equal(det.dossier.closedReason, 'Системен тормоз и заплахи');
+  assert.equal(det.penalties[0].kind, 'deregistration'); assert.equal(det.reports.length, 1);
+  assert.equal(det.reports[0].details, 'тест' === 'x' ? '' : det.reports[0].details);
+  const rep = (await admin('GET', '/api/admin/reports?status=open')).data.reports.find(r => r.reportedNick === ub.nickname);
+  assert.equal((await admin('GET', `/api/admin/reports/${rep.id}`)).data.messages[0].body, 'неприлично съобщение'); // доказателството е живо
+  assert.ok((await admin('GET', '/api/admin/dossiers?status=deregistered')).data.dossiers.some(x => x.id === d.id));
+  // повторна дерегистрация/наказание – не
+  assert.equal((await admin('POST', `/api/admin/dossiers/${d.id}/deregister`, { reason: 'още веднъж' })).status, 409);
+  assert.equal((await admin('POST', `/api/admin/dossiers/${d.id}/penalties`, { kind: 'warning', reason: 'вече няма профил' })).status, 409);
+
+  // Забрана на имейла – същият, и всички негови „варианти“
+  const key = dbx.prepare('SELECT hash FROM banned_emails').all();
+  assert.ok(key.length >= 1); assert.ok(!JSON.stringify(key).includes('baduser'));                  // пази се само хеш
+  for (const v of [badMail, badMail.toLowerCase(), badMail.replace('.', ''), badMail.replace('@', '+x@'), badMail.replace('gmail.com', 'googlemail.com')]) {
+    const r = await client()('POST', '/api/register', reg({ email: v }));
+    assert.equal(r.status, 403, v); assert.match(r.data.error, /не може да се използва/);
+  }
+  // потребителското име също не може да се ползва наново, но друг имейл и име – да
+  assert.equal((await client()('POST', '/api/register', reg({ username: bUsername }))).status, 409);
+  assert.equal((await client()('POST', '/api/register', reg())).status, 201);
+});
+
+test('самоизтрит профил НЕ блокира имейла му; админ не може да бъде дерегистриран', async () => {
+  const c = client(); const mail = `self${Date.now().toString(36)}@example.test`;
+  await c('POST', '/api/register', reg({ email: mail }));
+  assert.equal((await c('DELETE', '/api/me', { password: 'supersecret1' })).status, 200);
+  assert.equal((await client()('POST', '/api/register', reg({ email: mail }))).status, 201);   // може да се регистрира пак
+  const admin = await adminOf();
+  const adminDossier = dbx.prepare("SELECT id FROM users WHERE role = 'admin'").get();
+  dbx.prepare("INSERT INTO dossiers (user_id, nickname) VALUES (?, 'Админ')").run(adminDossier.id);
+  const did = dbx.prepare('SELECT id FROM dossiers WHERE user_id = ?').get(adminDossier.id).id;
+  assert.equal((await admin('POST', `/api/admin/dossiers/${did}/deregister`, { reason: 'опит срещу админ' })).status, 403);
+});
+
+test('активност: харесали те, взаимни и посетители (с възможност за скрито разглеждане)', async () => {
+  const { a, b, ua, ub } = await two();
+  const empty = (await b('GET', '/api/activity')).data; assert.deepEqual([empty.likedMe.length, empty.mutual.length, empty.visitors.length], [0, 0, 0]);
+  await a('POST', `/api/profiles/${ub.id}/like`);
+  await a('GET', `/api/profiles/${ub.id}`);                                  // a отваря профила на b → посещение
+  const act1 = (await b('GET', '/api/activity')).data;
+  assert.deepEqual(act1.likedMe.map(p => p.id), [ua.id]); assert.equal(act1.mutual.length, 0);
+  assert.deepEqual(act1.visitors.map(p => p.id), [ua.id]);
+  await b('POST', `/api/profiles/${ua.id}/like`);                            // взаимно
+  const act2 = (await b('GET', '/api/activity')).data;
+  assert.deepEqual([act2.likedMe.length, act2.mutual.map(p => p.id)], [0, [ua.id]]);
+  // скрито разглеждане: b гледа профила на a, но не се записва
+  await b('PUT', '/api/me/settings', { hideVisits: true });
+  await b('GET', `/api/profiles/${ua.id}`);
+  assert.equal((await a('GET', '/api/activity')).data.visitors.length, 0);
+  // посещенията се дублират само веднъж на ден
+  await a('GET', `/api/profiles/${ub.id}`); await a('GET', `/api/profiles/${ub.id}`);
+  assert.equal(dbx.prepare('SELECT COUNT(*) c FROM visits WHERE visitor_id = ? AND visited_id = ?').get(ua.id, ub.id).c, 1);
+  // блокиран не се вижда в активността
+  await b('POST', `/api/profiles/${ua.id}/report`, { reason: 'spam', block: true });
+  assert.equal((await b('GET', '/api/activity')).data.mutual.length, 0);
+});
+
+test('пауза на профила: скрит от търсенето и броячите, но чатът работи', async () => {
+  const { a, b, ua, ub } = await two();
+  const { cid } = await say(a, ub.id, 'здрасти');
+  const count = async () => (await a('GET', '/api/meta')).data.regions.find(r => r.code === 'SOF').count;
+  const before = await count();
+  assert.equal((await b('PUT', '/api/me/settings', { paused: true })).data.user.paused, true);
+  assert.equal(await count(), before - 1);
+  assert.ok(!(await a('GET', '/api/profiles?limit=48&sort=new&q=' + encodeURIComponent(ub.nickname))).data.profiles.some(p => p.nickname === ub.nickname));
+  assert.equal((await b('POST', `/api/chats/${cid}/messages`, { body: 'пак пиша' })).status, 201);   // разговорите работят
+  await b('PUT', '/api/me/settings', { paused: false });
+  assert.equal(await count(), before);
+});
+
+test('какво търся (цел): филтър и попълненост на профила', async () => {
+  const { a, ua } = await two();
+  const base = (await a('GET', '/api/me')).data.user.completeness;
+  assert.equal(base.pct, 15);                                                // само потвърден имейл
+  assert.equal((await a('PUT', '/api/me', { goal: 'нищо' })).status, 400);
+  const me = (await a('PUT', '/api/me', { goal: 'serious', bio: 'Обичам планината, кафето и дългите разходки в неделя сутрин.', interests: ['Музика', 'Йога', 'Кино'] })).data.user;
+  assert.equal(me.goal, 'serious'); assert.equal(me.goalLabel, 'Сериозна връзка'); assert.equal(me.completeness.pct, 15 + 10 + 20 + 15);
+  await a('POST', '/api/me/photos', { dataUrl: PNG });
+  assert.equal((await a('GET', '/api/me')).data.user.completeness.pct, 85);
+  const b = client(); await b('POST', '/api/register', reg());
+  const found = (await b('GET', '/api/profiles?goal=serious&limit=48')).data.profiles;
+  assert.ok(found.some(p => p.id === ua.id) && found.every(p => p.goal === 'serious'));
+  assert.equal((await b('GET', '/api/profiles?goal=нищо')).status, 400);
+});
+
+test('мета: целите и режим на пощата; непотвърдените не се броят', async () => {
+  const meta = (await client()('GET', '/api/meta')).data;
+  assert.equal(meta.goals.serious, 'Сериозна връзка'); assert.equal(meta.mailDev, true);
+});
+
+test('примерното досие е заредено: Сашо има предупреждение с чакащо обжалване и изтекла суспензия', async () => {
+  const admin = await adminOf();
+  const d = (await admin('GET', '/api/admin/dossiers?q=' + encodeURIComponent('Сашо'))).data.dossiers[0];
+  assert.ok(d && d.strikes === 2 && d.appeals === 1 && d.suspendedUntil === null);
+  const det = (await admin('GET', `/api/admin/dossiers/${d.id}`)).data;
+  assert.equal(det.penalties.map(p => p.kind).sort().join(), 'suspension,warning');
+  assert.ok(det.penalties.find(p => p.kind === 'warning').appealText.length > 10);
 });

@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 const db = require('./db');
 const places = require('./places');
 
-const { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS, TEST_GROUPS } = require('./seed-data');
+const { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS, TEST_GROUPS, SAMPLE_PENALTIES } = require('./seed-data');
 
 function birthFor(age, i) {
   const d = new Date();
@@ -17,12 +17,13 @@ function birthFor(age, i) {
 
 function seedReports() {
   const idOf = nick => db.prepare('SELECT id FROM users WHERE nickname_key = ?').get(nick.toLowerCase()).id;
-  const insR = db.prepare(`INSERT INTO reports (reporter_id, reported_id, reporter_nick, reported_nick, reason, details, created_at)
-                           VALUES (?, ?, ?, ?, ?, ?, datetime('now', ?))`);
+  const insR = db.prepare(`INSERT INTO reports (reporter_id, reported_id, reporter_nick, reported_nick, reason, details, created_at, dossier_id)
+                           VALUES (?, ?, ?, ?, ?, ?, datetime('now', ?), ?)`);
+  const dossierFor = (uid, nick) => (db.prepare('SELECT id FROM dossiers WHERE user_id = ?').get(uid) || { id: db.prepare('INSERT INTO dossiers (user_id, nickname) VALUES (?, ?)').run(uid, nick).lastInsertRowid }).id;
   const insM = db.prepare("INSERT INTO report_messages (report_id, from_reporter, body, sent_at, sender_nick, role) VALUES (?, ?, ?, datetime('now', ?), ?, ?)");
   db.transaction(() => {
     for (const r of SAMPLE_REPORTS) {
-      const rid = insR.run(idOf(r.reporter), idOf(r.reported), r.reporter, r.reported, r.reason, r.details, `-${r.ago} minutes`).lastInsertRowid;
+      const rid = insR.run(idOf(r.reporter), idOf(r.reported), r.reporter, r.reported, r.reason, r.details, `-${r.ago} minutes`, dossierFor(idOf(r.reported), r.reported)).lastInsertRowid;
       r.msgs.forEach(([who, text, ago]) => insM.run(rid, who === 'r' ? 1 : 0, text, `-${ago} minutes`, who === 'r' ? r.reporter : r.reported, who === 'r' ? 'reporter' : 'reported'));
     }
   })();
@@ -31,8 +32,8 @@ function seedReports() {
 function seedDemo() {
   if (db.prepare('SELECT 1 FROM users LIMIT 1').get()) return 0;
   const insUser = db.prepare(`
-    INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, place_id, region, bio, is_demo, last_seen)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now', ?))`);
+    INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, place_id, region, bio, is_demo, last_seen, email_verified_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now', ?), datetime('now'))`);
   const insInt = db.prepare('INSERT INTO user_interests (user_id, interest) VALUES (?, ?)');
   // Един и същ неизползваем хеш за всички демо акаунти.
   const dead = bcrypt.hashSync(crypto.randomBytes(24).toString('hex'), 4);
@@ -59,9 +60,26 @@ function seedAdmin() {
   const sofia = places.findPlace('София');
   if (db.prepare("SELECT 1 FROM users WHERE role = 'admin'").get()) return false;
   const dead = bcrypt.hashSync(crypto.randomBytes(24).toString('hex'), 4);
-  db.prepare(`INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, place_id, region, bio, role)
-              VALUES ('admin', ?, 'Админ', 'админ', '1990-01-01', 'other', 'any', ?, ?, ?, 'Администратор на Spark.', 'admin')`).run(dead, sofia.label, sofia.id, sofia.region);
+  db.prepare(`INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, place_id, region, bio, role, email_verified_at)
+              VALUES ('admin', ?, 'Админ', 'админ', '1990-01-01', 'other', 'any', ?, ?, ?, 'Администратор на Spark.', 'admin', datetime('now'))`).run(dead, sofia.label, sofia.id, sofia.region);
+  seedPenalties();
   return true;
+}
+
+// Примерни наказания в досието на „Сашо“ (изискват админ и вече създадени доклади).
+function seedPenalties() {
+  const admin = db.prepare("SELECT id, nickname FROM users WHERE role = 'admin' LIMIT 1").get();
+  if (!admin) return;
+  for (const p of SAMPLE_PENALTIES) {
+    const u = db.prepare('SELECT id FROM users WHERE nickname_key = ?').get(p.target.toLowerCase());
+    const d = u && db.prepare('SELECT id FROM dossiers WHERE user_id = ?').get(u.id);
+    if (!d || db.prepare('SELECT 1 FROM penalties WHERE dossier_id = ? AND kind = ? AND reason = ?').get(d.id, p.kind, p.reason)) continue;
+    const ends = p.days ? `datetime('now', '-${p.ago} minutes', '+${p.days} days')` : 'NULL';
+    const id = db.prepare(`INSERT INTO penalties (dossier_id, user_id, kind, reason, note, days, issued_by, issued_nick, created_at, ends_at, acked_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', ?), ${ends}, ${p.kind === 'warning' ? "datetime('now')" : 'NULL'})`)
+      .run(d.id, u.id, p.kind, p.reason, p.note, p.days || null, admin.id, admin.nickname, `-${p.ago} minutes`).lastInsertRowid;
+    if (p.appeal) db.prepare("UPDATE penalties SET appeal_text = ?, appeal_status = 'pending', appeal_at = datetime('now', ?) WHERE id = ?").run(p.appeal.text, `-${p.appeal.ago} minutes`, id);
+  }
 }
 
 // Тестов обикновен потребител с готови разговори. Без използваема парола; влиза се през /api/demo-user (DEMO_ADMIN=1).
@@ -72,8 +90,8 @@ function seedTestUser() {
   const dead = bcrypt.hashSync(crypto.randomBytes(24).toString('hex'), 4);
   const born = new Date(); born.setFullYear(born.getFullYear() - T.age); born.setMonth(5, 15);
   db.transaction(() => {
-    const id = db.prepare(`INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, place_id, region, bio, is_demo)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`)
+    const id = db.prepare(`INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, place_id, region, bio, is_demo, email_verified_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))`)
       .run(T.username, dead, T.nickname, T.nickname.toLowerCase(), born.toISOString().slice(0, 10), T.gender, T.lookingFor, place.label, place.id, place.region, T.bio).lastInsertRowid;
     T.interests.forEach(i => db.prepare('INSERT INTO user_interests (user_id, interest) VALUES (?, ?)').run(id, i));
     const idOf = nick => db.prepare('SELECT id FROM users WHERE nickname_key = ?').get(nick.toLowerCase());
