@@ -253,7 +253,6 @@ function renderChrome() {
     box.append(
       h('span', { class: 'who', text: state.me.nickname, title: state.me.nickname }),
       h('button', { class: 'btn ghost sm', type: 'button', text: 'Изход', onclick: logout }),
-      h('button', { class: 'menubtn', type: 'button', 'aria-label': 'Меню', title: 'Меню', text: '☰', onclick: openMenuSheet }),
     );
   } else {
     box.append(h('a', { class: 'btn sm', href: '#/', text: 'Вход / Регистрация' }));

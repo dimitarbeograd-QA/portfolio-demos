@@ -441,7 +441,7 @@ body.in-call { overflow: hidden; }
 button[aria-pressed=true].btn:not(.ghost) { animation: likepop .35s var(--ease); } @keyframes likepop { 50% { transform: scale(1.12); } }
 
 /* ═════════ Мобилен вид (≤700px): компактен, с долна лента за навигация. Функциите са същите. ═════════ */
-.tabbar, .menubtn, .sheetclose { display: none; }
+.tabbar, .sheetclose { display: none; }
 @media (max-width: 700px) {
   html { font-size: calc(15px * var(--font-scale)); }
   .bg-orbs i { opacity: .2; filter: blur(70px); }
@@ -452,7 +452,6 @@ button[aria-pressed=true].btn:not(.ghost) { animation: likepop .35s var(--ease);
   .topbar .nav, .topbar .fontctl { display: none !important; }
   .tools { margin-left: auto; width: auto; flex-wrap: nowrap; }
   .userbox .who, .userbox > .btn { display: none; }
-  .menubtn { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 50%; font-size: 1.15rem; cursor: pointer; color: var(--heading); background: var(--faint); border: var(--bw) solid var(--border); }
   .userbox > a.btn { padding: .35rem .8rem; font-size: .85rem; }
   .foot { display: none; }
   main { padding: .75rem .7rem 1rem; }
@@ -1625,7 +1624,6 @@ function renderChrome() {
     box.append(
       h('span', { class: 'who', text: state.me.nickname, title: state.me.nickname }),
       h('button', { class: 'btn ghost sm', type: 'button', text: 'Изход', onclick: logout }),
-      h('button', { class: 'menubtn', type: 'button', 'aria-label': 'Меню', title: 'Меню', text: '☰', onclick: openMenuSheet }),
     );
   } else {
     box.append(h('a', { class: 'btn sm', href: '#', text: 'Вход / Регистрация' }));
