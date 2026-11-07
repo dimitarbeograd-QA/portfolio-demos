@@ -1,5 +1,5 @@
 const app = require('./app');
-const { seedDemo, seedAdmin } = require('./seed');
+const { seedDemo, seedAdmin, seedTestUser } = require('./seed');
 
 if (process.env.SEED_DEMO !== '0') {
   const n = seedDemo();
@@ -8,7 +8,8 @@ if (process.env.SEED_DEMO !== '0') {
 
 if (process.env.DEMO_ADMIN === '1') {
   seedAdmin();
-  console.log('⚠ DEMO_ADMIN=1: вход като администратор без парола е ВКЛЮЧЕН (само за демо).');
+  seedTestUser();
+  console.log('⚠ DEMO_ADMIN=1: вход без парола (администратор и тестов потребител) е ВКЛЮЧЕН (само за демо).');
 }
 
 const PORT = process.env.PORT || 3100;

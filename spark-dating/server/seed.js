@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 const db = require('./db');
 const { CITIES, INTERESTS } = require('./constants');
 
-const { PEOPLE, randomInterests, SAMPLE_REPORTS } = require('./seed-data');
+const { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS } = require('./seed-data');
 
 function birthFor(age, i) {
   const d = new Date();
@@ -62,4 +62,30 @@ function seedAdmin() {
   return true;
 }
 
-module.exports = { seedDemo, seedAdmin };
+// Тестов обикновен потребител с готови разговори. Без използваема парола; влиза се през /api/demo-user (DEMO_ADMIN=1).
+function seedTestUser() {
+  if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(TEST_USER.username)) return false;
+  const T = TEST_USER;
+  const dead = bcrypt.hashSync(crypto.randomBytes(24).toString('hex'), 4);
+  const born = new Date(); born.setFullYear(born.getFullYear() - T.age); born.setMonth(5, 15);
+  const readAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  db.transaction(() => {
+    const id = db.prepare(`INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, bio, is_demo)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`)
+      .run(T.username, dead, T.nickname, T.nickname.toLowerCase(), born.toISOString().slice(0, 10), T.gender, T.lookingFor, T.city, T.bio).lastInsertRowid;
+    T.interests.forEach(i => db.prepare('INSERT INTO user_interests (user_id, interest) VALUES (?, ?)').run(id, i));
+    const ins = db.prepare("INSERT INTO messages (from_id, to_id, body, created_at, read_at) VALUES (?, ?, ?, datetime('now', ?), ?)");
+    for (const c of TEST_CHATS) {
+      const peer = db.prepare('SELECT id FROM users WHERE nickname_key = ?').get(c.peer.toLowerCase());
+      if (!peer) continue;
+      c.msgs.forEach(([who, text, ago], n) => {
+        const fromPeer = who === 'p';
+        const unread = fromPeer && c.unread && n === c.msgs.length - 1;
+        ins.run(fromPeer ? peer.id : id, fromPeer ? id : peer.id, text, `-${ago} minutes`, unread ? null : readAt);
+      });
+    }
+  })();
+  return true;
+}
+
+module.exports = { seedDemo, seedAdmin, seedTestUser };

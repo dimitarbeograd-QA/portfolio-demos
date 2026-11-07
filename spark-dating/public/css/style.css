@@ -18,6 +18,7 @@
   --surface-2: color-mix(in srgb, var(--surface) 80%, white 6%);
   --glow-shadow: 0 0 calc(28px * var(--glow)) color-mix(in srgb, var(--accent) calc(var(--glow) * 45%), transparent);
   --danger: #ff7a90;
+  --alert: #ffb347;
   --ok: #6ee7b7;
   --ease: cubic-bezier(.2, .8, .2, 1);
 }
@@ -273,7 +274,7 @@ input[type=color] { padding: 2px; height: 2.4rem; width: 3.4rem; cursor: pointer
 .bubble.theirs { align-self: flex-start; background: var(--faint); border-bottom-left-radius: 4px; }
 .bubble.accused { align-self: flex-start; background: color-mix(in srgb, var(--danger) 16%, var(--surface)); border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); border-bottom-left-radius: 4px; }
 .daysep { align-self: center; font-size: .74rem; color: var(--muted); padding: .1rem .7rem; border-radius: 999px; background: var(--faint); }
-.composer { display: flex; gap: .6rem; padding: .7rem; border-top: var(--bw) solid var(--border); align-items: flex-end; } .composer textarea { min-height: 0; resize: none; }
+.composer { display: flex; gap: .6rem; padding: .7rem; border-top: var(--bw) solid var(--border); align-items: flex-end; } .composer textarea { min-height: 0; resize: none; flex: 1; min-width: 0; width: auto; } .composer .btn { flex: none; }
 .notice { margin: 0; padding: .4rem 1rem; } p.notice { padding: .5rem .8rem; border-radius: 10px; background: var(--faint); margin: .6rem 0; }
 .backbtn { display: none; }
 @media (max-width: 800px) {
@@ -281,6 +282,27 @@ input[type=color] { padding: 2px; height: 2.4rem; width: 3.4rem; cursor: pointer
   .chatlayout.open .chatside, .chatlayout:not(.open) .chatthread { display: none; }
   .backbtn { display: inline-block; margin-left: 0; }
 }
+/* ── Плаващо кръгче със съобщения ── */
+.demologin { display: grid; gap: .5rem; margin-top: .7rem; }
+.dock { position: fixed; z-index: 70; right: max(1rem, env(safe-area-inset-right, 0px)); bottom: max(1rem, env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; align-items: flex-end; gap: .75rem; }
+.dockbtn { position: relative; width: 3.7rem; height: 3.7rem; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: var(--accent); background: var(--surface); border: 2px solid var(--accent); box-shadow: var(--glow-shadow), 0 8px 24px rgba(0,0,0,.5); transition: transform .2s var(--ease), background .3s, color .3s, border-color .3s; }
+.dockbtn:hover { transform: scale(1.08); } .dockbtn:active { transform: scale(.94); }
+.dockbtn svg { width: 1.7rem; height: 1.7rem; }
+.dockbtn .badge { position: absolute; top: -.35rem; right: -.35rem; margin: 0; background: #fff; color: #2a1300; box-shadow: 0 0 10px var(--alert); }
+/* Ново съобщение: кръгчето сменя цвета си и грее/пулсира */
+.dockbtn.alert { color: #2a1300; border-color: var(--alert); background: linear-gradient(135deg, var(--alert), color-mix(in srgb, var(--alert) 55%, white));
+  box-shadow: 0 0 24px 2px var(--alert), 0 8px 24px rgba(0,0,0,.5); animation: dockpulse 1.8s ease-out infinite, dockshake 5s ease-in-out infinite; }
+@keyframes dockpulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--alert) 75%, transparent), 0 0 18px var(--alert), 0 8px 24px rgba(0,0,0,.5); }
+  70% { box-shadow: 0 0 0 20px transparent, 0 0 34px 4px var(--alert), 0 8px 24px rgba(0,0,0,.5); } 100% { box-shadow: 0 0 0 0 transparent, 0 0 18px var(--alert), 0 8px 24px rgba(0,0,0,.5); } }
+@keyframes dockshake { 0%, 86%, 100% { transform: none; } 89% { transform: rotate(-14deg); } 92% { transform: rotate(12deg); } 95% { transform: rotate(-7deg); } 98% { transform: rotate(4deg); } }
+.dockpanel { width: min(370px, calc(100vw - 2rem)); height: min(500px, calc(100vh - 7.5rem)); display: flex; flex-direction: column; overflow: hidden; transform-origin: bottom right; animation: dockin .3s var(--ease) both; }
+.dockpanel[hidden] { display: none; }
+@keyframes dockin { from { opacity: 0; transform: translateY(14px) scale(.92); } }
+.dockpanel .win-head { gap: .4rem; } .dockpanel .win-head h2 { margin: 0; font-size: 1rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dockpanel .win-head h2 a { color: var(--heading); }
+.dockpanel .xbtn { margin-left: 0; }
+.dockpanel .msgs { padding: .7rem; } .dockpanel .bubble { max-width: 86%; }
+.dockpanel .composer textarea { min-height: 0; }
+
 /* ── Доклади ── */
 .replist { display: grid; gap: .6rem; }
 .rep { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; padding: .65rem .8rem; border: var(--bw) solid var(--border); border-radius: calc(var(--radius) * .6); background: var(--faint); }

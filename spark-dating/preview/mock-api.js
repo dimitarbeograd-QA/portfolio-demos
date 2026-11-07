@@ -184,6 +184,26 @@
     db.rseq = db.reports.length; save();
   }
 
+  // ── Тестов обикновен потребител с готови разговори ──
+  const TEST_ID = 998;
+  route('POST', /^\/api\/demo-user$/, () => {
+    let t = db.users.find(u => u.id === TEST_ID);
+    if (!t) {
+      const T = D.testUser, born = new Date(); born.setFullYear(born.getFullYear() - T.age); born.setMonth(5, 15);
+      t = { id: TEST_ID, username: T.username, pw: hash(Math.random() + ''), nickname: T.nickname, birthDate: born.toISOString().slice(0, 10), gender: T.gender, lookingFor: T.lookingFor, city: T.city,
+        bio: T.bio, interests: [...T.interests], photos: [], theme: null, role: 'user', created: 1000 };
+      db.users.push(t);
+      for (const c of D.testChats) {
+        const peer = demo.find(d => d.nickname === c.peer); if (!peer) continue;
+        c.msgs.forEach(([who, text, ago], n) => {
+          const fromPeer = who === 'p';
+          db.messages.push({ id: ++db.seq, from: fromPeer ? peer.id : t.id, to: fromPeer ? t.id : peer.id, body: text, at: Date.now() - ago * 60000, read: !(fromPeer && c.unread && n === c.msgs.length - 1) });
+        });
+      }
+    }
+    db.session = TEST_ID; save(); return ok({ user: full(t) });
+  });
+
   // ── Съобщения ──
   const CANNED = ['Здравей! Радвам се, че ми писа 😊', 'Звучи интересно, разкажи ми повече.', 'Хаха, добре :) Какво обичаш да правиш през свободното си време?', 'Може би. Как мина денят ти?', 'Супер, и аз мисля така!'];
   const thread = (a, b) => db.messages.filter(m => visibleMsg(m) && ((m.from === a && m.to === b) || (m.from === b && m.to === a))).sort((x, y) => x.id - y.id);

@@ -119,18 +119,34 @@ function loadLocalTheme() {
 
 /* ═══════════ Състояние ═══════════ */
 const state = { me: null, meta: null, unread: 0, openReports: 0 };
+const dock = { open: false, view: 'list', with: null, chats: [], peer: null, msgs: [], timer: null, root: null, panel: null, btn: null, sig: '' };
 let chatWith = null;                 // с кого е отворен чатът
 let viewTimer = null, badgeTimer = null;
 const stopViewTimer = () => { if (viewTimer) { clearInterval(viewTimer); viewTimer = null; } };
+let unreadKnown = false;
+const applyTitleBadge = () => { const base = document.title.replace(/^\(\d+\) /, ''); document.title = state.unread > 0 ? `(${state.unread}) ${base}` : base; };
 async function refreshBadges() {
   if (!state.me) return;
   try {
     const r = await api('GET', '/api/chats/unread');
-    if (r.unread !== state.unread || r.openReports !== state.openReports) { state.unread = r.unread; state.openReports = r.openReports; renderChrome(); }
+    const grew = unreadKnown && r.unread > state.unread;
+    const changed = r.unread !== state.unread || r.openReports !== state.openReports;
+    state.unread = r.unread; state.openReports = r.openReports; unreadKnown = true;
+    if (changed) { renderChrome(); applyTitleBadge(); }
+    if (grew) announceNewMessage();
   } catch { /* следващият опит ще мине */ }
 }
-function startBadges() { if (badgeTimer) return; refreshBadges(); badgeTimer = setInterval(refreshBadges, 20000); }
-function stopBadges() { if (badgeTimer) { clearInterval(badgeTimer); badgeTimer = null; } state.unread = 0; state.openReports = 0; }
+// Ново съобщение: тост + (ако мини чатът е отворен) обновяване на списъка.
+async function announceNewMessage() {
+  try {
+    const { chats } = await api('GET', '/api/chats');
+    const fresh = chats.find(c => c.unread > 0);
+    if (dock.open) { dock.chats = chats; renderDockPanel(false); }
+    if (fresh && !(dock.open && dock.view === 'thread' && dock.with === fresh.profile.id)) toast(`💬 Ново съобщение от ${fresh.profile.nickname}`);
+  } catch { /* ignore */ }
+}
+function startBadges() { if (badgeTimer) return; refreshBadges(); badgeTimer = setInterval(refreshBadges, 8000); }
+function stopBadges() { if (badgeTimer) { clearInterval(badgeTimer); badgeTimer = null; } state.unread = 0; state.openReports = 0; unreadKnown = false; }
 const fmtTime = at => new Date(at).toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit' });
 const fmtDate = at => new Date(at).toLocaleDateString('bg-BG', { day: 'numeric', month: 'short' });
 const fmtWhen = at => (new Date(at).toDateString() === new Date().toDateString() ? fmtTime(at) : `${fmtDate(at)}, ${fmtTime(at)}`);
@@ -163,6 +179,7 @@ function renderChrome() {
   } else {
     box.append(h('a', { class: 'btn sm', href: '#/', text: 'Вход / Регистрация' }));
   }
+  syncDock();
 }
 
 async function logout() {
@@ -195,7 +212,10 @@ function closeModal() {
   document.body.style.overflow = '';
   if (lastFocus && lastFocus.focus) lastFocus.focus();
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if ($('#modalRoot').firstChild) closeModal(); else if (dock.open) toggleDock(false);
+});
 
 /* ═══════════ Начална страница + вход ═══════════ */
 function viewLanding() {
@@ -244,12 +264,18 @@ function viewLanding() {
       h('div', { class: 'field' }, h('label', { for: 'l-user', text: 'Потребителско име' }), u),
       h('div', { class: 'field' }, h('label', { for: 'l-pass', text: 'Парола' }), p),
       err, btn,
-      state.meta.demoAdmin ? h('button', { class: 'btn ghost block', type: 'button', style: 'margin-top:.7rem', text: '🔑 Вход като администратор (без парола)', onclick: async e => {
-        e.currentTarget.disabled = true; err.textContent = '';
-        try { const r = await api('POST', '/api/demo-admin'); await afterAuth(r.user); location.hash = '#/admin'; route(); }
-        catch (x) { err.textContent = x.message; e.currentTarget.disabled = false; }
-      } }) : null,
-      h('p', { class: 'hint', text: state.meta.demoAdmin ? 'Демо режим: администраторският вход е без парола и показва сайта отвътре.' : 'Нямаш профил? Натисни „Регистрация“ по-горе.' }));
+      state.meta.demoAdmin ? h('div', { class: 'demologin' },
+        h('button', { class: 'btn ghost block', type: 'button', text: '👤 Вход като тестов потребител (без парола)', onclick: async e => {
+          e.currentTarget.disabled = true; err.textContent = '';
+          try { const r = await api('POST', '/api/demo-user'); await afterAuth(r.user); }
+          catch (x) { err.textContent = x.message; e.currentTarget.disabled = false; }
+        } }),
+        h('button', { class: 'btn ghost block', type: 'button', text: '🔑 Вход като администратор (без парола)', onclick: async e => {
+          e.currentTarget.disabled = true; err.textContent = '';
+          try { const r = await api('POST', '/api/demo-admin'); await afterAuth(r.user); location.hash = '#/admin'; route(); }
+          catch (x) { err.textContent = x.message; e.currentTarget.disabled = false; }
+        } })) : null,
+      h('p', { class: 'hint', text: state.meta.demoAdmin ? 'Демо режим: входът е без парола. Тестовият потребител има готови разговори; администраторът вижда сайта отвътре.' : 'Нямаш профил? Натисни „Регистрация“ по-горе.' }));
   }
 
   function registerForm() {
@@ -621,11 +647,145 @@ function deleteAccountDialog() {
   { narrow: true, title: 'Изтриване на профил' });
 }
 
+/* ═══════════ Плаващо кръгче със съобщения ═══════════ */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function chatIcon() {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', 'M4 3h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9.5L5 21v-4H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z');
+  path.setAttribute('fill', 'currentColor');
+  svg.append(path);
+  return svg;
+}
+const dockVisible = () => !!state.me && state.me.role !== 'admin' && currentRoute() !== 'messages';
+
+function syncDock() {
+  if (!dockVisible()) {
+    if (dock.root) { dock.root.remove(); dock.root = dock.panel = dock.btn = null; }
+    dockStop();
+    if (!state.me) Object.assign(dock, { open: false, view: 'list', with: null, chats: [], peer: null, msgs: [], sig: '' });
+    return;
+  }
+  if (!dock.root) {
+    dock.panel = h('section', { class: 'win dockpanel', 'aria-label': 'Мини чат', hidden: !dock.open });
+    dock.btn = h('button', { class: 'dockbtn', type: 'button', onclick: () => toggleDock() });
+    dock.root = h('div', { class: 'dock', id: 'dock' }, dock.panel, dock.btn);
+    document.body.append(dock.root);
+    if (dock.open) { dockStart(); dockRefresh(true); }
+  }
+  renderDockButton();
+}
+function renderDockButton() {
+  if (!dock.btn) return;
+  const n = state.unread;
+  dock.btn.className = 'dockbtn' + (n > 0 ? ' alert' : '');
+  dock.btn.setAttribute('aria-expanded', String(dock.open));
+  dock.btn.setAttribute('aria-label', (dock.open ? 'Скрий съобщенията' : 'Покажи съобщенията') + (n > 0 ? `, ${n} нови` : ''));
+  clear(dock.btn).append(chatIcon(), badge(n));
+}
+function toggleDock(force) {
+  if (!dock.root) return;
+  dock.open = force === undefined ? !dock.open : force;
+  dock.panel.hidden = !dock.open;
+  renderDockButton();
+  if (dock.open) { dockStart(); dockRefresh(true); } else dockStop();
+}
+const dockStart = () => { if (!dock.timer) dock.timer = setInterval(() => dockRefresh(false), 5000); };
+function dockStop() { if (dock.timer) { clearInterval(dock.timer); dock.timer = null; } }
+
+function dockOpenWith(id) {
+  if (!dock.root) return;
+  dock.with = id; dock.view = 'thread'; dock.peer = null; dock.msgs = []; dock.sig = '';
+  toggleDock(true);
+  renderDockPanel(true);
+}
+async function dockRefresh(force) {
+  if (!dock.root) return;
+  try {
+    if (dock.view === 'thread' && dock.with) {
+      const r = await api('GET', `/api/chats/${dock.with}`);
+      dock.peer = r.profile; dock.msgs = r.messages;
+      if (state.unread > 0) refreshBadges();
+    }
+    dock.chats = (await api('GET', '/api/chats')).chats;
+  } catch (x) {
+    if (x.status === 404 && dock.view === 'thread') { dock.view = 'list'; dock.with = null; dock.peer = null; }
+  }
+  renderDockPanel(force);
+}
+function dockHead(title, ...btns) {
+  return h('div', { class: 'win-head' }, ...title, ...btns);
+}
+function renderDockPanel(force) {
+  if (!dock.panel || !dock.open) return;
+  const thread = dock.view === 'thread' && dock.with;
+  const last = dock.msgs.length ? dock.msgs[dock.msgs.length - 1].id : 0;
+  const sig = thread ? `t:${dock.with}:${dock.msgs.length}:${last}:${dock.peer ? 1 : 0}` : 'l:' + dock.chats.map(c => `${c.profile.id}.${c.unread}.${c.last.at}`).join('|');
+  if (!force && sig === dock.sig) return;
+  dock.sig = sig;
+  const keep = $('textarea', dock.panel);
+  const draft = keep ? keep.value : '';
+  const hadFocus = keep && document.activeElement === keep;
+  const collapse = h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Скрий', title: 'Скрий (Esc)', text: '▾', onclick: () => toggleDock(false) });
+  clear(dock.panel);
+
+  if (!thread) {
+    const list = h('div', { class: 'chatlist', role: 'list' });
+    if (!dock.chats.length) list.append(h('div', { class: 'empty-state', style: 'padding:1.5rem 1rem' }, h('p', { text: 'Още нямаш разговори.' }), h('p', { class: 'dim', text: 'Натисни „💬 Пиши“ на нечия карта.' })));
+    dock.chats.forEach(c => list.append(h('button', { class: 'chatitem', type: 'button', role: 'listitem', onclick: () => dockOpenWith(c.profile.id) },
+      h('img', { src: mainPhoto(c.profile), alt: '', width: '44', height: '44' }),
+      h('span', { class: 'ci' }, h('b', { text: c.profile.nickname }), h('small', { text: (c.last.mine ? 'Ти: ' : '') + c.last.body })),
+      badge(c.unread))));
+    dock.panel.append(dockHead([h('h2', { text: '💬 Съобщения' })],
+      h('button', { class: 'xbtn', style: 'margin-left:auto', type: 'button', 'aria-label': 'Отвори на цял екран', title: 'Цял екран', text: '⤢', onclick: () => { toggleDock(false); location.hash = '#/messages'; } }), collapse), list);
+    return;
+  }
+
+  const peer = dock.peer;
+  if (!peer || peer.id !== dock.with) { dock.panel.append(dockHead([h('h2', { text: 'Зареждане…' })], h('span', { style: 'margin-left:auto' }), collapse), h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Зареждане' })); return; }
+  const list = h('div', { class: 'msgs', 'aria-live': 'polite' });
+  let day = '';
+  if (!dock.msgs.length) list.append(h('p', { class: 'dim', style: 'text-align:center;margin:auto', text: `Напиши първото съобщение на ${peer.nickname}.` }));
+  for (const m of dock.msgs) {
+    const d = fmtDate(m.at);
+    if (d !== day) { day = d; list.append(h('div', { class: 'daysep', text: d })); }
+    list.append(h('div', { class: 'bubble ' + (m.mine ? 'mine' : 'theirs') }, h('span', { text: m.body }), h('time', { datetime: m.at, text: fmtTime(m.at) })));
+  }
+  const input = h('textarea', { rows: '2', maxlength: '1000', placeholder: 'Напиши съобщение…', 'aria-label': 'Съобщение', onkeydown: e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } } });
+  input.value = draft;
+  const sendBtn = h('button', { class: 'btn sm', type: 'button', text: 'Изпрати', onclick: send });
+  async function send() {
+    const body = input.value.trim();
+    if (!body) return;
+    sendBtn.disabled = true;
+    try {
+      const r = await api('POST', `/api/chats/${peer.id}`, { body });
+      dock.msgs.push(r.message); input.value = ''; renderDockPanel(true);
+      dock.chats = (await api('GET', '/api/chats')).chats;
+    } catch (x) { toast(x.message, true); } finally { sendBtn.disabled = false; }
+  }
+  dock.panel.append(
+    dockHead([
+      h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Към списъка', title: 'Към списъка', text: '←', onclick: () => { dock.view = 'list'; dock.with = null; dock.peer = null; dock.msgs = []; dockRefresh(true); } }),
+      h('img', { class: 'mini', src: mainPhoto(peer), alt: '', width: '32', height: '32' }),
+      h('h2', {}, h('a', { href: '#/discover', text: peer.nickname, onclick: e => { e.preventDefault(); openProfile(peer); } }))],
+      h('button', { class: 'xbtn', style: 'margin-left:auto', type: 'button', 'aria-label': 'Докладвай', title: 'Докладвай', text: '🚩', onclick: () => reportDialog(peer) }),
+      h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Отвори на цял екран', title: 'Цял екран', text: '⤢', onclick: () => { chatWith = peer.id; toggleDock(false); location.hash = '#/messages'; } }),
+      collapse),
+    list, h('div', { class: 'composer' }, input, sendBtn));
+  list.scrollTop = list.scrollHeight;
+  if (hadFocus) input.focus();
+}
+
 /* ═══════════ Съобщения и докладване ═══════════ */
+// „Пиши“ отваря мини чата в кръгчето долу вдясно, за да останеш на страницата, на която си.
 function openChat(id) {
-  chatWith = id;
   closeModal();
-  if (location.hash === '#/messages') route(); else location.hash = '#/messages';
+  if (currentRoute() === 'messages') { chatWith = id; route(); return; }
+  if (!state.me || state.me.role === 'admin') return;
+  syncDock();
+  dockOpenWith(id);
 }
 
 function reportDialog(p) {
@@ -642,7 +802,7 @@ function reportDialog(p) {
     try {
       const r = await api('POST', `/api/profiles/${p.id}/report`, { reason: reason.value, details: details.value, block: block.checked });
       closeModal();
-      if (r.blocked) { disc.profiles = disc.profiles.filter(x => x.id !== p.id); if (chatWith === p.id) chatWith = null; }
+      if (r.blocked) { disc.profiles = disc.profiles.filter(x => x.id !== p.id); if (chatWith === p.id) chatWith = null; if (dock.with === p.id) { dock.with = null; dock.view = 'list'; dock.peer = null; dock.msgs = []; } }
       toast(r.blocked ? 'Докладът е изпратен и профилът е блокиран.' : 'Докладът е изпратен. Благодарим ти!');
       if (r.blocked) route();
     } catch (x) { err.textContent = x.message; btn.disabled = false; }
@@ -910,6 +1070,7 @@ function route() {
   window.scrollTo(0, 0);
   const main = $('#view'); if (main) main.focus({ preventScroll: true });
   document.title = ({ '': 'Spark — запознанства', discover: 'Открий хора · Spark', profile: 'Моят профил · Spark', settings: 'Дизайн и настройки · Spark', admin: 'Админ · Spark', messages: 'Съобщения · Spark' })[r];
+  applyTitleBadge();
 }
 
 /* ═══════════ Старт ═══════════ */

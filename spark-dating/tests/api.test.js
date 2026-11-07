@@ -6,9 +6,10 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 
 const app = require('../server/app');
-const { seedDemo, seedAdmin } = require('../server/seed');
+const { seedDemo, seedAdmin, seedTestUser } = require('../server/seed');
 seedDemo();
 seedAdmin();
+seedTestUser();
 
 let server, base;
 test.before(async () => {
@@ -436,4 +437,31 @@ test('примерните доклади са заредени и броят о
   const admin = await adminClient();
   assert.ok((await admin('GET', '/api/admin/stats')).data.openReports >= 2);
   assert.ok((await admin('GET', '/api/chats/unread')).data.openReports >= 2);
+});
+
+test('тестов потребител: изключен по подразбиране', async () => {
+  delete process.env.DEMO_ADMIN;
+  assert.equal((await client()('POST', '/api/demo-user')).status, 404);
+  assert.equal((await client()('POST', '/api/login', { username: 'tester', password: 'tester123' })).status, 401);
+});
+
+test('тестов потребител: вход без парола, готови разговори и непрочетени', async () => {
+  process.env.DEMO_ADMIN = '1';
+  try {
+    const c = client();
+    const r = await c('POST', '/api/demo-user');
+    assert.equal(r.status, 200);
+    assert.equal(r.data.user.role, 'user');
+    assert.equal(r.data.user.nickname, 'Тестер');
+    assert.equal((await c('GET', '/api/chats/unread')).data.unread, 2);
+    const chats = (await c('GET', '/api/chats')).data.chats;
+    assert.equal(chats.length, 3);
+    assert.deepEqual(chats.map(x => x.unread).sort(), [0, 1, 1]);
+    // не е админ
+    assert.equal((await c('GET', '/api/admin/stats')).status, 403);
+    // четенето на разговор маркира съобщенията като прочетени
+    const teddy = chats.find(x => x.profile.nickname === 'Теди');
+    await c('GET', `/api/chats/${teddy.profile.id}`);
+    assert.equal((await c('GET', '/api/chats/unread')).data.unread, 1);
+  } finally { delete process.env.DEMO_ADMIN; }
 });

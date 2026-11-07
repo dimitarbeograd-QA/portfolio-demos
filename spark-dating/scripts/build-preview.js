@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { CITIES, INTERESTS, REPORT_REASONS } = require('../server/constants');
-const { PEOPLE, randomInterests, SAMPLE_REPORTS } = require('../server/seed-data');
+const { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS } = require('../server/seed-data');
 
 const root = path.join(__dirname, '..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8');
@@ -42,7 +42,7 @@ html, body { height: auto; }
 <footer class="foot"><span>© Spark · само за лица над 18 години</span><span class="dim">Профилите с значка „демо“ са примерни.</span></footer>
 <div id="modalRoot"></div>
 <div id="toasts" role="status" aria-live="polite"></div>
-<script>window.__SPARK_PREVIEW__ = ${safe(JSON.stringify({ cities: CITIES, interests: INTERESTS, people, reportReasons: REPORT_REASONS, sampleReports: SAMPLE_REPORTS }))};</script>
+<script>window.__SPARK_PREVIEW__ = ${safe(JSON.stringify({ cities: CITIES, interests: INTERESTS, people, reportReasons: REPORT_REASONS, sampleReports: SAMPLE_REPORTS, testUser: TEST_USER, testChats: TEST_CHATS }))};</script>
 <script>
 ${safe(read('preview/mock-api.js'))}
 </script>

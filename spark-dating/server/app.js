@@ -573,6 +573,19 @@ app.post('/api/demo-admin', wrap((req, res) => {
   });
 }));
 
+// Вход като тестов обикновен потребител (без парола) – със същата защита като админския.
+app.post('/api/demo-user', wrap((req, res) => {
+  if (!demoAdminOn()) return bad(res, 'Няма такъв маршрут.', 404);
+  const row = db.prepare("SELECT id FROM users WHERE username = 'tester' AND role = 'user'").get();
+  if (!row) return bad(res, 'Няма тестов потребител.', 404);
+  req.session.regenerate(err => {
+    if (err) return bad(res, 'Грешка при създаване на сесия.', 500);
+    req.session.userId = row.id;
+    touch.run(row.id);
+    res.json({ user: meOf(row.id) });
+  });
+}));
+
 app.get('/api/admin/stats', requireAdmin, wrap((req, res) => {
   const one = sql => db.prepare(sql).get().c;
   const byCity = db.prepare("SELECT city, COUNT(*) c FROM users WHERE role <> 'admin' GROUP BY city ORDER BY c DESC, city").all();
