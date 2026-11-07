@@ -6,7 +6,7 @@ const path = require('node:path');
 const { INTERESTS, REPORT_REASONS } = require('../server/constants');
 const places = require('../server/places');
 const placesData = require('../server/places.json');
-const { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS } = require('../server/seed-data');
+const { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS, TEST_GROUPS } = require('../server/seed-data');
 
 const root = path.join(__dirname, '..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8');
@@ -45,9 +45,12 @@ html, body { height: auto; }
 <footer class="foot"><span>© Spark · само за лица над 18 години</span><span class="dim">Профилите с значка „демо“ са примерни.</span></footer>
 <div id="modalRoot"></div>
 <div id="toasts" role="status" aria-live="polite"></div>
-<script>window.__SPARK_PREVIEW__ = ${safe(JSON.stringify({ places: { regions: placesData.regions, obshtini: placesData.obshtini, places: placesData.places }, adminPlaceId: placeIdOf('София'), interests: INTERESTS, people, reportReasons: REPORT_REASONS, sampleReports: SAMPLE_REPORTS, testUser: { ...TEST_USER, placeId: placeIdOf(TEST_USER.city) }, testChats: TEST_CHATS }))};</script>
+<script>window.__SPARK_PREVIEW__ = ${safe(JSON.stringify({ places: { regions: placesData.regions, obshtini: placesData.obshtini, places: placesData.places }, adminPlaceId: placeIdOf('София'), interests: INTERESTS, people, reportReasons: REPORT_REASONS, sampleReports: SAMPLE_REPORTS, testUser: { ...TEST_USER, placeId: placeIdOf(TEST_USER.city) }, testChats: TEST_CHATS, testGroups: TEST_GROUPS }))};</script>
 <script>
 ${safe(read('preview/mock-api.js'))}
+</script>
+<script>
+${safe(read('public/js/emoticons.js'))}
 </script>
 <script>
 ${safe(app)}

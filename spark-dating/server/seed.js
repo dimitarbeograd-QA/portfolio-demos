@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 const db = require('./db');
 const places = require('./places');
 
-const { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS } = require('./seed-data');
+const { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS, TEST_GROUPS } = require('./seed-data');
 
 function birthFor(age, i) {
   const d = new Date();
@@ -19,11 +19,11 @@ function seedReports() {
   const idOf = nick => db.prepare('SELECT id FROM users WHERE nickname_key = ?').get(nick.toLowerCase()).id;
   const insR = db.prepare(`INSERT INTO reports (reporter_id, reported_id, reporter_nick, reported_nick, reason, details, created_at)
                            VALUES (?, ?, ?, ?, ?, ?, datetime('now', ?))`);
-  const insM = db.prepare("INSERT INTO report_messages (report_id, from_reporter, body, sent_at) VALUES (?, ?, ?, datetime('now', ?))");
+  const insM = db.prepare("INSERT INTO report_messages (report_id, from_reporter, body, sent_at, sender_nick, role) VALUES (?, ?, ?, datetime('now', ?), ?, ?)");
   db.transaction(() => {
     for (const r of SAMPLE_REPORTS) {
       const rid = insR.run(idOf(r.reporter), idOf(r.reported), r.reporter, r.reported, r.reason, r.details, `-${r.ago} minutes`).lastInsertRowid;
-      r.msgs.forEach(([who, text, ago]) => insM.run(rid, who === 'r' ? 1 : 0, text, `-${ago} minutes`));
+      r.msgs.forEach(([who, text, ago]) => insM.run(rid, who === 'r' ? 1 : 0, text, `-${ago} minutes`, who === 'r' ? r.reporter : r.reported, who === 'r' ? 'reporter' : 'reported'));
     }
   })();
 }
@@ -71,21 +71,40 @@ function seedTestUser() {
   const place = places.findPlace(T.city);
   const dead = bcrypt.hashSync(crypto.randomBytes(24).toString('hex'), 4);
   const born = new Date(); born.setFullYear(born.getFullYear() - T.age); born.setMonth(5, 15);
-  const readAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
   db.transaction(() => {
     const id = db.prepare(`INSERT INTO users (username, password_hash, nickname, nickname_key, birth_date, gender, looking_for, city, place_id, region, bio, is_demo)
                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`)
       .run(T.username, dead, T.nickname, T.nickname.toLowerCase(), born.toISOString().slice(0, 10), T.gender, T.lookingFor, place.label, place.id, place.region, T.bio).lastInsertRowid;
     T.interests.forEach(i => db.prepare('INSERT INTO user_interests (user_id, interest) VALUES (?, ?)').run(id, i));
-    const ins = db.prepare("INSERT INTO messages (from_id, to_id, body, created_at, read_at) VALUES (?, ?, ?, datetime('now', ?), ?)");
+    const idOf = nick => db.prepare('SELECT id FROM users WHERE nickname_key = ?').get(nick.toLowerCase());
+    const addMsg = db.prepare("INSERT INTO messages (conversation_id, sender_id, kind, body, created_at) VALUES (?, ?, ?, ?, datetime('now', ?))");
+    const setRead = db.prepare('UPDATE conversation_members SET last_read_id = ? WHERE conversation_id = ? AND user_id = ?');
+    const maxId = cid => db.prepare('SELECT MAX(id) x FROM messages WHERE conversation_id = ?').get(cid).x;
     for (const c of TEST_CHATS) {
-      const peer = db.prepare('SELECT id FROM users WHERE nickname_key = ?').get(c.peer.toLowerCase());
+      const peer = idOf(c.peer);
       if (!peer) continue;
-      c.msgs.forEach(([who, text, ago], n) => {
-        const fromPeer = who === 'p';
-        const unread = fromPeer && c.unread && n === c.msgs.length - 1;
-        ins.run(fromPeer ? peer.id : id, fromPeer ? id : peer.id, text, `-${ago} minutes`, unread ? null : readAt);
+      const key = id < peer.id ? `${id}:${peer.id}` : `${peer.id}:${id}`;
+      const cid = db.prepare("INSERT INTO conversations (kind, direct_key, created_by) VALUES ('direct', ?, ?)").run(key, id).lastInsertRowid;
+      db.prepare('INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)').run(cid, id);
+      db.prepare('INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)').run(cid, peer.id);
+      let lastPeerMsg = 0;
+      c.msgs.forEach(([who, text, ago]) => { const mid = addMsg.run(cid, who === 'p' ? peer.id : id, 'user', text, `-${ago} minutes`).lastInsertRowid; if (who === 'p') lastPeerMsg = mid; });
+      setRead.run(c.unread ? lastPeerMsg - 1 : maxId(cid), cid, id);
+      setRead.run(maxId(cid), cid, peer.id);
+    }
+    for (const g of TEST_GROUPS) {
+      const people = g.members.map(idOf).filter(Boolean);
+      const cid = db.prepare("INSERT INTO conversations (kind, title, created_by) VALUES ('group', ?, ?)").run(g.title, id).lastInsertRowid;
+      db.prepare("INSERT INTO conversation_members (conversation_id, user_id, role) VALUES (?, ?, 'owner')").run(cid, id);
+      people.forEach(p => db.prepare('INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)').run(cid, p.id));
+      let lastOther = 0;
+      g.msgs.forEach(([who, text, ago]) => {
+        const sender = who === 'sys' || who === 'me' ? id : (idOf(who) || {}).id;
+        const mid = addMsg.run(cid, sender, who === 'sys' ? 'system' : 'user', text, `-${ago} minutes`).lastInsertRowid;
+        if (who !== 'me' && who !== 'sys') lastOther = mid;
       });
+      setRead.run(g.unread ? lastOther - 1 : maxId(cid), cid, id);
+      people.forEach(p => setRead.run(maxId(cid), cid, p.id));
     }
   })();
   return true;

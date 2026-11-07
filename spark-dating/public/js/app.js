@@ -187,8 +187,8 @@ function placePicker({ initial, onChange }) {
 
 /* ═══════════ Състояние ═══════════ */
 const state = { me: null, meta: null, unread: 0, openReports: 0 };
-const dock = { open: false, view: 'list', with: null, chats: [], peer: null, msgs: [], timer: null, root: null, panel: null, btn: null, sig: '' };
-let chatWith = null;                 // с кого е отворен чатът
+const dock = { open: false, view: 'list', with: null, chats: [], timer: null, root: null, panel: null, btn: null, pane: null };
+let chatWith = null;                 // id на отворения разговор (страница „Съобщения“)
 let viewTimer = null, badgeTimer = null;
 const stopViewTimer = () => { if (viewTimer) { clearInterval(viewTimer); viewTimer = null; } };
 let unreadKnown = false;
@@ -209,8 +209,10 @@ async function announceNewMessage() {
   try {
     const { chats } = await api('GET', '/api/chats');
     const fresh = chats.find(c => c.unread > 0);
-    if (dock.open) { dock.chats = chats; renderDockPanel(false); }
-    if (fresh && !(dock.open && dock.view === 'thread' && dock.with === fresh.profile.id)) toast(`💬 Ново съобщение от ${fresh.profile.nickname}`);
+    dock.chats = chats; if (dock.open && dock.view === 'list') renderDockList();
+    if (fresh && !(dock.open && dock.view === 'thread' && dock.with === fresh.id)) {
+      toast(fresh.kind === 'group' ? `💬 ${fresh.last.senderNick || 'Ново съобщение'} в „${fresh.title}“` : `💬 Ново съобщение от ${fresh.title}`);
+    }
   } catch { /* ignore */ }
 }
 function startBadges() { if (badgeTimer) return; refreshBadges(); badgeTimer = setInterval(refreshBadges, 8000); }
@@ -624,6 +626,23 @@ function resizeImage(file, maxSide = 1100) {
   });
 }
 
+// Смалява голяма снимка до Blob (без fetch на data: – CSP го забранява). Връща null, ако не е нужно смаляване.
+function resizeToBlob(file, maxSide = 1600) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const k = Math.min(1, maxSide / Math.max(img.width, img.height));
+      if (k === 1 && file.size < 1.5 * 1048576) return resolve(null);
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(b => (b ? resolve(b) : reject(new Error('resize'))), 'image/jpeg', 0.86);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('img')); };
+    img.src = url;
+  });
+}
+
 function viewProfile() {
   const v = clear($('#view'));
   const me = state.me;
@@ -775,6 +794,311 @@ function deleteAccountDialog() {
   { narrow: true, title: 'Изтриване на профил' });
 }
 
+/* ═══════════ Чат: общ компонент, групи, файлове, емотиконки ═══════════ */
+const MAX_FILE_MB = 10;
+const fmtSize = n => (n < 1024 ? `${n} B` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`);
+const nickColor = nick => { let x = 7; for (const c of nick) x = (x * 31 + c.codePointAt(0)) >>> 0; return `hsl(${(x % 300) + 20} 85% 74%)`; };
+const fileIcon = name => {
+  const e = (name.split('.').pop() || '').toLowerCase();
+  if (e === 'pdf') return '📕';
+  if (['doc', 'docx', 'odt', 'rtf', 'txt'].includes(e)) return '📝';
+  if (['xls', 'xlsx', 'csv', 'ods'].includes(e)) return '📊';
+  if (['ppt', 'pptx', 'odp'].includes(e)) return '📽️';
+  if (['zip', 'rar', '7z', 'gz', 'tar'].includes(e)) return '🗜️';
+  if (['mp3', 'wav', 'ogg', 'm4a', 'flac'].includes(e)) return '🎵';
+  if (['mp4', 'mov', 'webm', 'avi', 'mkv'].includes(e)) return '🎬';
+  return '📎';
+};
+// Групова аватарка: до 3 инициала върху градиент.
+function groupAvatar(title, size = 44) {
+  let x = 3; for (const c of title) x = (x * 31 + c.codePointAt(0)) >>> 0;
+  const hue = 190 + (x % 80);
+  const el = h('span', { class: 'gav', 'aria-hidden': 'true', text: [...title.trim()][0] ? [...title.trim()][0].toUpperCase() : '👥' });
+  el.style.setProperty('--gh', String(hue)); el.style.setProperty('--gs', size + 'px');
+  return el;
+}
+const chatAvatar = (c, size = 44) => (c.kind === 'group' ? groupAvatar(c.title, size) : h('img', { src: mainPhoto(c.peer), alt: '', width: String(size), height: String(size) }));
+const lastLine = c => {
+  const l = c.last, who = l.system ? '' : l.mine ? 'Ти: ' : c.kind === 'group' && l.senderNick ? l.senderNick + ': ' : '';
+  return who + l.body.replace(/:([a-z]+):/g, (m, n) => (SparkEmo.labels[n] ? '🙂' : m));
+};
+
+// Преглед на снимка на цял екран.
+function openLightbox(att) {
+  openModal(h('div', { class: 'lightbox' }, h('img', { src: att.url, alt: att.name }), h('p', { class: 'dim', text: `${att.name} · ${fmtSize(att.size)}` }),
+    h('a', { class: 'btn sm', href: att.url, download: att.name, text: '⬇ Свали' })), { title: att.name });
+}
+function attachmentNode(a) {
+  if (a.kind === 'image') return h('button', { class: 'att-img', type: 'button', 'aria-label': `Отвори снимка ${a.name}`, onclick: () => openLightbox(a) }, h('img', { src: a.url, alt: a.name, loading: 'lazy' }));
+  return h('a', { class: 'att-file', href: a.url, download: a.name, title: 'Свали' }, h('span', { class: 'ficon', 'aria-hidden': 'true', text: fileIcon(a.name) }),
+    h('span', { class: 'finfo' }, h('b', { text: a.name }), h('small', { text: fmtSize(a.size) })), h('span', { class: 'fdl', 'aria-hidden': 'true', text: '⬇' }));
+}
+
+// Прозорче с емотиконки: „Spark“ (наши) и „Емоджи“ (системни).
+function emojiPopover(onPick, onClose) {
+  let tab = 'spark';
+  const box = h('div', { class: 'emopop', role: 'dialog', 'aria-label': 'Емотиконки' });
+  function paint() {
+    clear(box);
+    const tabs = h('div', { class: 'tabs', role: 'tablist', style: 'margin:.4rem' },
+      h('button', { type: 'button', role: 'tab', 'aria-selected': String(tab === 'spark'), text: '✨ Spark', onclick: () => { tab = 'spark'; paint(); } }),
+      h('button', { type: 'button', role: 'tab', 'aria-selected': String(tab === 'uni'), text: '😊 Емоджи', onclick: () => { tab = 'uni'; paint(); } }));
+    const grid = h('div', { class: 'emogrid' });
+    if (tab === 'spark') {
+      SparkEmo.names.forEach(n => grid.append(h('button', { class: 'emobtn', type: 'button', title: SparkEmo.labels[n], 'aria-label': SparkEmo.labels[n], onclick: () => onPick(` :${n}: `) }, h('img', { src: SparkEmo.url(n), alt: '', width: '34', height: '34' }))));
+    } else {
+      SparkEmo.unicode.forEach(g => { grid.append(h('div', { class: 'emogrp', text: g.title })); g.items.forEach(c => grid.append(h('button', { class: 'emobtn uni', type: 'button', 'aria-label': c, text: c, onclick: () => onPick(c) }))); });
+    }
+    box.append(tabs, grid);
+  }
+  paint();
+  const off = e => { if (!box.contains(e.target) && !e.target.closest('[data-emotoggle]')) { onClose(); } };
+  setTimeout(() => document.addEventListener('mousedown', off), 0);
+  box.close = () => document.removeEventListener('mousedown', off);
+  return box;
+}
+
+// Общият чат панел (за кръгчето и за страницата „Съобщения“).
+function createChatPane({ compact, onBack, onFull, onCollapse, onChanged }) {
+  const root = h('div', { class: 'chatpane' });
+  const headEl = h('div', { class: 'win-head' });
+  const listEl = h('div', { class: 'msgs', 'aria-live': 'polite' });
+  const noteEl = h('p', { class: 'hint notice' });
+  const pendEl = h('div', { class: 'pendingatt', hidden: true });
+  const input = h('textarea', { rows: '2', maxlength: '1000', placeholder: 'Напиши съобщение…', 'aria-label': 'Съобщение',
+    onkeydown: e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } },
+    onpaste: e => { const f = e.clipboardData && [...e.clipboardData.files].find(x => x.type.startsWith('image/')); if (f) { e.preventDefault(); attach(f); } } });
+  const fileIn = h('input', { type: 'file', class: 'sr', 'aria-label': 'Избери файл', onchange: e => { if (e.target.files[0]) attach(e.target.files[0]); e.target.value = ''; } });
+  const sendBtn = h('button', { class: 'btn sm', type: 'button', text: 'Изпрати', onclick: () => send() });
+  const attBtn = h('button', { class: 'xbtn', type: 'button', title: 'Прикачи снимка или файл', 'aria-label': 'Прикачи снимка или файл', text: '📎', onclick: () => fileIn.click() });
+  const emoBtn = h('button', { class: 'xbtn emotoggle', type: 'button', 'data-emotoggle': '1', title: 'Емотиконки', 'aria-label': 'Емотиконки', onclick: () => togglePop() }, SparkEmo.img('smile', 'emo-btn'));
+  const composer = h('div', { class: 'composer' }, attBtn, emoBtn, input, sendBtn, fileIn);
+  root.append(headEl, listEl, noteEl, pendEl, composer);
+
+  let convId = null, data = null, sig = '', pending = null, uploading = false, pop = null, token = 0;
+  const conv = () => (data ? data.conversation : null);
+
+  function togglePop() {
+    if (pop) { closePop(); return; }
+    pop = emojiPopover(txt => { insertAtCursor(txt); }, closePop);
+    composer.append(pop);
+  }
+  function closePop() { if (pop) { pop.close(); pop.remove(); pop = null; } }
+  function insertAtCursor(txt) {
+    const s = input.selectionStart ?? input.value.length, e = input.selectionEnd ?? s;
+    input.value = input.value.slice(0, s) + txt + input.value.slice(e);
+    input.focus(); const pos = s + txt.length; input.setSelectionRange(pos, pos);
+  }
+
+  function setPending(p) {
+    pending = p; clear(pendEl); pendEl.hidden = !p;
+    if (!p) return;
+    pendEl.append(p.previewUrl ? h('img', { src: p.previewUrl, alt: '' }) : h('span', { class: 'ficon', text: fileIcon(p.name) }),
+      h('span', { class: 'finfo' }, h('b', { text: p.name }), h('small', { text: p.uploading ? 'Качва се…' : fmtSize(p.size) })),
+      h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Махни файла', text: '✕', onclick: () => setPending(null) }));
+  }
+
+  async function attach(file) {
+    if (!convId) return;
+    if (file.size > MAX_FILE_MB * 1048576) { toast(`Файлът е твърде голям (макс. ${MAX_FILE_MB} MB).`, true); return; }
+    let body = file, name = file.name || 'снимка.png', previewUrl = null;
+    try {
+      if (/^image\/(jpeg|png|webp)$/.test(file.type)) {
+        const small = await resizeToBlob(file, 1600);
+        if (small) { body = small; name = name.replace(/\.[^.]+$/, '') + '.jpg'; }
+        previewUrl = URL.createObjectURL(body);
+      } else if (file.type === 'image/gif') previewUrl = URL.createObjectURL(file);
+    } catch { /* ако не може да се смали, качваме оригинала */ }
+    setPending({ name, size: body.size, previewUrl, uploading: true }); uploading = true; sendBtn.disabled = true;
+    const mine = convId;
+    try {
+      const res = await fetch(`/api/chats/${mine}/attachments`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(name) }, body });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || 'Файлът не беше качен.');
+      if (mine !== convId) return;
+      setPending({ id: j.attachment.id, name: j.attachment.name, size: j.attachment.size, previewUrl });
+    } catch (x) { setPending(null); toast(x.message, true); }
+    finally { uploading = false; sendBtn.disabled = false; }
+  }
+
+  async function send() {
+    const body = input.value.trim();
+    if ((!body && !(pending && pending.id)) || uploading || !convId) return;
+    sendBtn.disabled = true;
+    try {
+      const r = await api('POST', `/api/chats/${convId}/messages`, { body, attachmentId: pending && pending.id });
+      data.messages.push(r.message); input.value = ''; setPending(null); closePop();
+      renderList(true); onChanged && onChanged();
+    } catch (x) { toast(x.message, true); } finally { sendBtn.disabled = uploading; }
+  }
+
+  function bubble(m) {
+    if (m.kind === 'system') return h('div', { class: 'sysmsg', text: m.body });
+    const group = conv().kind === 'group', r = m.body ? SparkEmo.render(m.body) : null;
+    const el = h('div', { class: 'bubble ' + (m.mine ? 'mine' : 'theirs') + (r && r.big && !m.attachment ? ' emobig' : '') });
+    if (group && !m.mine) el.append(h('small', { class: 'from', style: `color:${nickColor(m.senderNick || '?')}`, text: m.senderNick || 'Изтрит профил' }));
+    if (m.attachment) el.append(attachmentNode(m.attachment));
+    if (r) el.append(h('span', { class: 'txt' }, ...r.nodes));
+    el.append(h('time', { datetime: m.at, text: fmtTime(m.at) }));
+    return el;
+  }
+  function renderList(force) {
+    const msgs = data ? data.messages : [];
+    const next = `${convId}:${msgs.length}:${msgs.length ? msgs[msgs.length - 1].id : 0}`;
+    if (!force && next === sig) return;
+    const nearBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 80 || sig === '';
+    sig = next; clear(listEl);
+    if (!data) { listEl.append(h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Зареждане' })); return; }
+    if (!msgs.length) listEl.append(h('p', { class: 'dim', style: 'text-align:center;margin:auto', text: 'Напиши първото съобщение.' }));
+    let day = '';
+    for (const m of msgs) {
+      const d = fmtDate(m.at);
+      if (d !== day) { day = d; listEl.append(h('div', { class: 'daysep', text: d })); }
+      listEl.append(bubble(m));
+    }
+    if (nearBottom) {
+      listEl.scrollTop = listEl.scrollHeight;
+      // снимките се зареждат по-късно и променят височината → пак до дъното
+      listEl.querySelectorAll('.att-img img').forEach(im => { if (!im.complete) im.addEventListener('load', () => { listEl.scrollTop = listEl.scrollHeight; }, { once: true }); });
+    }
+  }
+  function renderHead() {
+    clear(headEl);
+    const c = conv();
+    if (!c) { headEl.append(h('h2', { text: 'Зареждане…' })); return; }
+    const group = c.kind === 'group';
+    const peer = c.peer;
+    headEl.append(
+      onBack ? h('button', { class: 'xbtn' + (compact ? '' : ' backbtn'), type: 'button', 'aria-label': 'Към разговорите', title: 'Към списъка', text: '←', onclick: onBack }) : null,
+      group ? groupAvatar(c.title, 32) : h('img', { class: 'mini', src: peer ? mainPhoto(peer) : avatar('?', ''), alt: '', width: '32', height: '32' }),
+      h('h2', {}, group
+        ? [h('button', { class: 'linkbtn', type: 'button', text: c.title, title: 'Информация за групата', onclick: () => groupInfoDialog(c, reload) }), h('small', { class: 'dim', text: ` · ${c.members.length} души` })]
+        : [peer ? h('a', { href: '#/discover', text: peer.nickname, onclick: e => { e.preventDefault(); openProfile(peer); } }) : c.title, peer ? h('small', { class: 'dim', text: ` · ${peer.city}` }) : null]),
+      group ? h('button', { class: 'xbtn', style: 'margin-left:auto', type: 'button', 'aria-label': 'Информация за групата', title: 'Група', text: '👥', onclick: () => groupInfoDialog(c, reload) })
+            : (peer ? h('button', { class: 'xbtn', style: 'margin-left:auto', type: 'button', 'aria-label': 'Докладвай', title: 'Докладвай', text: '🚩', onclick: () => reportDialog(peer, c.id) }) : null),
+      onFull ? h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Отвори на цял екран', title: 'Цял екран', text: '⤢', onclick: onFull }) : null,
+      onCollapse ? h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Скрий', title: 'Скрий (Esc)', text: '▾', onclick: onCollapse }) : null);
+    noteEl.textContent = group
+      ? '🔒 Лична група. При доклад администратор вижда последните съобщения и файлове в нея.'
+      : '🔒 Личен разговор. При доклад администратор може да прегледа размяната ви и файловете.';
+  }
+
+  async function reload(force) {
+    if (!convId) return;
+    const mine = ++token;
+    try {
+      const r = await api('GET', `/api/chats/${convId}`);
+      if (mine !== token) return;
+      const grew = !data || r.messages.length !== data.messages.length;
+      data = r;
+      renderHead(); renderList(force);
+      if (grew) onChanged && onChanged(true);
+      if (state.unread > 0) refreshBadges();
+    } catch (x) {
+      if (mine !== token) return;
+      if (x.status === 404) { convId = null; data = null; onChanged && onChanged(true, true); } else if (x.status) toast(x.message, true);
+    }
+  }
+  function open(id) {
+    if (id === convId) { reload(false); return; }
+    convId = id; data = null; sig = ''; closePop(); setPending(null); input.value = '';
+    renderHead(); renderList(true); reload(true);
+  }
+  // Влачене на файл върху панела
+  root.addEventListener('dragover', e => { if (convId && e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); root.classList.add('dropping'); } });
+  root.addEventListener('dragleave', e => { if (!root.contains(e.relatedTarget)) root.classList.remove('dropping'); });
+  root.addEventListener('drop', e => { root.classList.remove('dropping'); const f = e.dataTransfer && e.dataTransfer.files[0]; if (f && convId) { e.preventDefault(); attach(f); } });
+  return { el: root, open, reload, get id() { return convId; }, closePop, focus: () => input.focus() };
+}
+
+// ── Групи ──
+function contactRow(p, cb) {
+  return h('label', { class: 'contact' }, cb, h('img', { src: mainPhoto(p), alt: '', width: '36', height: '36' }), h('span', { class: 'ci' }, h('b', { text: p.nickname }), h('small', { class: 'dim', text: p.city })));
+}
+async function groupCreateDialog(onCreated) {
+  let contacts = [];
+  try { contacts = (await api('GET', '/api/chats/contacts')).contacts; } catch (x) { toast(x.message, true); return; }
+  const err = h('div', { class: 'err', role: 'alert' });
+  const title = h('input', { id: 'grp-title', maxlength: '40', placeholder: 'напр. Приятели от Пловдив' });
+  const boxes = contacts.map(p => ({ p, cb: h('input', { type: 'checkbox', 'aria-label': p.nickname }) }));
+  const count = h('span', { class: 'dim' });
+  const upd = () => { const n = boxes.filter(b => b.cb.checked).length; count.textContent = `Избрани: ${n} от 11`; };
+  boxes.forEach(b => b.cb.addEventListener('change', upd)); upd();
+  const btn = h('button', { class: 'btn', type: 'submit', text: 'Създай групата' });
+  openModal(h('form', { novalidate: true, onsubmit: async e => {
+    e.preventDefault(); err.textContent = '';
+    const ids = boxes.filter(b => b.cb.checked).map(b => b.p.id);
+    if (title.value.trim().length < 2) { err.textContent = 'Дай име на групата (поне 2 символа).'; return; }
+    if (!ids.length) { err.textContent = 'Избери поне един човек.'; return; }
+    btn.disabled = true;
+    try { const r = await api('POST', '/api/chats/groups', { title: title.value, memberIds: ids }); closeModal(); toast('Групата е създадена 🎉'); onCreated(r.id); }
+    catch (x) { err.textContent = x.message; btn.disabled = false; }
+  } },
+    h('div', { class: 'field' }, h('label', { for: 'grp-title', text: 'Име на групата' }), title),
+    h('div', { class: 'field' }, h('span', { class: 'lbl', text: 'Кого да добавиш?' }), h('p', { class: 'hint', style: 'margin:0 0 .5rem', text: 'Можеш да добавяш само хора, с които вече си писал.' }),
+      contacts.length ? h('div', { class: 'contacts' }, boxes.map(b => contactRow(b.p, b.cb)))
+        : h('div', { class: 'empty-state', style: 'padding:1rem' }, h('p', { text: 'Още не си писал на никого.' }), h('a', { class: 'btn sm', href: '#/discover', text: 'Открий хора', onclick: closeModal })), count),
+    err, h('div', { class: 'actions' }, btn, h('button', { class: 'btn ghost', type: 'button', text: 'Отказ', onclick: closeModal }))),
+  { narrow: true, title: 'Нова група' });
+}
+
+async function groupInfoDialog(c, changed) {
+  const me = state.me.id, owner = c.isOwner;
+  const err = h('div', { class: 'err', role: 'alert' });
+  const members = h('div', { class: 'contacts' });
+  c.members.forEach(m => {
+    const row = h('div', { class: 'contact' }, h('img', { src: mainPhoto(m), alt: '', width: '36', height: '36' }),
+      h('span', { class: 'ci' }, h('b', { text: m.nickname + (m.id === me ? ' (ти)' : '') }), h('small', { class: 'dim', text: m.role === 'owner' ? 'създател · ' + m.city : m.city })));
+    if (m.id !== me) {
+      row.append(h('button', { class: 'xbtn', type: 'button', title: 'Докладвай', 'aria-label': `Докладвай ${m.nickname}`, text: '🚩', onclick: () => reportDialog(m, c.id) }));
+      if (owner) {
+        const rm = h('button', { class: 'xbtn', type: 'button', title: 'Премахни от групата', 'aria-label': `Премахни ${m.nickname}`, text: '✕' });
+        let armed = false;
+        rm.addEventListener('click', async () => {
+          if (!armed) { armed = true; rm.textContent = 'Да?'; setTimeout(() => { armed = false; rm.textContent = '✕'; }, 3000); return; }
+          try { await api('DELETE', `/api/chats/${c.id}/members/${m.id}`); closeModal(); toast(`${m.nickname} е премахнат.`); changed(true); } catch (x) { err.textContent = x.message; }
+        });
+        row.append(rm);
+      }
+    }
+    members.append(row);
+  });
+  const body = h('div', {}, h('h3', { style: 'margin-top:0', text: `Членове (${c.members.length}/12)` }), members);
+
+  if (owner) {
+    const name = h('input', { id: 'grp-rename', value: c.title, maxlength: '40' });
+    body.append(h('div', { class: 'field', style: 'margin-top:1rem' }, h('label', { for: 'grp-rename', text: 'Име на групата' }),
+      h('div', { class: 'composer', style: 'padding:0;border:0' }, name, h('button', { class: 'btn sm', type: 'button', text: 'Запази', onclick: async () => {
+        err.textContent = '';
+        try { await api('PUT', `/api/chats/${c.id}`, { title: name.value }); closeModal(); toast('Името е променено.'); changed(true); } catch (x) { err.textContent = x.message; }
+      } }))));
+    try {
+      const have = new Set(c.members.map(m => m.id));
+      const cand = (await api('GET', '/api/chats/contacts')).contacts.filter(p => !have.has(p.id));
+      if (c.members.length < 12) {
+        const boxes = cand.map(p => ({ p, cb: h('input', { type: 'checkbox', 'aria-label': p.nickname }) }));
+        body.append(h('h3', { text: 'Добави хора' }), cand.length ? h('div', { class: 'contacts' }, boxes.map(b => contactRow(b.p, b.cb))) : h('p', { class: 'dim', text: 'Няма други познати, които да добавиш. Пиши на още хора, за да ги добавиш тук.' }),
+          cand.length ? h('div', { class: 'actions' }, h('button', { class: 'btn sm', type: 'button', text: 'Добави избраните', onclick: async () => {
+            err.textContent = '';
+            const ids = boxes.filter(b => b.cb.checked).map(b => b.p.id);
+            if (!ids.length) { err.textContent = 'Избери поне един човек.'; return; }
+            try { await api('POST', `/api/chats/${c.id}/members`, { userIds: ids }); closeModal(); toast('Хората са добавени.'); changed(true); } catch (x) { err.textContent = x.message; }
+          } })) : null);
+      }
+    } catch { /* без списък за добавяне */ }
+  }
+  let armed = false;
+  const leave = h('button', { class: 'btn danger', type: 'button', text: 'Напусни групата' });
+  leave.addEventListener('click', async () => {
+    if (!armed) { armed = true; leave.textContent = 'Сигурен ли си? Натисни пак'; setTimeout(() => { armed = false; leave.textContent = 'Напусни групата'; }, 3500); return; }
+    try { await api('DELETE', `/api/chats/${c.id}/members/${me}`); closeModal(); toast('Напусна групата.'); changed(true, true); } catch (x) { err.textContent = x.message; }
+  });
+  body.append(err, h('hr', { style: 'border:0;border-top:1px solid var(--border);margin:1.2rem 0' }), h('div', { class: 'actions' }, leave));
+  openModal(body, { narrow: true, title: c.title });
+}
+
+async function newGroupFlow() { await groupCreateDialog(id => openConversation(id)); }
+
 /* ═══════════ Плаващо кръгче със съобщения ═══════════ */
 const SVG_NS = 'http://www.w3.org/2000/svg';
 function chatIcon() {
@@ -790,17 +1114,19 @@ const dockVisible = () => !!state.me && state.me.role !== 'admin' && currentRout
 
 function syncDock() {
   if (!dockVisible()) {
-    if (dock.root) { dock.root.remove(); dock.root = dock.panel = dock.btn = null; }
+    if (dock.root) { dock.root.remove(); dock.root = dock.panel = dock.btn = dock.pane = null; }
     dockStop();
-    if (!state.me) Object.assign(dock, { open: false, view: 'list', with: null, chats: [], peer: null, msgs: [], sig: '' });
+    if (!state.me) Object.assign(dock, { open: false, view: 'list', with: null, chats: [] });
     return;
   }
   if (!dock.root) {
     dock.panel = h('section', { class: 'win dockpanel', 'aria-label': 'Мини чат', hidden: !dock.open });
     dock.btn = h('button', { class: 'dockbtn', type: 'button', onclick: () => toggleDock() });
     dock.root = h('div', { class: 'dock', id: 'dock' }, dock.panel, dock.btn);
+    dock.pane = createChatPane({ compact: true, onBack: () => dockBack(), onFull: () => { chatWith = dock.with; toggleDock(false); location.hash = '#/messages'; }, onCollapse: () => toggleDock(false),
+      onChanged: (grew, gone) => { if (gone) dockBack(); else dockLoadList(); } });
     document.body.append(dock.root);
-    if (dock.open) { dockStart(); dockRefresh(true); }
+    if (dock.open) { dockStart(); renderDock(); }
   }
   renderDockButton();
 }
@@ -817,106 +1143,56 @@ function toggleDock(force) {
   dock.open = force === undefined ? !dock.open : force;
   dock.panel.hidden = !dock.open;
   renderDockButton();
-  if (dock.open) { dockStart(); dockRefresh(true); } else dockStop();
+  if (dock.open) { dockStart(); renderDock(); } else { dockStop(); dock.pane.closePop(); }
 }
-const dockStart = () => { if (!dock.timer) dock.timer = setInterval(() => dockRefresh(false), 5000); };
+const dockStart = () => { if (!dock.timer) dock.timer = setInterval(() => { if (dock.view === 'thread') dock.pane.reload(false); else dockLoadList(); }, 5000); };
 function dockStop() { if (dock.timer) { clearInterval(dock.timer); dock.timer = null; } }
-
+function dockBack() { dock.view = 'list'; dock.with = null; renderDock(); }
 function dockOpenWith(id) {
   if (!dock.root) return;
-  dock.with = id; dock.view = 'thread'; dock.peer = null; dock.msgs = []; dock.sig = '';
-  toggleDock(true);
-  renderDockPanel(true);
+  dock.with = id; dock.view = 'thread';
+  if (!dock.open) { dock.open = true; dock.panel.hidden = false; renderDockButton(); dockStart(); }
+  renderDock();
 }
-async function dockRefresh(force) {
-  if (!dock.root) return;
-  try {
-    if (dock.view === 'thread' && dock.with) {
-      const r = await api('GET', `/api/chats/${dock.with}`);
-      dock.peer = r.profile; dock.msgs = r.messages;
-      if (state.unread > 0) refreshBadges();
-    }
-    dock.chats = (await api('GET', '/api/chats')).chats;
-  } catch (x) {
-    if (x.status === 404 && dock.view === 'thread') { dock.view = 'list'; dock.with = null; dock.peer = null; }
-  }
-  renderDockPanel(force);
+async function dockLoadList() {
+  try { dock.chats = (await api('GET', '/api/chats')).chats; } catch { return; }
+  if (dock.view === 'list') renderDockList();
 }
-function dockHead(title, ...btns) {
-  return h('div', { class: 'win-head' }, ...title, ...btns);
-}
-function renderDockPanel(force) {
+function renderDock() {
   if (!dock.panel || !dock.open) return;
-  const thread = dock.view === 'thread' && dock.with;
-  const last = dock.msgs.length ? dock.msgs[dock.msgs.length - 1].id : 0;
-  const sig = thread ? `t:${dock.with}:${dock.msgs.length}:${last}:${dock.peer ? 1 : 0}` : 'l:' + dock.chats.map(c => `${c.profile.id}.${c.unread}.${c.last.at}`).join('|');
-  if (!force && sig === dock.sig) return;
-  dock.sig = sig;
-  const keep = $('textarea', dock.panel);
-  const draft = keep ? keep.value : '';
-  const hadFocus = keep && document.activeElement === keep;
-  const collapse = h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Скрий', title: 'Скрий (Esc)', text: '▾', onclick: () => toggleDock(false) });
   clear(dock.panel);
-
-  if (!thread) {
-    const list = h('div', { class: 'chatlist', role: 'list' });
-    if (!dock.chats.length) list.append(h('div', { class: 'empty-state', style: 'padding:1.5rem 1rem' }, h('p', { text: 'Още нямаш разговори.' }), h('p', { class: 'dim', text: 'Натисни „💬 Пиши“ на нечия карта.' })));
-    dock.chats.forEach(c => list.append(h('button', { class: 'chatitem', type: 'button', role: 'listitem', onclick: () => dockOpenWith(c.profile.id) },
-      h('img', { src: mainPhoto(c.profile), alt: '', width: '44', height: '44' }),
-      h('span', { class: 'ci' }, h('b', { text: c.profile.nickname }), h('small', { text: (c.last.mine ? 'Ти: ' : '') + c.last.body })),
-      badge(c.unread))));
-    dock.panel.append(dockHead([h('h2', { text: '💬 Съобщения' })],
-      h('button', { class: 'xbtn', style: 'margin-left:auto', type: 'button', 'aria-label': 'Отвори на цял екран', title: 'Цял екран', text: '⤢', onclick: () => { toggleDock(false); location.hash = '#/messages'; } }), collapse), list);
-    return;
-  }
-
-  const peer = dock.peer;
-  if (!peer || peer.id !== dock.with) { dock.panel.append(dockHead([h('h2', { text: 'Зареждане…' })], h('span', { style: 'margin-left:auto' }), collapse), h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Зареждане' })); return; }
-  const list = h('div', { class: 'msgs', 'aria-live': 'polite' });
-  let day = '';
-  if (!dock.msgs.length) list.append(h('p', { class: 'dim', style: 'text-align:center;margin:auto', text: `Напиши първото съобщение на ${peer.nickname}.` }));
-  for (const m of dock.msgs) {
-    const d = fmtDate(m.at);
-    if (d !== day) { day = d; list.append(h('div', { class: 'daysep', text: d })); }
-    list.append(h('div', { class: 'bubble ' + (m.mine ? 'mine' : 'theirs') }, h('span', { text: m.body }), h('time', { datetime: m.at, text: fmtTime(m.at) })));
-  }
-  const input = h('textarea', { rows: '2', maxlength: '1000', placeholder: 'Напиши съобщение…', 'aria-label': 'Съобщение', onkeydown: e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } } });
-  input.value = draft;
-  const sendBtn = h('button', { class: 'btn sm', type: 'button', text: 'Изпрати', onclick: send });
-  async function send() {
-    const body = input.value.trim();
-    if (!body) return;
-    sendBtn.disabled = true;
-    try {
-      const r = await api('POST', `/api/chats/${peer.id}`, { body });
-      dock.msgs.push(r.message); input.value = ''; renderDockPanel(true);
-      dock.chats = (await api('GET', '/api/chats')).chats;
-    } catch (x) { toast(x.message, true); } finally { sendBtn.disabled = false; }
-  }
-  dock.panel.append(
-    dockHead([
-      h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Към списъка', title: 'Към списъка', text: '←', onclick: () => { dock.view = 'list'; dock.with = null; dock.peer = null; dock.msgs = []; dockRefresh(true); } }),
-      h('img', { class: 'mini', src: mainPhoto(peer), alt: '', width: '32', height: '32' }),
-      h('h2', {}, h('a', { href: '#/discover', text: peer.nickname, onclick: e => { e.preventDefault(); openProfile(peer); } }))],
-      h('button', { class: 'xbtn', style: 'margin-left:auto', type: 'button', 'aria-label': 'Докладвай', title: 'Докладвай', text: '🚩', onclick: () => reportDialog(peer) }),
-      h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Отвори на цял екран', title: 'Цял екран', text: '⤢', onclick: () => { chatWith = peer.id; toggleDock(false); location.hash = '#/messages'; } }),
-      collapse),
-    list, h('div', { class: 'composer' }, input, sendBtn));
-  list.scrollTop = list.scrollHeight;
-  if (hadFocus) input.focus();
+  if (dock.view === 'thread' && dock.with) { dock.panel.append(dock.pane.el); dock.pane.open(dock.with); return; }
+  dock.panel.append(h('div', { class: 'win-head' }, h('h2', { text: '💬 Съобщения' }),
+    h('button', { class: 'xbtn', style: 'margin-left:auto', type: 'button', 'aria-label': 'Нова група', title: 'Нова група', text: '👥', onclick: () => newGroupFlow() }),
+    h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Отвори на цял екран', title: 'Цял екран', text: '⤢', onclick: () => { toggleDock(false); location.hash = '#/messages'; } }),
+    h('button', { class: 'xbtn', type: 'button', 'aria-label': 'Скрий', title: 'Скрий (Esc)', text: '▾', onclick: () => toggleDock(false) })),
+    h('div', { class: 'chatlist', role: 'list', id: 'dockList' }));
+  renderDockList(); dockLoadList();
+}
+function chatItem(c, onclick, on) {
+  return h('button', { class: 'chatitem' + (on ? ' on' : ''), type: 'button', role: 'listitem', onclick },
+    chatAvatar(c), h('span', { class: 'ci' }, h('b', { text: c.title }), h('small', { text: lastLine(c) })), badge(c.unread));
+}
+function renderDockList() {
+  const box = $('#dockList'); if (!box) return;
+  clear(box);
+  if (!dock.chats.length) { box.append(h('div', { class: 'empty-state', style: 'padding:1.5rem 1rem' }, h('p', { text: 'Още нямаш разговори.' }), h('p', { class: 'dim', text: 'Натисни „💬 Пиши“ на нечия карта или създай група с 👥.' }))); return; }
+  dock.chats.forEach(c => box.append(chatItem(c, () => dockOpenWith(c.id))));
 }
 
 /* ═══════════ Съобщения и докладване ═══════════ */
-// „Пиши“ отваря мини чата в кръгчето долу вдясно, за да останеш на страницата, на която си.
-function openChat(id) {
+// „Пиши“ отваря личен разговор в мини чата (за да останеш на страницата, на която си).
+async function openChat(userId) {
   closeModal();
-  if (currentRoute() === 'messages') { chatWith = id; route(); return; }
   if (!state.me || state.me.role === 'admin') return;
-  syncDock();
-  dockOpenWith(id);
+  try { const r = await api('POST', '/api/chats/direct', { userId }); openConversation(r.id); } catch (x) { toast(x.message, true); }
+}
+function openConversation(id) {
+  if (currentRoute() === 'messages') { chatWith = id; route(); return; }
+  syncDock(); dockOpenWith(id);
 }
 
-function reportDialog(p) {
+function reportDialog(p, convId) {
   const reasons = state.meta.reportReasons;
   const err = h('div', { class: 'err', role: 'alert' });
   const reason = h('select', { id: 'rp-reason' }, h('option', { value: '', text: 'Избери причина…' }), Object.entries(reasons).map(([k, t]) => h('option', { value: k, text: t })));
@@ -928,9 +1204,9 @@ function reportDialog(p) {
     if (!reason.value) { err.textContent = 'Изберете причина за доклада.'; return; }
     btn.disabled = true;
     try {
-      const r = await api('POST', `/api/profiles/${p.id}/report`, { reason: reason.value, details: details.value, block: block.checked });
+      const r = await api('POST', `/api/profiles/${p.id}/report`, { reason: reason.value, details: details.value, block: block.checked, conversationId: convId });
       closeModal();
-      if (r.blocked) { disc.profiles = disc.profiles.filter(x => x.id !== p.id); if (chatWith === p.id) chatWith = null; if (dock.with === p.id) { dock.with = null; dock.view = 'list'; dock.peer = null; dock.msgs = []; } }
+      if (r.blocked) { disc.profiles = disc.profiles.filter(x => x.id !== p.id); chatWith = null; if (dock.view === 'thread') { dock.view = 'list'; dock.with = null; } }
       toast(r.blocked ? 'Докладът е изпратен и профилът е блокиран.' : 'Докладът е изпратен. Благодарим ти!');
       if (r.blocked) route();
     } catch (x) { err.textContent = x.message; btn.disabled = false; }
@@ -939,7 +1215,7 @@ function reportDialog(p) {
     h('div', { class: 'field' }, h('label', { for: 'rp-reason', text: 'Причина' }), reason),
     h('div', { class: 'field' }, h('label', { for: 'rp-details', text: 'Подробности' }), details),
     h('div', { class: 'checkline' }, block, h('label', { for: 'rp-block', text: 'Блокирай този човек (няма да можете да си пишете и да се виждате)' })),
-    h('p', { class: 'hint notice', text: '🔒 С подаването на доклада позволяваш на администратор да прегледа вашата размяна на съобщения с този човек, за да прецени дали докладът е основателен. Другите ти разговори остават лични.' }),
+    h('p', { class: 'hint notice', text: convId ? '🔒 С подаването на доклада позволяваш на администратор да прегледа последните съобщения и файлове в този разговор (при група – от всички в нея), за да прецени доклада. Другите ти разговори остават лични.' : '🔒 С подаването на доклада позволяваш на администратор да прегледа вашата размяна на съобщения с този човек, за да прецени дали докладът е основателен. Другите ти разговори остават лични.' }),
     err, h('div', { class: 'actions' }, btn, h('button', { class: 'btn ghost', type: 'button', text: 'Отказ', onclick: closeModal }))),
   { narrow: true, title: 'Докладване на профил' });
 }
@@ -947,94 +1223,34 @@ function reportDialog(p) {
 function viewMessages() {
   const v = clear($('#view'));
   const listBox = h('div', { class: 'chatlist', role: 'list' });
+  let chats = [];
+  const pane = createChatPane({ compact: false,
+    onBack: () => { chatWith = null; layout.classList.remove('open'); renderList(); showEmpty(); },
+    onChanged: (grew, gone) => { if (gone) { chatWith = null; layout.classList.remove('open'); showEmpty(); } loadList(); } });
   const threadBox = h('section', { class: 'win chatthread', 'aria-label': 'Разговор' });
   const layout = h('div', { class: 'chatlayout' + (chatWith ? ' open' : '') },
     h('aside', { class: 'win chatside', 'aria-label': 'Разговори' },
       h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: 'Разговори' }),
-        h('a', { class: 'btn sm', style: 'margin-left:auto', href: '#/discover', text: '＋ Нов' , title: 'Намери човек, на когото да пишеш' })), listBox),
+        h('button', { class: 'btn sm', style: 'margin-left:auto', type: 'button', text: '👥 Група', title: 'Нова група', onclick: () => newGroupFlow() }),
+        h('a', { class: 'btn ghost sm', href: '#/discover', text: '＋ Чат', title: 'Намери човек, на когото да пишеш' })), listBox),
     threadBox);
   v.append(h('h1', { text: 'Съобщения' }), layout);
 
-  let chats = [], sig = '', peer = null, msgs = [];
-  const toBottom = () => { const m = $('.msgs', threadBox); if (m) m.scrollTop = m.scrollHeight; };
-
+  function showEmpty() {
+    clear(threadBox).append(h('div', { class: 'empty-state' }, h('div', { class: 'big', text: '💬' }), h('h3', { text: 'Избери разговор' }), h('p', { text: 'Или започни нов: избери човек и натисни „Пиши“, или създай група.' }),
+      h('div', { class: 'actions', style: 'justify-content:center' }, h('a', { class: 'btn', href: '#/discover', text: '＋ Нов чат' }), h('button', { class: 'btn ghost', type: 'button', text: '👥 Нова група', onclick: () => newGroupFlow() }))));
+  }
+  function select(id) { chatWith = id; layout.classList.add('open'); clear(threadBox).append(pane.el); pane.open(id); renderList(); }
   function renderList() {
     clear(listBox);
-    if (!chats.length) { listBox.append(h('div', { class: 'empty-state', style: 'padding:1.5rem 1rem' }, h('p', { text: 'Още нямаш разговори.' }),
-      h('p', { class: 'dim', text: 'Намери човек в „Открий хора“ и натисни „💬 Пиши“ на неговата карта.' }), h('a', { class: 'btn', href: '#/discover', text: 'Открий хора' }))); return; }
-    chats.forEach(c => listBox.append(h('button', { class: 'chatitem' + (c.profile.id === chatWith ? ' on' : ''), type: 'button', role: 'listitem', onclick: () => { chatWith = c.profile.id; layout.classList.add('open'); renderList(); loadThread(true); } },
-      h('img', { src: mainPhoto(c.profile), alt: '', width: '44', height: '44' }),
-      h('span', { class: 'ci' }, h('b', { text: c.profile.nickname }), h('small', { text: (c.last.mine ? 'Ти: ' : '') + c.last.body })),
-      badge(c.unread))));
+    if (!chats.length) { listBox.append(h('div', { class: 'empty-state', style: 'padding:1.5rem 1rem' }, h('p', { text: 'Още нямаш разговори.' }), h('p', { class: 'dim', text: 'Намери човек в „Открий хора“ и натисни „💬 Пиши“ на неговата карта.' }), h('a', { class: 'btn', href: '#/discover', text: 'Открий хора' }))); return; }
+    chats.forEach(c => listBox.append(chatItem(c, () => select(c.id), c.id === chatWith)));
   }
-  async function loadList() {
-    try { chats = (await api('GET', '/api/chats')).chats; renderList(); } catch (x) { if (x.status !== 0) toast(x.message, true); }
-  }
+  async function loadList() { try { chats = (await api('GET', '/api/chats')).chats; renderList(); } catch (x) { if (x.status) toast(x.message, true); } }
 
-  function renderThread(force) {
-    if (!chatWith) {
-      clear(threadBox).append(h('div', { class: 'empty-state' }, h('div', { class: 'big', text: '💬' }), h('h3', { text: 'Избери разговор' }), h('p', { text: 'Или започни нов: избери човек и натисни „Пиши“.' }), h('a', { class: 'btn', href: '#/discover', text: '＋ Нов разговор' })));
-      return;
-    }
-    if (!peer || peer.id !== chatWith) { clear(threadBox).append(h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Зареждане' })); sig = ''; return; }
-    const nextSig = msgs.length + ':' + (msgs.length ? msgs[msgs.length - 1].id : 0) + ':' + (peer ? peer.id : 0);
-    if (!force && nextSig === sig) return;
-    sig = nextSig;
-    const keep = $('textarea', threadBox);
-    const draft = keep ? keep.value : '';
-    const list = h('div', { class: 'msgs', 'aria-live': 'polite' });
-    let day = '';
-    if (!msgs.length) list.append(h('p', { class: 'dim', style: 'text-align:center;margin:auto', text: `Напиши първото съобщение на ${peer.nickname}.` }));
-    for (const m of msgs) {
-      const d = fmtDate(m.at);
-      if (d !== day) { day = d; list.append(h('div', { class: 'daysep', text: d })); }
-      list.append(h('div', { class: 'bubble ' + (m.mine ? 'mine' : 'theirs') }, h('span', { text: m.body }), h('time', { datetime: m.at, text: fmtTime(m.at) })));
-    }
-    const input = h('textarea', { id: 'chat-input', rows: '2', maxlength: '1000', placeholder: 'Напиши съобщение…', 'aria-label': 'Съобщение',
-      onkeydown: e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } } });
-    input.value = draft;
-    const sendBtn = h('button', { class: 'btn', type: 'button', text: 'Изпрати', onclick: send });
-    async function send() {
-      const body = input.value.trim();
-      if (!body) return;
-      sendBtn.disabled = true;
-      try {
-        const r = await api('POST', `/api/chats/${peer.id}`, { body });
-        msgs.push(r.message); input.value = ''; renderThread(true); toBottom(); loadList();
-      } catch (x) { toast(x.message, true); } finally { sendBtn.disabled = false; }
-    }
-    clear(threadBox).append(
-      h('div', { class: 'win-head' },
-        h('button', { class: 'xbtn backbtn', type: 'button', 'aria-label': 'Към разговорите', text: '←', onclick: () => { chatWith = null; layout.classList.remove('open'); renderList(); renderThread(true); } }),
-        h('img', { class: 'mini', src: mainPhoto(peer), alt: '', width: '32', height: '32' }),
-        h('h2', {}, h('a', { href: '#/messages', text: peer.nickname, onclick: e => { e.preventDefault(); openProfile(peer); } }), ` · ${peer.city}`),
-        h('button', { class: 'btn danger sm', style: 'margin-left:auto', type: 'button', text: '🚩 Докладвай', onclick: () => reportDialog(peer) })),
-      list,
-      h('p', { class: 'hint notice', text: '🔒 Разговорът е личен. При подаден доклад администратор може да прегледа размяната ви с докладвания човек.' }),
-      h('div', { class: 'composer' }, input, sendBtn));
-    toBottom();
-    if (draft) input.focus();
-  }
-
-  async function loadThread(initial) {
-    if (!chatWith) { renderThread(true); return; }
-    try {
-      const r = await api('GET', `/api/chats/${chatWith}`);
-      const grew = r.messages.length !== msgs.length;
-      peer = r.profile; msgs = r.messages;
-      renderThread(initial);
-      if (initial || grew) toBottom();
-      if (initial || grew) loadList();
-      refreshBadges();
-    } catch (x) {
-      if (x.status === 404) { chatWith = null; layout.classList.remove('open'); renderThread(true); loadList(); } else if (x.status !== 0) toast(x.message, true);
-    }
-  }
-
-  renderThread(true);
+  if (chatWith) { clear(threadBox).append(pane.el); pane.open(chatWith); } else showEmpty();
   loadList();
-  if (chatWith) loadThread(true);
-  viewTimer = setInterval(() => { loadList(); if (chatWith) loadThread(false); }, 5000);
+  viewTimer = setInterval(() => { loadList(); if (chatWith) pane.reload(false); }, 5000);
 }
 
 /* ═══════════ Администрация ═══════════ */
@@ -1144,7 +1360,11 @@ async function openCase(id, changed) {
   for (const m of d.messages) {
     const dd = fmtDate(m.at);
     if (dd !== day) { day = dd; transcript.append(h('div', { class: 'daysep', text: dd })); }
-    transcript.append(h('div', { class: 'bubble ' + (m.fromReporter ? 'mine' : 'accused') }, h('small', { class: 'from', text: m.from + (m.fromReporter ? ' (докладва)' : ' (докладван)') }), h('span', { text: m.body }), h('time', { datetime: m.at, text: fmtTime(m.at) })));
+    if (m.role === 'system') { transcript.append(h('div', { class: 'sysmsg', text: m.body })); continue; }
+    const r = m.body ? SparkEmo.render(m.body) : null;
+    const label = m.from + (m.role === 'reporter' ? ' (докладва)' : m.role === 'reported' ? ' (докладван)' : '');
+    transcript.append(h('div', { class: 'bubble ' + (m.role === 'reporter' ? 'mine' : m.role === 'reported' ? 'accused' : 'theirs') },
+      h('small', { class: 'from', text: label }), m.attachment ? attachmentNode(m.attachment) : null, r ? h('span', { class: 'txt' }, ...r.nodes) : null, h('time', { datetime: m.at, text: fmtTime(m.at) })));
   }
 
   const rep = d.reported;
@@ -1165,8 +1385,8 @@ async function openCase(id, changed) {
           h('p', { class: 'bio', text: rep.bio || 'Няма био.' }),
           rep.otherReports ? h('p', {}, h('span', { class: 'tag st-upheld', text: `⚠️ Още ${rep.otherReports} доклада срещу този профил` })) : null] : null),
       h('div', {},
-        h('h3', { text: 'Разговор (снимка към момента на доклада)' }),
-        h('p', { class: 'hint', text: 'Показан е само разговорът между тези двама души. Останалите чатове не са достъпни.' }),
+        h('h3', { text: d.conversation && d.conversation.group ? `Групов чат „${d.conversation.title}“ (снимка към момента на доклада)` : 'Разговор (снимка към момента на доклада)' }),
+        h('p', { class: 'hint', text: d.conversation && d.conversation.group ? 'Показани са последните съобщения и файлове в тази група. Останалите чатове не са достъпни.' : 'Показан е само разговорът между тези двама души. Останалите чатове не са достъпни.' }),
         transcript)),
     h('div', { class: 'field', style: 'margin-top:1rem' }, h('label', { for: 'case-note', text: 'Бележка на администратора' }), note),
     h('div', { class: 'actions' },

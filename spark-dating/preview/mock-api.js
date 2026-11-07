@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const D = window.__SPARK_PREVIEW__; // { places, interests, people, ... }
-  const KEY = 'spark.preview.v1';
+  const KEY = 'spark.preview.v2', FKEY = 'spark.preview.files.v2';
   window.confirm = () => true; // в прегледа диалозите са недостъпни
   const MIN_AGE = 18, MAX_PHOTOS = 6;
   // ── Области и населени места (ЕКАТТЕ на НСИ) ──
@@ -20,9 +20,12 @@
     const a = [], b = []; for (const p of list) { const i = p.key.indexOf(term); if (i === 0) a.push(p); else if (i > 0) b.push(p); }
     return a.concat(b).slice(0, limit);
   }
-  let db = { users: [], likes: [], seq: 1000, session: null, messages: [], blocks: [], reports: null, rseq: 0 };
+  let db = { users: [], likes: [], seq: 1000, session: null, convs: [], messages: [], blocks: [], reports: null, rseq: 0 };
+  let files = {}; // id -> { id, name, size, kind, url (data URL) } – пазят се отделно, защото са големи
   try { const raw = localStorage.getItem(KEY); if (raw) db = JSON.parse(raw); } catch { /* без storage */ }
-  db.messages = db.messages || []; db.blocks = db.blocks || [];
+  db.messages = db.messages || []; db.blocks = db.blocks || []; db.convs = db.convs || [];
+  try { files = JSON.parse(localStorage.getItem(FKEY) || '{}'); } catch { files = {}; }
+  const saveFiles = () => { try { localStorage.setItem(FKEY, JSON.stringify(files)); } catch { /* квотата е пълна – файловете остават само в тази сесия */ } };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* ignore */ } };
 
   let demo = D.people.map((p, i) => ({ ...p, id: i + 1, isDemo: true, photos: [], lastMin: (i * 37) % 600, likesBase: (i * 5) % 7, created: i }));
@@ -198,18 +201,43 @@
     db.likes = db.likes.filter(l => l.from !== id && l.to !== id); save(); return ok({ ok: true });
   }));
 
+  // ── Разговори: помощни функции ──
+  const userById = id => all().find(u => u.id === id);
+  const nickOf = id => (userById(id) || {}).nickname || 'Изтрит профил';
+  const convById = id => db.convs.find(c => c.id === id);
+  const memberOf = (c, uid) => c && c.members.find(m => m.id === uid);
+  const dkey = (a, b) => (a < b ? a + ':' + b : b + ':' + a);
+  const msgsOf = c => db.messages.filter(m => m.cid === c.id && visibleMsg(m)).sort((x, y) => x.id - y.id);
+  const lastId = c => db.messages.reduce((n, m) => (m.cid === c.id ? Math.max(n, m.id) : n), 0);
+  const attView = id => { const f = files[id]; return f ? { id: f.id, name: f.name, size: f.size, kind: f.kind, url: f.url } : null; };
+  const msgView = (m, me) => ({ id: m.id, kind: m.kind, senderId: m.from || null, senderNick: m.from ? nickOf(m.from) : '', mine: m.from === me.id, body: m.body, at: iso(m.at), attachment: attView(m.att) });
+  const peerUser = (c, me) => { const o = c.members.find(m => m.id !== me.id); const u = o && people().find(x => x.id === o.id); return u && !blocked(me.id, u.id) ? u : null; };
+  const addSystem = (c, actor, text, at = Date.now()) => { const m = { id: ++db.seq, cid: c.id, from: actor, kind: 'system', body: text, att: null, at }; db.messages.push(m); return m.id; };
+  const addMsg = (c, from, body, att, at = Date.now()) => { const m = { id: ++db.seq, cid: c.id, from, kind: 'user', body, att: att || null, at }; db.messages.push(m); if (att && files[att]) files[att].mid = m.id; return m; };
+  function directConv(a, b) {
+    let c = db.convs.find(x => x.kind === 'direct' && x.key === dkey(a, b));
+    if (!c) { c = { id: ++db.seq, kind: 'direct', title: '', key: dkey(a, b), members: [{ id: a, role: 'member', from: 0, read: 0 }, { id: b, role: 'member', from: 0, read: 0 }] }; db.convs.push(c); }
+    return c;
+  }
+  const unreadOf = (c, uid) => { const mm = memberOf(c, uid); return msgsOf(c).filter(m => m.id > mm.read && m.id >= mm.from && m.kind === 'user' && m.from !== uid).length; };
+  const contactsOf = me => {
+    const ids = new Set();
+    db.convs.filter(c => c.kind === 'direct' && memberOf(c, me.id) && db.messages.some(m => m.cid === c.id && m.kind === 'user')).forEach(c => { const o = c.members.find(m => m.id !== me.id); if (o) ids.add(o.id); });
+    return [...ids].map(id => people().find(u => u.id === id)).filter(u => u && !blocked(me.id, u.id));
+  };
+
   // ── Примерни доклади (от демо данните) ──
   if (!db.reports) {
     const idOf = nick => demo.find(d => d.nickname === nick).id;
     db.reports = D.sampleReports.map((r, i) => ({
       id: i + 1, reporterId: idOf(r.reporter), reportedId: idOf(r.reported), reporterNick: r.reporter, reportedNick: r.reported, reason: r.reason, details: r.details,
-      status: 'open', note: '', created: Date.now() - r.ago * 60000, resolvedAt: null, views: 0,
-      msgs: r.msgs.map(([who, body, ago]) => ({ fromReporter: who === 'r', body, at: Date.now() - ago * 60000 })),
+      status: 'open', note: '', created: Date.now() - r.ago * 60000, resolvedAt: null, views: 0, convTitle: '',
+      msgs: r.msgs.map(([who, body, ago]) => ({ role: who === 'r' ? 'reporter' : 'reported', from: who === 'r' ? r.reporter : r.reported, body, at: Date.now() - ago * 60000, att: null })),
     }));
     db.rseq = db.reports.length; save();
   }
 
-  // ── Тестов обикновен потребител с готови разговори ──
+  // ── Тестов обикновен потребител с готови разговори и група ──
   const TEST_ID = 998;
   route('POST', /^\/api\/demo-user$/, () => {
     let t = db.users.find(u => u.id === TEST_ID);
@@ -218,51 +246,138 @@
       t = { id: TEST_ID, username: T.username, pw: hash(Math.random() + ''), nickname: T.nickname, birthDate: born.toISOString().slice(0, 10), gender: T.gender, lookingFor: T.lookingFor, placeId: T.placeId,
         bio: T.bio, interests: [...T.interests], photos: [], theme: null, role: 'user', created: 1000 };
       db.users.push(t);
+      const demoId = nick => (demo.find(d => d.nickname === nick) || {}).id;
       for (const c of D.testChats) {
-        const peer = demo.find(d => d.nickname === c.peer); if (!peer) continue;
-        c.msgs.forEach(([who, text, ago], n) => {
-          const fromPeer = who === 'p';
-          db.messages.push({ id: ++db.seq, from: fromPeer ? peer.id : t.id, to: fromPeer ? t.id : peer.id, body: text, at: Date.now() - ago * 60000, read: !(fromPeer && c.unread && n === c.msgs.length - 1) });
+        const peer = demoId(c.peer); if (!peer) continue;
+        const conv = directConv(t.id, peer); let lastPeer = 0;
+        c.msgs.forEach(([who, text, ago]) => { const m = addMsg(conv, who === 'p' ? peer : t.id, text, null, Date.now() - ago * 60000); if (who === 'p') lastPeer = m.id; });
+        memberOf(conv, t.id).read = c.unread ? lastPeer - 1 : lastId(conv); memberOf(conv, peer).read = lastId(conv);
+      }
+      for (const g of D.testGroups) {
+        const ppl = g.members.map(demoId).filter(Boolean);
+        const conv = { id: ++db.seq, kind: 'group', title: g.title, key: null, members: [{ id: t.id, role: 'owner', from: 0, read: 0 }, ...ppl.map(id => ({ id, role: 'member', from: 0, read: 0 }))] };
+        db.convs.push(conv); let lastOther = 0;
+        g.msgs.forEach(([who, text, ago]) => {
+          const at = Date.now() - ago * 60000;
+          if (who === 'sys') addSystem(conv, t.id, text, at);
+          else { const m = addMsg(conv, who === 'me' ? t.id : demoId(who), text, null, at); if (who !== 'me') lastOther = m.id; }
         });
+        memberOf(conv, t.id).read = g.unread ? lastOther - 1 : lastId(conv); conv.members.forEach(m => { if (m.id !== t.id) m.read = lastId(conv); });
       }
     }
     db.session = TEST_ID; save(); return ok({ user: full(t) });
   });
 
-  // ── Съобщения ──
-  const CANNED = ['Здравей! Радвам се, че ми писа 😊', 'Звучи интересно, разкажи ми повече.', 'Хаха, добре :) Какво обичаш да правиш през свободното си време?', 'Може би. Как мина денят ти?', 'Супер, и аз мисля така!'];
-  const thread = (a, b) => db.messages.filter(m => visibleMsg(m) && ((m.from === a && m.to === b) || (m.from === b && m.to === a))).sort((x, y) => x.id - y.id);
-  const peerOk = (id, me) => id !== me.id && people().some(u => u.id === id) && !blocked(id, me.id);
+  // ── Разговори (лични и групови) ──
+  const CANNED = ['Здравей! Радвам се, че ми писа :smile:', 'Звучи интересно, разкажи ми повече.', 'Хаха, добре :laugh: Какво обичаш да правиш през свободното си време?', 'Може би. Как мина денят ти?', 'Супер, и аз мисля така! :heart:'];
   const rate = {};
+  const canSend = me => { const now = Date.now(); rate[me.id] = (rate[me.id] || []).filter(t => now - t < 60000); if (rate[me.id].length >= 20) return false; rate[me.id].push(now); return true; };
   route('GET', /^\/api\/chats\/unread$/, authed(({ me }) => ok({
-    unread: db.messages.filter(m => visibleMsg(m) && m.to === me.id && !m.read).length,
+    unread: db.convs.filter(c => memberOf(c, me.id)).reduce((n, c) => n + unreadOf(c, me.id), 0),
     openReports: me.role === 'admin' ? db.reports.filter(r => r.status === 'open').length : 0 })));
+  route('GET', /^\/api\/chats\/contacts$/, authed(({ me }) => ok({ contacts: contactsOf(me).map(u => pub(u, me.id)) })));
   route('GET', /^\/api\/chats$/, authed(({ me }) => {
-    const peers = new Map();
-    for (const m of db.messages.filter(visibleMsg)) {
-      if (m.from !== me.id && m.to !== me.id) continue;
-      const o = m.from === me.id ? m.to : m.from; peers.set(o, m);
+    const chats = [];
+    for (const c of db.convs.filter(x => memberOf(x, me.id))) {
+      const mm = memberOf(c, me.id), ms = msgsOf(c).filter(m => m.id >= mm.from); if (!ms.length) continue;
+      const last = ms[ms.length - 1];
+      const lp = { body: last.body || (attView(last.att) || {}).kind === 'image' ? (last.body || '📷 Снимка') : (last.body || '📎 Файл'), mine: last.from === me.id, senderNick: last.from ? nickOf(last.from) : '', system: last.kind === 'system', at: iso(last.at) };
+      if (c.kind === 'direct') { const pr = peerUser(c, me); if (!pr) continue; chats.push({ id: c.id, kind: 'direct', title: pr.nickname, peer: pub(pr, me.id), unread: unreadOf(c, me.id), last: lp, _t: last.id }); }
+      else chats.push({ id: c.id, kind: 'group', title: c.title, members: c.members.length, preview: c.members.slice(0, 3).map(m => ({ id: m.id, nickname: nickOf(m.id) })), unread: unreadOf(c, me.id), last: lp, _t: last.id });
     }
-    const chats = [...peers.entries()].filter(([o]) => peerOk(o, me)).sort((a, b) => b[1].id - a[1].id).map(([o, last]) => ({
-      profile: pub(people().find(u => u.id === o), me.id), unread: db.messages.filter(m => visibleMsg(m) && m.from === o && m.to === me.id && !m.read).length,
-      last: { body: last.body, mine: last.from === me.id, at: iso(last.at) } }));
+    chats.sort((a, b) => b._t - a._t); chats.forEach(c => delete c._t);
     return ok({ chats });
   }));
-  route('GET', /^\/api\/chats\/(\d+)$/, authed(({ m, me }) => {
-    const id = Number(m[1]); if (!peerOk(id, me)) return bad('Разговорът не е намерен.', 404);
-    const list = thread(me.id, id); db.messages.forEach(x => { if (x.to === me.id && x.from === id && visibleMsg(x)) x.read = true; }); save();
-    return ok({ profile: pub(people().find(u => u.id === id), me.id), messages: list.slice(-200).map(x => ({ id: x.id, mine: x.from === me.id, body: x.body, at: iso(x.at) })) });
+  route('POST', /^\/api\/chats\/direct$/, authed(({ body: b, me }) => {
+    if (me.role === 'admin') return bad('Администраторът не води разговори.', 403);
+    const id = Number(b.userId);
+    if (id === me.id || !people().some(u => u.id === id) || blocked(me.id, id)) return bad('Не можете да пишете на този профил.', 403);
+    const c = directConv(me.id, id); save(); return ok({ id: c.id });
   }));
-  route('POST', /^\/api\/chats\/(\d+)$/, authed(({ m, body: b, me }) => {
-    const id = Number(m[1]); if (!peerOk(id, me)) return bad('Не можете да пишете на този профил.', 403);
-    const text = String(b.body || '').trim();
-    if (!text) return bad('Съобщението е празно.'); if (text.length > 1000) return bad('Съобщението може да е до 1000 символа.');
-    const now = Date.now(); rate[me.id] = (rate[me.id] || []).filter(t => now - t < 60000);
-    if (rate[me.id].length >= 20) return bad('Изпращате твърде бързо. Изчакайте малко.', 429); rate[me.id].push(now);
-    const msg = { id: ++db.seq, from: me.id, to: id, body: text, at: now, read: false }; db.messages.push(msg);
-    const other = demo.find(d => d.id === id);
-    if (other) db.messages.push({ id: ++db.seq, from: id, to: me.id, body: CANNED[db.messages.length % CANNED.length], at: now + 2500, read: false }); // демо профилите отговарят
-    save(); return ok({ message: { id: msg.id, mine: true, body: msg.body, at: iso(msg.at) } }, 201);
+  const cleanTitle = t => String(t || '').trim().replace(/\s+/g, ' ');
+  const pickMembers = (me, raw, existing = []) => {
+    const ids = [...new Set((Array.isArray(raw) ? raw : []).map(Number).filter(n => Number.isInteger(n) && n > 0 && n !== me.id))];
+    const allowed = new Set(contactsOf(me).map(u => u.id));
+    return { ids: ids.filter(i => !existing.includes(i)), invalid: ids.some(i => !allowed.has(i)) };
+  };
+  route('POST', /^\/api\/chats\/groups$/, authed(({ body: b, me }) => {
+    if (me.role === 'admin') return bad('Администраторът не води разговори.', 403);
+    const title = cleanTitle(b.title); if (title.length < 2 || title.length > 40) return bad('Името на групата трябва да е 2–40 символа.');
+    const { ids, invalid } = pickMembers(me, b.memberIds);
+    if (invalid) return bad('В група може да добавяш само хора, с които си писал.');
+    if (!ids.length) return bad('Избери поне един човек за групата.');
+    if (ids.length + 1 > 12) return bad('В група има най-много 12 души.');
+    const c = { id: ++db.seq, kind: 'group', title, key: null, members: [{ id: me.id, role: 'owner', from: 0, read: 0 }, ...ids.map(id => ({ id, role: 'member', from: 0, read: 0 }))] };
+    db.convs.push(c); addSystem(c, me.id, `${me.nickname} създаде групата „${title}“`); save(); return ok({ id: c.id }, 201);
+  }));
+  const threadOf = (c, me) => {
+    const mm = memberOf(c, me.id), ms = msgsOf(c).filter(m => m.id >= mm.from).slice(-200);
+    const conversation = { id: c.id, kind: c.kind, title: c.title, isOwner: mm.role === 'owner', createdAt: iso(Date.now()) };
+    if (c.kind === 'direct') { const pr = peerUser(c, me); conversation.peer = pr ? pub(pr, me.id) : null; conversation.title = pr ? pr.nickname : 'Недостъпен профил'; }
+    else conversation.members = c.members.map(m => userById(m.id)).filter(Boolean).map(u => ({ ...pub(u, me.id), role: memberOf(c, u.id).role }));
+    return { conversation, messages: ms.map(m => msgView(m, me)) };
+  };
+  route('GET', /^\/api\/chats\/(\d+)$/, authed(({ m, me }) => {
+    const c = convById(Number(m[1])); if (!memberOf(c, me.id)) return bad('Разговорът не е намерен.', 404);
+    if (c.kind === 'direct' && !peerUser(c, me)) return bad('Разговорът не е намерен.', 404);
+    const t = threadOf(c, me); memberOf(c, me.id).read = lastId(c); save(); return ok(t);
+  }));
+  route('POST', /^\/api\/chats\/(\d+)\/messages$/, authed(({ m, body: b, me }) => {
+    const c = convById(Number(m[1])); if (!memberOf(c, me.id)) return bad('Разговорът не е намерен.', 404);
+    if (c.kind === 'direct' && !peerUser(c, me)) return bad('Не можете да пишете на този профил.', 403);
+    const text = String(b.body || '').trim(); if (text.length > 1000) return bad('Съобщението може да е до 1000 символа.');
+    let att = null;
+    if (b.attachmentId) { att = files[b.attachmentId]; if (!att || att.uploader !== me.id || att.mid) return bad('Файлът не е наличен. Качи го отново.'); }
+    if (!text && !att) return bad('Съобщението е празно.');
+    if (!canSend(me)) return bad('Изпращате твърде бързо. Изчакайте малко.', 429);
+    const msg = addMsg(c, me.id, text, att && att.id);
+    if (att) saveFiles();
+    // Демо профилите отговарят (един член на групата, след малко)
+    const bots = c.members.filter(x => x.id !== me.id && demo.some(d => d.id === x.id));
+    if (bots.length) { const bot = bots[db.messages.length % bots.length]; addMsg(c, bot.id, CANNED[db.messages.length % CANNED.length], null, Date.now() + 2500); }
+    save(); return ok({ message: msgView(msg, me) }, 201);
+  }));
+  const BLOCKED_EXT = new Set(['exe', 'bat', 'cmd', 'com', 'scr', 'msi', 'ps1', 'vbs', 'js', 'mjs', 'jar', 'sh', 'app', 'apk', 'dll', 'lnk', 'html', 'htm', 'xhtml', 'svg', 'hta', 'reg']);
+  const readBlob = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
+  route('POST', /^\/api\/chats\/(\d+)\/attachments$/, authed(async ({ m, blob, headers, me }) => {
+    const c = convById(Number(m[1])); if (!memberOf(c, me.id)) return bad('Разговорът не е намерен.', 404);
+    if (c.kind === 'direct' && !peerUser(c, me)) return bad('Не можете да пишете на този профил.', 403);
+    if (!blob || !blob.size) return bad('Празен файл.');
+    if (blob.size > 10 * 1024 * 1024) return bad('Файлът е твърде голям (макс. 10 MB).', 413);
+    let name = ''; try { name = decodeURIComponent(headers['X-Filename'] || ''); } catch { name = headers['X-Filename'] || ''; }
+    name = name.replace(/[\\/]/g, '_').replace(/[\u0000-\u001f<>:"|?*]/g, '').trim().slice(-120) || 'файл';
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    if (name.includes('.') && BLOCKED_EXT.has(ext)) return bad(`Файлове от тип .${ext} не са позволени.`);
+    if (!canSend(me)) return bad('Изпращате твърде бързо. Изчакайте малко.', 429);
+    const url = await readBlob(blob);
+    const kind = /^data:image\/(jpeg|png|webp|gif);/.test(url) ? 'image' : 'file';
+    const f = { id: ++db.seq, name, size: blob.size, kind, url, uploader: me.id, mid: null }; files[f.id] = f; saveFiles();
+    return ok({ attachment: { id: f.id, name, size: f.size, kind, url } }, 201);
+  }));
+  const ownerOnly = (m, me) => { const c = convById(Number(m[1])); if (!c || c.kind !== 'group' || !memberOf(c, me.id)) return [null, bad('Групата не е намерена.', 404)]; if (memberOf(c, me.id).role !== 'owner') return [null, bad('Само създателят на групата може да прави това.', 403)]; return [c, null]; };
+  route('PUT', /^\/api\/chats\/(\d+)$/, authed(({ m, body: b, me }) => {
+    const [c, err] = ownerOnly(m, me); if (err) return err;
+    const title = cleanTitle(b.title); if (title.length < 2 || title.length > 40) return bad('Името на групата трябва да е 2–40 символа.');
+    c.title = title; addSystem(c, me.id, `Групата беше преименувана на „${title}“`); save(); return ok({ ok: true });
+  }));
+  route('POST', /^\/api\/chats\/(\d+)\/members$/, authed(({ m, body: b, me }) => {
+    const [c, err] = ownerOnly(m, me); if (err) return err;
+    const { ids, invalid } = pickMembers(me, b.userIds, c.members.map(x => x.id));
+    if (invalid) return bad('Може да добавяш само хора, с които си писал.');
+    if (!ids.length) return bad('Няма кого да добавиш.');
+    if (c.members.length + ids.length > 12) return bad('В група има най-много 12 души.');
+    for (const u of ids) { const sid = addSystem(c, me.id, `${me.nickname} добави ${nickOf(u)}`); c.members.push({ id: u, role: 'member', from: sid, read: sid }); }
+    save(); return ok({ ok: true }, 201);
+  }));
+  route('DELETE', /^\/api\/chats\/(\d+)\/members\/(\d+)$/, authed(({ m, me }) => {
+    const c = convById(Number(m[1])), uid = Number(m[2]);
+    if (!c || c.kind !== 'group' || !memberOf(c, me.id) || !memberOf(c, uid)) return bad('Групата не е намерена.', 404);
+    if (uid !== me.id && memberOf(c, me.id).role !== 'owner') return bad('Само създателят на групата може да премахва хора.', 403);
+    const wasOwner = memberOf(c, uid).role === 'owner';
+    c.members = c.members.filter(x => x.id !== uid);
+    if (!c.members.length) { db.convs = db.convs.filter(x => x !== c); db.messages = db.messages.filter(x => x.cid !== c.id); }
+    else { if (wasOwner) c.members[0].role = 'owner'; addSystem(c, me.id, uid === me.id ? `${nickOf(uid)} напусна групата` : `${nickOf(uid)} беше премахнат от групата`); }
+    save(); return ok({ ok: true });
   }));
 
   // ── Доклади ──
@@ -273,8 +388,13 @@
     if (!Object.hasOwn(D.reportReasons, b.reason)) return bad('Изберете причина за доклада.');
     const details = String(b.details || '').trim(); if (details.length > 500) return bad('Описанието може да е до 500 символа.');
     if (db.reports.some(r => r.reporterId === me.id && r.reportedId === id && r.status === 'open')) return bad('Вече сте докладвали този профил. Администраторите разглеждат доклада.', 409);
+    let c = null;
+    if (b.conversationId) { c = convById(Number(b.conversationId)); if (!memberOf(c, me.id) || !memberOf(c, id)) return bad('Разговорът не е намерен.', 404); }
+    else c = db.convs.find(x => x.kind === 'direct' && x.key === dkey(me.id, id)) || null;
+    const msgs = c ? msgsOf(c).filter(x => x.id >= memberOf(c, me.id).from).slice(-200).map(x => ({
+      role: x.kind === 'system' ? 'system' : x.from === me.id ? 'reporter' : x.from === id ? 'reported' : 'other', from: x.kind === 'system' ? '' : nickOf(x.from), body: x.body, at: x.at, att: x.att })) : [];
     db.reports.push({ id: ++db.rseq, reporterId: me.id, reportedId: id, reporterNick: me.nickname, reportedNick: target.nickname, reason: b.reason, details, status: 'open', note: '', created: Date.now(), resolvedAt: null, views: 0,
-      msgs: thread(me.id, id).slice(-200).map(x => ({ fromReporter: x.from === me.id, body: x.body, at: x.at })) });
+      convTitle: c && c.kind === 'group' ? c.title : '', msgs });
     if (b.block && !blocked(me.id, id)) db.blocks.push({ from: me.id, to: id });
     save(); return ok({ ok: true, blocked: !!b.block }, 201);
   }));
@@ -293,7 +413,8 @@
     const reported = u ? { id: u.id, nickname: u.nickname, age: ageOf(u), ...placeFields(u), gender: u.gender, bio: u.bio, isDemo: !!u.isDemo, createdAt: iso(Date.now() - (u.created || 0) * 1000), photos: u.photos.length,
       otherReports: db.reports.filter(x => x.reportedId === u.id && x.id !== r.id).length } : null;
     return ok({ report: { ...rrow(r), details: r.details, adminNote: r.note, reporterStillExists: !!all().find(x => x.id === r.reporterId), reportedStillExists: !!u }, reported,
-      messages: r.msgs.map((x, i) => ({ id: i + 1, fromReporter: x.fromReporter, from: x.fromReporter ? r.reporterNick : r.reportedNick, body: x.body, at: iso(x.at) })), views: r.views });
+      messages: r.msgs.map((x, i) => ({ id: i + 1, fromReporter: x.role === 'reporter', role: x.role, from: x.from, body: x.body, at: iso(x.at), attachment: attView(x.att) })),
+      conversation: r.convTitle ? { title: r.convTitle, group: true } : null, views: r.views });
   }));
   route('PUT', /^\/api\/admin\/reports\/(\d+)$/, adminOnly(({ m, body: b }) => {
     const r = db.reports.find(x => x.id === Number(m[1])); if (!r) return bad('Докладът не е намерен.', 404);
@@ -307,10 +428,11 @@
     const u = new URL(String(url), 'http://x');
     if (!u.pathname.startsWith('/api/')) return realFetch(url, opt);
     const method = (opt.method || 'GET').toUpperCase();
-    let body = {}; try { body = opt.body ? JSON.parse(opt.body) : {}; } catch { /* ignore */ }
+    const isBlob = typeof Blob !== 'undefined' && opt.body instanceof Blob;
+    let body = {}; try { body = opt.body && !isBlob ? JSON.parse(opt.body) : {}; } catch { /* ignore */ }
     for (const [m, re, fn] of routes) {
       const match = re.exec(u.pathname);
-      if (m === method && match) { await new Promise(r => setTimeout(r, 60)); return fn({ body, q: u.searchParams, m: match }); }
+      if (m === method && match) { await new Promise(r => setTimeout(r, 60)); return fn({ body, blob: isBlob ? opt.body : null, headers: opt.headers || {}, q: u.searchParams, m: match }); }
     }
     return bad('Няма такъв маршрут.', 404);
   };

@@ -372,7 +372,9 @@ app.delete('/api/me', requireAuth, wrap((req, res) => {
   if (typeof password !== 'string' || !bcrypt.compareSync(password, row.password_hash)) {
     return bad(res, 'Паролата е грешна.', 403);
   }
+  cleanupBeforeUserDelete(id);
   db.prepare('DELETE FROM users WHERE id = ?').run(id);
+  repairGroups();
   files.forEach(f => fs.rm(path.join(db.UPLOAD_DIR, f.filename), { force: true }, () => {}));
   req.session.destroy(() => { res.clearCookie('spark.sid'); res.json({ ok: true }); });
 }));
@@ -491,13 +493,20 @@ app.post('/api/profiles/:id/like', requireAuth, wrap((req, res) => {
   res.json({ profile: publicProfiles([row], from)[0] });
 }));
 
-// ── Съобщения, блокиране, доклади ──
+// ── Разговори (лични и групови), прикачени файлове, блокиране, доклади ──
+const MAX_GROUP = 12;
+const MAX_FILE = 10 * 1024 * 1024;
 const isBlockedStmt = db.prepare('SELECT 1 FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)');
 function blockedBetween(a, b) { return !!isBlockedStmt.get(a, b, b, a); }
 const iso = t => t.replace(' ', 'T') + 'Z';
 const findPeer = id => db.prepare("SELECT * FROM users WHERE id = ? AND role <> 'admin'").get(id);
+const memberRow = (cid, uid) => db.prepare('SELECT * FROM conversation_members WHERE conversation_id = ? AND user_id = ?').get(cid, uid);
+const convRow = cid => db.prepare('SELECT * FROM conversations WHERE id = ?').get(cid);
+const membersOf = cid => db.prepare('SELECT m.*, u.* , m.role AS mrole FROM conversation_members m JOIN users u ON u.id = m.user_id WHERE m.conversation_id = ? ORDER BY m.joined_at, m.user_id').all(cid);
+const lastMsgId = cid => db.prepare('SELECT COALESCE(MAX(id), 0) x FROM messages WHERE conversation_id = ?').get(cid).x;
+const directKey = (a, b) => (a < b ? `${a}:${b}` : `${b}:${a}`);
 
-// Най-много 20 съобщения в минута на потребител.
+// Най-много 20 съобщения/файла в минута на потребител.
 const sendLog = new Map();
 function canSend(uid) {
   const now = Date.now();
@@ -506,55 +515,332 @@ function canSend(uid) {
   arr.push(now); sendLog.set(uid, arr); return true;
 }
 
+function getOrCreateDirect(a, b) {
+  const key = directKey(a, b);
+  const ex = db.prepare('SELECT id FROM conversations WHERE direct_key = ?').get(key);
+  if (ex) { // ако някой е бил изтрит/излязъл – връщаме го като член
+    db.prepare('INSERT OR IGNORE INTO conversation_members (conversation_id, user_id) VALUES (?, ?)').run(ex.id, a);
+    db.prepare('INSERT OR IGNORE INTO conversation_members (conversation_id, user_id) VALUES (?, ?)').run(ex.id, b);
+    return ex.id;
+  }
+  return db.transaction(() => {
+    const id = db.prepare("INSERT INTO conversations (kind, direct_key, created_by) VALUES ('direct', ?, ?)").run(key, a).lastInsertRowid;
+    db.prepare('INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)').run(id, a);
+    db.prepare('INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)').run(id, b);
+    return id;
+  })();
+}
+// Другият член на личен разговор (или null, ако го няма/е блокиран).
+function directPeer(cid, me) {
+  const o = db.prepare('SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id <> ?').get(cid, me);
+  const u = o && findPeer(o.user_id);
+  return u && !blockedBetween(me, u.id) ? u : null;
+}
+function addSystem(cid, actorId, text) {
+  return db.prepare("INSERT INTO messages (conversation_id, sender_id, kind, body) VALUES (?, ?, 'system', ?)").run(cid, actorId, text).lastInsertRowid;
+}
+
+// ── Прикачени файлове ──
+const BLOCKED_EXT = new Set(['exe', 'bat', 'cmd', 'com', 'scr', 'msi', 'ps1', 'vbs', 'js', 'mjs', 'jar', 'sh', 'app', 'apk', 'dll', 'lnk', 'html', 'htm', 'xhtml', 'svg', 'hta', 'reg']);
+function sniffAny(buf) {
+  const img = sniff(buf);
+  if (img) return img;
+  if (buf.length > 6 && buf.subarray(0, 4).toString() === 'GIF8') return 'gif';
+  return null;
+}
+const IMG_MIME = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
+const cleanName = raw => {
+  let n = '';
+  try { n = decodeURIComponent(String(raw || '')); } catch { n = String(raw || ''); }
+  n = n.replace(/[\\/]/g, '_').replace(/[\u0000-\u001f\u007f<>:"|?*]/g, '').trim().slice(-120);
+  return n || 'файл';
+};
+const attView = a => a && { id: a.id, name: a.name, size: a.size, kind: a.kind, url: '/api/files/' + a.id };
+const attById = id => (id ? db.prepare('SELECT * FROM attachments WHERE id = ?').get(id) : null);
+const dropFile = stored => fs.rm(path.join(db.UPLOAD_DIR, stored), { force: true }, () => {});
+
+// Качените, но неизпратени файлове се трият след 1 час.
+function purgeOrphans() {
+  const rows = db.prepare("SELECT id, stored FROM attachments WHERE message_id IS NULL AND created_at < datetime('now', '-1 hour')").all();
+  rows.forEach(r => { db.prepare('DELETE FROM attachments WHERE id = ?').run(r.id); dropFile(r.stored); });
+}
+purgeOrphans();
+setInterval(purgeOrphans, 30 * 60 * 1000).unref();
+
+// Изтрива файловете на разговори/потребител, освен тези, които са доказателство в доклад.
+function dropUnreferencedFiles(rows) {
+  for (const r of rows) {
+    if (db.prepare('SELECT 1 FROM report_messages WHERE attachment_id = ?').get(r.id)) continue;
+    db.prepare('DELETE FROM attachments WHERE id = ?').run(r.id); dropFile(r.stored);
+  }
+}
+// Преди изтриване на акаунт: личните разговори, останали без втори човек, се чистят заедно с файловете им.
+function cleanupBeforeUserDelete(uid) {
+  const direct = db.prepare("SELECT c.id FROM conversations c JOIN conversation_members m ON m.conversation_id = c.id WHERE c.kind = 'direct' AND m.user_id = ?").all(uid);
+  const files = [];
+  for (const c of direct) {
+    files.push(...db.prepare('SELECT a.* FROM attachments a JOIN messages m ON m.attachment_id = a.id WHERE m.conversation_id = ?').all(c.id));
+    db.prepare('DELETE FROM conversations WHERE id = ?').run(c.id); // съобщенията се трият по каскада
+  }
+  files.push(...db.prepare('SELECT * FROM attachments WHERE uploader_id = ? AND message_id IS NULL').all(uid));
+  dropUnreferencedFiles(files);
+}
+
+// След изтриване на акаунт: групи без собственик получават нов (най-стария член), празните групи се трият.
+function repairGroups() {
+  for (const g of db.prepare("SELECT id FROM conversations WHERE kind = 'group'").all()) {
+    const ms = membersOf(g.id);
+    if (!ms.length) {
+      const files = db.prepare('SELECT a.* FROM attachments a JOIN messages m ON m.attachment_id = a.id WHERE m.conversation_id = ?').all(g.id);
+      db.prepare('DELETE FROM conversations WHERE id = ?').run(g.id); dropUnreferencedFiles(files);
+    } else if (!ms.some(m => m.mrole === 'owner')) {
+      db.prepare("UPDATE conversation_members SET role = 'owner' WHERE conversation_id = ? AND user_id = ?").run(g.id, ms[0].user_id);
+    }
+  }
+}
+
+app.post('/api/chats/:id/attachments', requireAuth, express.raw({ type: () => true, limit: MAX_FILE + 1024 }), wrap((req, res) => {
+  const me = req.session.userId, cid = Number(req.params.id);
+  if (!memberRow(cid, me)) return bad(res, 'Разговорът не е намерен.', 404);
+  const conv = convRow(cid);
+  if (conv.kind === 'direct' && !directPeer(cid, me)) return bad(res, 'Не можете да пишете на този профил.', 403);
+  const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+  if (!buf.length) return bad(res, 'Празен файл.');
+  if (buf.length > MAX_FILE) return bad(res, 'Файлът е твърде голям (макс. 10 MB).', 413);
+  const name = cleanName(req.get('x-filename'));
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  if (name.includes('.') && BLOCKED_EXT.has(ext)) return bad(res, `Файлове от тип .${ext} не са позволени.`, 400);
+  if (!canSend(me)) return bad(res, 'Изпращате твърде бързо. Изчакайте малко.', 429);
+  const imgType = sniffAny(buf);
+  const stored = crypto.randomBytes(16).toString('hex') + (imgType ? '.' + imgType : '.bin');
+  fs.writeFileSync(path.join(db.UPLOAD_DIR, stored), buf, { flag: 'wx' });
+  const r = db.prepare('INSERT INTO attachments (uploader_id, name, mime, size, stored, kind) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(me, name, imgType ? IMG_MIME[imgType] : 'application/octet-stream', buf.length, stored, imgType ? 'image' : 'file');
+  res.status(201).json({ attachment: attView(attById(r.lastInsertRowid)) });
+}));
+
+// Достъп до файл: качилият го, членовете на разговора, а администратор – само ако е доказателство в доклад.
+app.get('/api/files/:id', requireAuth, wrap((req, res) => {
+  const me = req.session.userId, a = attById(Number(req.params.id));
+  if (!a) return bad(res, 'Файлът не е намерен.', 404);
+  let ok = a.uploader_id === me;
+  if (!ok && a.message_id) {
+    const m = db.prepare('SELECT conversation_id FROM messages WHERE id = ?').get(a.message_id);
+    ok = !!(m && memberRow(m.conversation_id, me));
+  }
+  if (!ok) {
+    const isAdmin = db.prepare('SELECT role FROM users WHERE id = ?').get(me).role === 'admin';
+    ok = isAdmin && !!db.prepare('SELECT 1 FROM report_messages WHERE attachment_id = ?').get(a.id);
+    if (ok) db.prepare("INSERT INTO audit_log (admin_id, action, report_id) VALUES (?, 'view_file', NULL)").run(me);
+  }
+  if (!ok) return bad(res, 'Файлът не е намерен.', 404);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'; img-src 'self'");
+  res.type(a.kind === 'image' ? a.mime : 'application/octet-stream');
+  const encoded = encodeURIComponent(a.name).replace(/['()]/g, escape);
+  res.setHeader('Content-Disposition', `${a.kind === 'image' ? 'inline' : 'attachment'}; filename*=UTF-8''${encoded}`);
+  fs.createReadStream(path.join(db.UPLOAD_DIR, a.stored)).on('error', () => res.destroy()).pipe(res);
+}));
+
+// ── Разговори ──
+function unreadTotal(uid) {
+  return db.prepare(`SELECT COUNT(*) c FROM messages m JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = ?
+    WHERE m.id > cm.last_read_id AND m.id >= cm.from_msg_id AND m.kind = 'user' AND COALESCE(m.sender_id, 0) <> ?`).get(uid, uid).c;
+}
 app.get('/api/chats/unread', requireAuth, wrap((req, res) => {
   const id = req.session.userId;
-  const unread = db.prepare('SELECT COUNT(*) c FROM messages WHERE to_id = ? AND read_at IS NULL').get(id).c;
   const isAdmin = db.prepare('SELECT role FROM users WHERE id = ?').get(id).role === 'admin';
-  const openReports = isAdmin ? db.prepare("SELECT COUNT(*) c FROM reports WHERE status = 'open'").get().c : 0;
-  res.json({ unread, openReports });
+  res.json({ unread: unreadTotal(id), openReports: isAdmin ? db.prepare("SELECT COUNT(*) c FROM reports WHERE status = 'open'").get().c : 0 });
 }));
+
+// Хората, с които си писал (за нова група и за добавяне към група).
+function contactsOf(me) {
+  const rows = db.prepare(`SELECT DISTINCT o.user_id FROM conversation_members mine
+    JOIN conversations c ON c.id = mine.conversation_id AND c.kind = 'direct'
+    JOIN conversation_members o ON o.conversation_id = c.id AND o.user_id <> mine.user_id
+    WHERE mine.user_id = ? AND EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.kind = 'user')`).all(me);
+  return rows.map(r => findPeer(r.user_id)).filter(u => u && !blockedBetween(me, u.id));
+}
+app.get('/api/chats/contacts', requireAuth, wrap((req, res) => {
+  res.json({ contacts: publicProfiles(contactsOf(req.session.userId), req.session.userId) });
+}));
+
+function messageView(m, me, names) {
+  return { id: m.id, kind: m.kind, senderId: m.sender_id, senderNick: m.sender_id ? (names.get(m.sender_id) || 'Изтрит профил') : '', mine: m.sender_id === me,
+    body: m.body, at: iso(m.created_at), attachment: attView(attById(m.attachment_id)) };
+}
+function lastPreview(c, me, names) {
+  const m = db.prepare('SELECT * FROM messages WHERE id = ?').get(c.last_id);
+  const text = m.body || (m.attachment_id ? (attById(m.attachment_id) || {}).kind === 'image' ? '📷 Снимка' : '📎 Файл' : '');
+  return { body: text, mine: m.sender_id === me, senderNick: m.sender_id ? names.get(m.sender_id) || '' : '', system: m.kind === 'system', at: iso(m.created_at) };
+}
 
 app.get('/api/chats', requireAuth, wrap((req, res) => {
   const me = req.session.userId;
   const rows = db.prepare(`
-    SELECT CASE WHEN from_id = ? THEN to_id ELSE from_id END AS other, MAX(id) AS last_id,
-           SUM(CASE WHEN to_id = ? AND read_at IS NULL THEN 1 ELSE 0 END) AS unread
-    FROM messages WHERE from_id = ? OR to_id = ? GROUP BY other ORDER BY last_id DESC LIMIT 100`).all(me, me, me, me);
-  const items = [];
-  for (const r of rows) {
-    const u = findPeer(r.other);
-    if (!u || blockedBetween(me, u.id)) continue;
-    const last = db.prepare('SELECT from_id, body, created_at FROM messages WHERE id = ?').get(r.last_id);
-    items.push({ u, unread: r.unread, last });
+    SELECT c.*, cm.last_read_id, cm.from_msg_id,
+      (SELECT MAX(id) FROM messages m WHERE m.conversation_id = c.id AND m.id >= cm.from_msg_id) AS last_id,
+      (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.id > cm.last_read_id AND m.id >= cm.from_msg_id AND m.kind = 'user' AND COALESCE(m.sender_id, 0) <> cm.user_id) AS unread
+    FROM conversation_members cm JOIN conversations c ON c.id = cm.conversation_id
+    WHERE cm.user_id = ? ORDER BY COALESCE(last_id, 0) DESC, c.id DESC LIMIT 100`).all(me);
+  const chats = [];
+  for (const c of rows) {
+    if (!c.last_id) continue; // празни разговори не се показват
+    const members = membersOf(c.id);
+    const names = new Map(members.map(m => [m.user_id, m.nickname]));
+    if (c.kind === 'direct') {
+      const peer = directPeer(c.id, me);
+      if (!peer) continue;
+      chats.push({ id: c.id, kind: 'direct', title: peer.nickname, peer: publicProfiles([peer], me)[0], unread: c.unread, last: lastPreview(c, me, names) });
+    } else {
+      chats.push({ id: c.id, kind: 'group', title: c.title, members: members.length, preview: members.slice(0, 3).map(m => ({ id: m.user_id, nickname: m.nickname })), unread: c.unread, last: lastPreview(c, me, names) });
+    }
   }
-  const profiles = publicProfiles(items.map(i => i.u), me);
-  res.json({ chats: items.map((i, n) => ({ profile: profiles[n], unread: i.unread, last: { body: i.last.body, mine: i.last.from_id === me, at: iso(i.last.created_at) } })) });
+  res.json({ chats });
 }));
 
-app.get('/api/chats/:id', requireAuth, wrap((req, res) => {
-  const me = req.session.userId, id = Number(req.params.id);
-  const peer = id === me ? null : findPeer(id);
-  if (!peer || blockedBetween(me, id)) return bad(res, 'Разговорът не е намерен.', 404);
-  const msgs = db.prepare(`SELECT id, from_id, body, created_at FROM messages
-    WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?) ORDER BY id DESC LIMIT 200`).all(me, id, id, me).reverse();
-  db.prepare("UPDATE messages SET read_at = datetime('now') WHERE to_id = ? AND from_id = ? AND read_at IS NULL").run(me, id);
-  res.json({ profile: publicProfiles([peer], me)[0], messages: msgs.map(m => ({ id: m.id, mine: m.from_id === me, body: m.body, at: iso(m.created_at) })) });
-}));
-
-app.post('/api/chats/:id', requireAuth, wrap((req, res) => {
-  const me = req.session.userId, id = Number(req.params.id);
+app.post('/api/chats/direct', requireAuth, wrap((req, res) => {
+  const me = req.session.userId, id = Number((req.body || {}).userId);
+  if (db.prepare('SELECT role FROM users WHERE id = ?').get(me).role === 'admin') return bad(res, 'Администраторът не води разговори.', 403);
   const peer = id === me ? null : findPeer(id);
   if (!peer || blockedBetween(me, id)) return bad(res, 'Не можете да пишете на този профил.', 403);
-  const body = String((req.body || {}).body || '').trim();
-  if (!body) return bad(res, 'Съобщението е празно.');
-  if (body.length > 1000) return bad(res, 'Съобщението може да е до 1000 символа.');
-  if (!canSend(me)) return bad(res, 'Изпращате твърде бързо. Изчакайте малко.', 429);
-  const r = db.prepare('INSERT INTO messages (from_id, to_id, body) VALUES (?, ?, ?)').run(me, id, body);
-  const m = db.prepare('SELECT id, body, created_at FROM messages WHERE id = ?').get(r.lastInsertRowid);
-  res.status(201).json({ message: { id: m.id, mine: true, body: m.body, at: iso(m.created_at) } });
+  res.json({ id: getOrCreateDirect(me, id) });
 }));
 
-// Доклад за профил. Към него се прикача снимка на разговора между двамата, за да може администраторът да прецени казуса.
+function groupMemberIds(me, raw, existing = []) {
+  const ids = [...new Set((Array.isArray(raw) ? raw : []).map(Number).filter(n => Number.isInteger(n) && n > 0 && n !== me))];
+  const allowed = new Set(contactsOf(me).map(u => u.id));
+  const bad_ = ids.filter(i => !allowed.has(i));
+  return { ids: ids.filter(i => !existing.includes(i)), invalid: bad_.length > 0 };
+}
+const cleanTitle = t => String(t || '').trim().replace(/\s+/g, ' ');
+
+app.post('/api/chats/groups', requireAuth, wrap((req, res) => {
+  const me = req.session.userId, b = req.body || {};
+  if (db.prepare('SELECT role FROM users WHERE id = ?').get(me).role === 'admin') return bad(res, 'Администраторът не води разговори.', 403);
+  const title = cleanTitle(b.title);
+  if (title.length < 2 || title.length > 40) return bad(res, 'Името на групата трябва да е 2–40 символа.');
+  const { ids, invalid } = groupMemberIds(me, b.memberIds);
+  if (invalid) return bad(res, 'В група може да добавяш само хора, с които си писал.');
+  if (!ids.length) return bad(res, 'Избери поне един човек за групата.');
+  if (ids.length + 1 > MAX_GROUP) return bad(res, `В група има най-много ${MAX_GROUP} души.`);
+  const nick = db.prepare('SELECT nickname FROM users WHERE id = ?').get(me).nickname;
+  const cid = db.transaction(() => {
+    const id = db.prepare("INSERT INTO conversations (kind, title, created_by) VALUES ('group', ?, ?)").run(title, me).lastInsertRowid;
+    db.prepare("INSERT INTO conversation_members (conversation_id, user_id, role) VALUES (?, ?, 'owner')").run(id, me);
+    ids.forEach(u => db.prepare('INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)').run(id, u));
+    addSystem(id, me, `${nick} създаде групата „${title}“`);
+    return id;
+  })();
+  res.status(201).json({ id: cid });
+}));
+
+function threadFor(cid, me) {
+  const conv = convRow(cid), mine = memberRow(cid, me);
+  const members = membersOf(cid);
+  const names = new Map(members.map(m => [m.user_id, m.nickname]));
+  const rows = db.prepare('SELECT * FROM messages WHERE conversation_id = ? AND id >= ? ORDER BY id DESC LIMIT 200').all(cid, mine.from_msg_id).reverse();
+  const out = {
+    messages: rows.map(m => messageView(m, me, names)),
+    conversation: { id: conv.id, kind: conv.kind, title: conv.title, isOwner: mine.role === 'owner', createdAt: iso(conv.created_at) },
+  };
+  if (conv.kind === 'direct') {
+    const peer = directPeer(cid, me);
+    out.conversation.peer = peer ? publicProfiles([peer], me)[0] : null;
+    out.conversation.title = peer ? peer.nickname : 'Недостъпен профил';
+  } else {
+    const profiles = publicProfiles(members.map(m => findPeer(m.user_id)).filter(Boolean), me);
+    out.conversation.members = profiles.map(p => ({ ...p, role: (members.find(m => m.user_id === p.id) || {}).mrole }));
+  }
+  return out;
+}
+
+app.get('/api/chats/:id', requireAuth, wrap((req, res) => {
+  const me = req.session.userId, cid = Number(req.params.id);
+  if (!memberRow(cid, me)) return bad(res, 'Разговорът не е намерен.', 404);
+  const conv = convRow(cid);
+  if (conv.kind === 'direct' && !directPeer(cid, me)) return bad(res, 'Разговорът не е намерен.', 404);
+  const t = threadFor(cid, me);
+  db.prepare('UPDATE conversation_members SET last_read_id = ? WHERE conversation_id = ? AND user_id = ?').run(lastMsgId(cid), cid, me);
+  res.json(t);
+}));
+
+app.post('/api/chats/:id/messages', requireAuth, wrap((req, res) => {
+  const me = req.session.userId, cid = Number(req.params.id), b = req.body || {};
+  if (!memberRow(cid, me)) return bad(res, 'Разговорът не е намерен.', 404);
+  const conv = convRow(cid);
+  if (conv.kind === 'direct' && !directPeer(cid, me)) return bad(res, 'Не можете да пишете на този профил.', 403);
+  const body = String(b.body || '').trim();
+  if (body.length > 1000) return bad(res, 'Съобщението може да е до 1000 символа.');
+  let att = null;
+  if (b.attachmentId) {
+    att = attById(Number(b.attachmentId));
+    if (!att || att.uploader_id !== me || att.message_id) return bad(res, 'Файлът не е наличен. Качи го отново.');
+  }
+  if (!body && !att) return bad(res, 'Съобщението е празно.');
+  if (!canSend(me)) return bad(res, 'Изпращате твърде бързо. Изчакайте малко.', 429);
+  const mid = db.prepare("INSERT INTO messages (conversation_id, sender_id, body, attachment_id) VALUES (?, ?, ?, ?)").run(cid, me, body, att ? att.id : null).lastInsertRowid;
+  if (att) db.prepare('UPDATE attachments SET message_id = ? WHERE id = ?').run(mid, att.id);
+  const names = new Map([[me, db.prepare('SELECT nickname FROM users WHERE id = ?').get(me).nickname]]);
+  res.status(201).json({ message: messageView(db.prepare('SELECT * FROM messages WHERE id = ?').get(mid), me, names) });
+}));
+
+// Управление на група: преименуване, добавяне и премахване на хора, напускане.
+function groupOwnerOnly(req, res) {
+  const me = req.session.userId, cid = Number(req.params.id);
+  const mine = memberRow(cid, me), conv = convRow(cid);
+  if (!mine || !conv || conv.kind !== 'group') { bad(res, 'Групата не е намерена.', 404); return null; }
+  if (mine.role !== 'owner') { bad(res, 'Само създателят на групата може да прави това.', 403); return null; }
+  return { me, cid, conv };
+}
+app.put('/api/chats/:id', requireAuth, wrap((req, res) => {
+  const g = groupOwnerOnly(req, res); if (!g) return;
+  const title = cleanTitle((req.body || {}).title);
+  if (title.length < 2 || title.length > 40) return bad(res, 'Името на групата трябва да е 2–40 символа.');
+  db.prepare('UPDATE conversations SET title = ? WHERE id = ?').run(title, g.cid);
+  addSystem(g.cid, g.me, `Групата беше преименувана на „${title}“`);
+  res.json({ ok: true });
+}));
+app.post('/api/chats/:id/members', requireAuth, wrap((req, res) => {
+  const g = groupOwnerOnly(req, res); if (!g) return;
+  const current = membersOf(g.cid).map(m => m.user_id);
+  const { ids, invalid } = groupMemberIds(g.me, (req.body || {}).userIds, current);
+  if (invalid) return bad(res, 'Може да добавяш само хора, с които си писал.');
+  if (!ids.length) return bad(res, 'Няма кого да добавиш.');
+  if (current.length + ids.length > MAX_GROUP) return bad(res, `В група има най-много ${MAX_GROUP} души.`);
+  const actor = db.prepare('SELECT nickname FROM users WHERE id = ?').get(g.me).nickname;
+  db.transaction(() => {
+    for (const u of ids) {
+      const nick = db.prepare('SELECT nickname FROM users WHERE id = ?').get(u).nickname;
+      const sid = addSystem(g.cid, g.me, `${actor} добави ${nick}`);
+      db.prepare('INSERT INTO conversation_members (conversation_id, user_id, from_msg_id, last_read_id) VALUES (?, ?, ?, ?)').run(g.cid, u, sid, sid);
+    }
+  })();
+  res.status(201).json({ ok: true });
+}));
+app.delete('/api/chats/:id/members/:uid', requireAuth, wrap((req, res) => {
+  const me = req.session.userId, cid = Number(req.params.id), uid = Number(req.params.uid);
+  const conv = convRow(cid), mine = memberRow(cid, me), target = memberRow(cid, uid);
+  if (!conv || conv.kind !== 'group' || !mine || !target) return bad(res, 'Групата не е намерена.', 404);
+  if (uid !== me && mine.role !== 'owner') return bad(res, 'Само създателят на групата може да премахва хора.', 403);
+  const nick = db.prepare('SELECT nickname FROM users WHERE id = ?').get(uid).nickname;
+  db.transaction(() => {
+    db.prepare('DELETE FROM conversation_members WHERE conversation_id = ? AND user_id = ?').run(cid, uid);
+    const left = membersOf(cid);
+    if (!left.length) { // последният излиза → групата се трие
+      const files = db.prepare('SELECT a.* FROM attachments a JOIN messages m ON m.attachment_id = a.id WHERE m.conversation_id = ?').all(cid);
+      db.prepare('DELETE FROM conversations WHERE id = ?').run(cid);
+      dropUnreferencedFiles(files);
+      return;
+    }
+    if (target.role === 'owner') db.prepare("UPDATE conversation_members SET role = 'owner' WHERE conversation_id = ? AND user_id = ?").run(cid, left[0].user_id);
+    addSystem(cid, me, uid === me ? `${nick} напусна групата` : `${nick} беше премахнат от групата`);
+  })();
+  res.json({ ok: true });
+}));
+
+// Доклад за профил. Към него се прикача снимка на разговора (личния между двамата или групата), за да може администраторът да прецени казуса.
 app.post('/api/profiles/:id/report', requireAuth, wrap((req, res) => {
   const me = req.session.userId, id = Number(req.params.id), b = req.body || {};
   if (id === me) return bad(res, 'Не можете да докладвате себе си.');
@@ -569,14 +855,28 @@ app.post('/api/profiles/:id/report', requireAuth, wrap((req, res) => {
   if (db.prepare("SELECT COUNT(*) c FROM reports WHERE reporter_id = ? AND created_at >= datetime('now', '-1 day')").get(me).c >= 10) {
     return bad(res, 'Достигнахте дневния лимит за доклади.', 429);
   }
+  // Кой разговор се прикача: подаденият (трябва и двамата да са членове), иначе личният между двамата.
+  let cid = null;
+  if (b.conversationId) {
+    cid = Number(b.conversationId);
+    if (!memberRow(cid, me) || !memberRow(cid, id)) return bad(res, 'Разговорът не е намерен.', 404);
+  } else {
+    const d = db.prepare('SELECT id FROM conversations WHERE direct_key = ?').get(directKey(me, id));
+    cid = d ? d.id : null;
+  }
   const reporter = db.prepare('SELECT nickname FROM users WHERE id = ?').get(me);
   db.transaction(() => {
-    const rid = db.prepare('INSERT INTO reports (reporter_id, reported_id, reporter_nick, reported_nick, reason, details) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(me, id, reporter.nickname, target.nickname, b.reason, details).lastInsertRowid;
-    const msgs = db.prepare(`SELECT from_id, body, created_at FROM messages
-      WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?) ORDER BY id DESC LIMIT 200`).all(me, id, id, me).reverse();
-    const ins = db.prepare('INSERT INTO report_messages (report_id, from_reporter, body, sent_at) VALUES (?, ?, ?, ?)');
-    msgs.forEach(m => ins.run(rid, m.from_id === me ? 1 : 0, m.body, m.created_at));
+    const conv = cid ? convRow(cid) : null;
+    const rid = db.prepare('INSERT INTO reports (reporter_id, reported_id, reporter_nick, reported_nick, reason, details, conversation_id, conv_title) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(me, id, reporter.nickname, target.nickname, b.reason, details, cid, conv && conv.kind === 'group' ? conv.title : '').lastInsertRowid;
+    if (cid) {
+      const from = memberRow(cid, me).from_msg_id;
+      const msgs = db.prepare(`SELECT m.*, u.nickname FROM messages m LEFT JOIN users u ON u.id = m.sender_id
+        WHERE m.conversation_id = ? AND m.id >= ? ORDER BY m.id DESC LIMIT 200`).all(cid, from).reverse();
+      const ins = db.prepare('INSERT INTO report_messages (report_id, from_reporter, body, sent_at, sender_nick, role, attachment_id) VALUES (?, ?, ?, ?, ?, ?, ?)');
+      msgs.forEach(m => ins.run(rid, m.sender_id === me ? 1 : 0, m.body, m.created_at, m.kind === 'system' ? '' : m.nickname || 'Изтрит профил',
+        m.kind === 'system' ? 'system' : m.sender_id === me ? 'reporter' : m.sender_id === id ? 'reported' : 'other', m.attachment_id));
+    }
     if (b.block) db.prepare('INSERT OR IGNORE INTO blocks (blocker_id, blocked_id) VALUES (?, ?)').run(me, id);
   })();
   res.status(201).json({ ok: true, blocked: !!b.block });
@@ -655,7 +955,9 @@ app.delete('/api/admin/users/:id', requireAdmin, wrap((req, res) => {
   if (!row) return bad(res, 'Потребителят не е намерен.', 404);
   if (row.role === 'admin') return bad(res, 'Администраторски акаунт не може да се изтрива.', 403);
   const files = db.prepare('SELECT filename FROM photos WHERE user_id = ?').all(id);
+  cleanupBeforeUserDelete(id);
   db.prepare('DELETE FROM users WHERE id = ?').run(id);
+  repairGroups();
   files.forEach(f => fs.rm(path.join(db.UPLOAD_DIR, f.filename), { force: true }, () => {}));
   res.json({ ok: true });
 }));
@@ -683,7 +985,7 @@ app.get('/api/admin/reports/:id', requireAdmin, wrap((req, res) => {
   if (!r) return bad(res, 'Докладът не е намерен.', 404);
   db.prepare("INSERT INTO audit_log (admin_id, action, report_id) VALUES (?, 'view_report', ?)").run(req.session.userId, r.id);
   const views = db.prepare("SELECT COUNT(*) c FROM audit_log WHERE action = 'view_report' AND report_id = ?").get(r.id).c;
-  const msgs = db.prepare('SELECT id, from_reporter, body, sent_at FROM report_messages WHERE report_id = ? ORDER BY id').all(r.id);
+  const msgs = db.prepare('SELECT id, from_reporter, body, sent_at, sender_nick, role, attachment_id FROM report_messages WHERE report_id = ? ORDER BY id').all(r.id);
   let reported = null;
   if (r.reported_id) {
     const u = db.prepare('SELECT * FROM users WHERE id = ?').get(r.reported_id);
@@ -696,7 +998,13 @@ app.get('/api/admin/reports/:id', requireAdmin, wrap((req, res) => {
   res.json({
     report: { ...reportRow(r), details: r.details, adminNote: r.admin_note, reporterStillExists: !!r.reporter_id, reportedStillExists: !!reported },
     reported,
-    messages: msgs.map(m => ({ id: m.id, fromReporter: !!m.from_reporter, from: m.from_reporter ? r.reporter_nick : r.reported_nick, body: m.body, at: iso(m.sent_at) })),
+    messages: msgs.map(m => ({
+      id: m.id, fromReporter: !!m.from_reporter,
+      role: m.role || (m.from_reporter ? 'reporter' : 'reported'),
+      from: m.sender_nick != null ? m.sender_nick : (m.from_reporter ? r.reporter_nick : r.reported_nick),
+      body: m.body, at: iso(m.sent_at), attachment: attView(attById(m.attachment_id)),
+    })),
+    conversation: r.conversation_id || r.conv_title ? { title: r.conv_title, group: !!r.conv_title } : null,
     views,
   });
 }));

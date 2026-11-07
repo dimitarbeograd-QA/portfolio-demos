@@ -11,6 +11,13 @@ const db = new Database(isTest ? ':memory:' : path.join(DATA_DIR, 'spark.db'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
+// Стар модел на съобщенията (от един към един) → преименуваме и мигрираме по-долу към разговори.
+const legacyMessages = (() => {
+  const cols = db.prepare('PRAGMA table_info(messages)').all();
+  if (cols.some(c => c.name === 'from_id')) { db.exec('ALTER TABLE messages RENAME TO messages_old'); return true; }
+  return false;
+})();
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,16 +61,47 @@ db.exec(`
     PRIMARY KEY (from_id, to_id)
   );
 
-  CREATE TABLE IF NOT EXISTS messages (
+  -- Разговор = личен (двама души) или група (до 12). Съобщенията принадлежат на разговор.
+  CREATE TABLE IF NOT EXISTS conversations (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    from_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    to_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    body       TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    read_at    TEXT
+    kind       TEXT NOT NULL CHECK (kind IN ('direct','group')),
+    title      TEXT NOT NULL DEFAULT '',
+    direct_key TEXT UNIQUE,                         -- „малкото:голямото“ id за личните разговори
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
-  CREATE INDEX IF NOT EXISTS idx_msg_pair ON messages(from_id, to_id, id);
-  CREATE INDEX IF NOT EXISTS idx_msg_unread ON messages(to_id, read_at);
+  CREATE TABLE IF NOT EXISTS conversation_members (
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role            TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner','member')),
+    joined_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    from_msg_id     INTEGER NOT NULL DEFAULT 0,     -- нов член вижда само съобщенията от присъединяването нататък
+    last_read_id    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (conversation_id, user_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_cm_user ON conversation_members(user_id);
+  CREATE TABLE IF NOT EXISTS messages (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    sender_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    kind            TEXT NOT NULL DEFAULT 'user' CHECK (kind IN ('user','system')),
+    body            TEXT NOT NULL DEFAULT '',
+    attachment_id   INTEGER,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conversation_id, id);
+  -- Прикачени снимки и файлове в чата. Файловете са ЛИЧНИ: достъпни само за членове на разговора (и за админ през доклад).
+  CREATE TABLE IF NOT EXISTS attachments (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    uploader_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    name        TEXT NOT NULL,
+    mime        TEXT NOT NULL,
+    size        INTEGER NOT NULL,
+    stored      TEXT NOT NULL,
+    kind        TEXT NOT NULL CHECK (kind IN ('image','file')),
+    message_id  INTEGER,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 
   CREATE TABLE IF NOT EXISTS blocks (
     blocker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -85,7 +123,9 @@ db.exec(`
     admin_note    TEXT NOT NULL DEFAULT '',
     resolved_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-    resolved_at   TEXT
+    resolved_at   TEXT,
+    conversation_id INTEGER,                        -- разговорът, от който е снимката (личен или група)
+    conv_title      TEXT NOT NULL DEFAULT ''
   );
   CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, id);
 
@@ -94,7 +134,10 @@ db.exec(`
     report_id     INTEGER NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
     from_reporter INTEGER NOT NULL,
     body          TEXT NOT NULL,
-    sent_at       TEXT NOT NULL
+    sent_at       TEXT NOT NULL,
+    sender_nick   TEXT,                             -- никнейм на изпращача (в група има и трети хора)
+    role          TEXT,                             -- reporter | reported | other | system
+    attachment_id INTEGER
   );
   CREATE INDEX IF NOT EXISTS idx_rm_report ON report_messages(report_id, id);
 
@@ -113,6 +156,42 @@ db.exec(`
     expires INTEGER NOT NULL
   );
 `);
+
+// Миграции за бази, създадени преди новите колони на докладите.
+for (const [table, col, ddl] of [
+  ['reports', 'conversation_id', 'ALTER TABLE reports ADD COLUMN conversation_id INTEGER'],
+  ['reports', 'conv_title', "ALTER TABLE reports ADD COLUMN conv_title TEXT NOT NULL DEFAULT ''"],
+  ['report_messages', 'sender_nick', 'ALTER TABLE report_messages ADD COLUMN sender_nick TEXT'],
+  ['report_messages', 'role', 'ALTER TABLE report_messages ADD COLUMN role TEXT'],
+  ['report_messages', 'attachment_id', 'ALTER TABLE report_messages ADD COLUMN attachment_id INTEGER'],
+]) {
+  if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === col)) db.exec(ddl);
+}
+
+// Старите съобщения (от → към) стават лични разговори; непрочетените остават непрочетени.
+if (legacyMessages) {
+  db.transaction(() => {
+    const old = db.prepare('SELECT * FROM messages_old ORDER BY id').all();
+    const convOf = new Map();
+    const mkConv = db.prepare("INSERT INTO conversations (kind, direct_key) VALUES ('direct', ?)");
+    const mkMember = db.prepare("INSERT OR IGNORE INTO conversation_members (conversation_id, user_id) VALUES (?, ?)");
+    const ins = db.prepare('INSERT INTO messages (conversation_id, sender_id, body, created_at) VALUES (?, ?, ?, ?)');
+    const firstUnread = new Map(); // "conv:user" -> първото непрочетено ново id
+    for (const m of old) {
+      const key = m.from_id < m.to_id ? `${m.from_id}:${m.to_id}` : `${m.to_id}:${m.from_id}`;
+      let cid = convOf.get(key);
+      if (!cid) { cid = mkConv.run(key).lastInsertRowid; convOf.set(key, cid); mkMember.run(cid, m.from_id); mkMember.run(cid, m.to_id); }
+      const nid = ins.run(cid, m.from_id, m.body, m.created_at).lastInsertRowid;
+      if (!m.read_at && !firstUnread.has(`${cid}:${m.to_id}`)) firstUnread.set(`${cid}:${m.to_id}`, nid);
+    }
+    const setRead = db.prepare('UPDATE conversation_members SET last_read_id = ? WHERE conversation_id = ? AND user_id = ?');
+    for (const m of db.prepare('SELECT conversation_id c, user_id u FROM conversation_members').all()) {
+      const fu = firstUnread.get(`${m.c}:${m.u}`);
+      setRead.run(fu ? fu - 1 : db.prepare('SELECT COALESCE(MAX(id),0) x FROM messages WHERE conversation_id = ?').get(m.c).x, m.c, m.u);
+    }
+    db.exec('DROP TABLE messages_old');
+  })();
+}
 
 // Миграция за бази, създадени преди колоната role.
 if (!db.prepare("PRAGMA table_info(users)").all().some(c => c.name === 'role')) {

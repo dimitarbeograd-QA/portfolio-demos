@@ -75,4 +75,11 @@ const TEST_CHATS = [
   { peer: 'Явор', unread: false, msgs: [['me', 'Привет, Явор! Харесва ми, че свириш на китара.', 1500], ['p', 'Благодаря! Свириш ли и ти?', 1490], ['me', 'Само на душата 😄', 1480]] },
 ];
 
-module.exports = { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS };
+// Групов чат на тестовия потребител: ['sys'|'me'|никнейм, текст, преди колко минути]. :име: са наши емотиконки.
+const TEST_GROUPS = [
+  { title: 'Приятели от Пловдив', members: ['Теди', 'Явор'], unread: true, msgs: [
+    ['sys', 'Тестер създаде групата „Приятели от Пловдив“', 700], ['Теди', 'Здравейте! Кой е за кафе в събота? :coffee:', 690],
+    ['me', 'Аз съм! :smile:', 685], ['Явор', 'И аз идвам, ще нося китарата :cool: :heart:', 14]] },
+];
+
+module.exports = { PEOPLE, randomInterests, SAMPLE_REPORTS, TEST_USER, TEST_CHATS, TEST_GROUPS };
