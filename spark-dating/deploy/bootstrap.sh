@@ -29,6 +29,13 @@ if sudo iptables -S INPUT 2>/dev/null | grep -q REJECT; then
   sudo netfilter-persistent save || true
 fi
 
+# Малка машина (напр. 1 GB AMD): без swap строенето на образа може да спре от липса на памет
+if [ "$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)" -lt 3000 ] && ! swapon --show | grep -q .; then
+  echo "==> Малко RAM – добавям 2 GB swap"
+  sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile >/dev/null && sudo swapon /swapfile
+  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+fi
+
 echo "==> Автоматични обновявания и защита на SSH"
 sudo systemctl enable --now fail2ban >/dev/null 2>&1 || true
 printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' | sudo tee /etc/apt/apt.conf.d/20auto-upgrades >/dev/null
