@@ -6,7 +6,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const db = require('./db');
 const SqliteStore = require('./session-store');
-const { CITIES, INTERESTS, GENDERS, LOOKING, MIN_AGE, MAX_PHOTOS } = require('./constants');
+const { CITIES, INTERESTS, GENDERS, LOOKING, MIN_AGE, MAX_PHOTOS, REPORT_REASONS } = require('./constants');
 
 const isProd = process.env.NODE_ENV === 'production';
 if (isProd && !process.env.SESSION_SECRET) {
@@ -196,6 +196,7 @@ app.get('/api/meta', (req, res) => {
     maxPhotos: MAX_PHOTOS,
     total: db.prepare("SELECT COUNT(*) c FROM users WHERE role <> 'admin'").get().c,
     demoAdmin: demoAdminOn(),
+    reportReasons: REPORT_REASONS,
   });
 });
 
@@ -402,8 +403,9 @@ const SORTS = {
 };
 app.get('/api/profiles', requireAuth, wrap((req, res) => {
   const q = req.query;
-  const where = ['u.id <> ?', "u.role <> 'admin'"];
-  const args = [req.session.userId];
+  const where = ['u.id <> ?', "u.role <> 'admin'",
+    'NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = ? AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = ?))'];
+  const args = [req.session.userId, req.session.userId, req.session.userId];
 
   if (q.city) {
     if (!CITIES.includes(q.city)) return bad(res, 'Непознат град.');
@@ -444,18 +446,109 @@ app.get('/api/profiles', requireAuth, wrap((req, res) => {
 
 app.get('/api/profiles/:id', requireAuth, wrap((req, res) => {
   const row = db.prepare("SELECT * FROM users WHERE id = ? AND role <> 'admin'").get(Number(req.params.id));
-  if (!row) return bad(res, 'Профилът не е намерен.', 404);
+  if (!row || blockedBetween(req.session.userId, row.id)) return bad(res, 'Профилът не е намерен.', 404);
   res.json({ profile: publicProfiles([row], req.session.userId)[0] });
 }));
 
 app.post('/api/profiles/:id/like', requireAuth, wrap((req, res) => {
   const to = Number(req.params.id), from = req.session.userId;
   if (to === from) return bad(res, 'Не можете да харесате себе си.');
-  if (!db.prepare("SELECT 1 FROM users WHERE id = ? AND role <> 'admin'").get(to)) return bad(res, 'Профилът не е намерен.', 404);
+  if (!db.prepare("SELECT 1 FROM users WHERE id = ? AND role <> 'admin'").get(to) || blockedBetween(from, to)) return bad(res, 'Профилът не е намерен.', 404);
   const had = db.prepare('DELETE FROM likes WHERE from_id = ? AND to_id = ?').run(from, to).changes > 0;
   if (!had) db.prepare('INSERT INTO likes (from_id, to_id) VALUES (?, ?)').run(from, to);
   const row = db.prepare('SELECT * FROM users WHERE id = ?').get(to);
   res.json({ profile: publicProfiles([row], from)[0] });
+}));
+
+// ── Съобщения, блокиране, доклади ──
+const isBlockedStmt = db.prepare('SELECT 1 FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)');
+function blockedBetween(a, b) { return !!isBlockedStmt.get(a, b, b, a); }
+const iso = t => t.replace(' ', 'T') + 'Z';
+const findPeer = id => db.prepare("SELECT * FROM users WHERE id = ? AND role <> 'admin'").get(id);
+
+// Най-много 20 съобщения в минута на потребител.
+const sendLog = new Map();
+function canSend(uid) {
+  const now = Date.now();
+  const arr = (sendLog.get(uid) || []).filter(t => now - t < 60000);
+  if (arr.length >= 20) { sendLog.set(uid, arr); return false; }
+  arr.push(now); sendLog.set(uid, arr); return true;
+}
+
+app.get('/api/chats/unread', requireAuth, wrap((req, res) => {
+  const id = req.session.userId;
+  const unread = db.prepare('SELECT COUNT(*) c FROM messages WHERE to_id = ? AND read_at IS NULL').get(id).c;
+  const isAdmin = db.prepare('SELECT role FROM users WHERE id = ?').get(id).role === 'admin';
+  const openReports = isAdmin ? db.prepare("SELECT COUNT(*) c FROM reports WHERE status = 'open'").get().c : 0;
+  res.json({ unread, openReports });
+}));
+
+app.get('/api/chats', requireAuth, wrap((req, res) => {
+  const me = req.session.userId;
+  const rows = db.prepare(`
+    SELECT CASE WHEN from_id = ? THEN to_id ELSE from_id END AS other, MAX(id) AS last_id,
+           SUM(CASE WHEN to_id = ? AND read_at IS NULL THEN 1 ELSE 0 END) AS unread
+    FROM messages WHERE from_id = ? OR to_id = ? GROUP BY other ORDER BY last_id DESC LIMIT 100`).all(me, me, me, me);
+  const items = [];
+  for (const r of rows) {
+    const u = findPeer(r.other);
+    if (!u || blockedBetween(me, u.id)) continue;
+    const last = db.prepare('SELECT from_id, body, created_at FROM messages WHERE id = ?').get(r.last_id);
+    items.push({ u, unread: r.unread, last });
+  }
+  const profiles = publicProfiles(items.map(i => i.u), me);
+  res.json({ chats: items.map((i, n) => ({ profile: profiles[n], unread: i.unread, last: { body: i.last.body, mine: i.last.from_id === me, at: iso(i.last.created_at) } })) });
+}));
+
+app.get('/api/chats/:id', requireAuth, wrap((req, res) => {
+  const me = req.session.userId, id = Number(req.params.id);
+  const peer = id === me ? null : findPeer(id);
+  if (!peer || blockedBetween(me, id)) return bad(res, 'Разговорът не е намерен.', 404);
+  const msgs = db.prepare(`SELECT id, from_id, body, created_at FROM messages
+    WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?) ORDER BY id DESC LIMIT 200`).all(me, id, id, me).reverse();
+  db.prepare("UPDATE messages SET read_at = datetime('now') WHERE to_id = ? AND from_id = ? AND read_at IS NULL").run(me, id);
+  res.json({ profile: publicProfiles([peer], me)[0], messages: msgs.map(m => ({ id: m.id, mine: m.from_id === me, body: m.body, at: iso(m.created_at) })) });
+}));
+
+app.post('/api/chats/:id', requireAuth, wrap((req, res) => {
+  const me = req.session.userId, id = Number(req.params.id);
+  const peer = id === me ? null : findPeer(id);
+  if (!peer || blockedBetween(me, id)) return bad(res, 'Не можете да пишете на този профил.', 403);
+  const body = String((req.body || {}).body || '').trim();
+  if (!body) return bad(res, 'Съобщението е празно.');
+  if (body.length > 1000) return bad(res, 'Съобщението може да е до 1000 символа.');
+  if (!canSend(me)) return bad(res, 'Изпращате твърде бързо. Изчакайте малко.', 429);
+  const r = db.prepare('INSERT INTO messages (from_id, to_id, body) VALUES (?, ?, ?)').run(me, id, body);
+  const m = db.prepare('SELECT id, body, created_at FROM messages WHERE id = ?').get(r.lastInsertRowid);
+  res.status(201).json({ message: { id: m.id, mine: true, body: m.body, at: iso(m.created_at) } });
+}));
+
+// Доклад за профил. Към него се прикача снимка на разговора между двамата, за да може администраторът да прецени казуса.
+app.post('/api/profiles/:id/report', requireAuth, wrap((req, res) => {
+  const me = req.session.userId, id = Number(req.params.id), b = req.body || {};
+  if (id === me) return bad(res, 'Не можете да докладвате себе си.');
+  const target = findPeer(id);
+  if (!target) return bad(res, 'Профилът не е намерен.', 404);
+  if (!Object.hasOwn(REPORT_REASONS, b.reason)) return bad(res, 'Изберете причина за доклада.');
+  const details = String(b.details || '').trim();
+  if (details.length > 500) return bad(res, 'Описанието може да е до 500 символа.');
+  if (db.prepare("SELECT 1 FROM reports WHERE reporter_id = ? AND reported_id = ? AND status = 'open'").get(me, id)) {
+    return bad(res, 'Вече сте докладвали този профил. Администраторите разглеждат доклада.', 409);
+  }
+  if (db.prepare("SELECT COUNT(*) c FROM reports WHERE reporter_id = ? AND created_at >= datetime('now', '-1 day')").get(me).c >= 10) {
+    return bad(res, 'Достигнахте дневния лимит за доклади.', 429);
+  }
+  const reporter = db.prepare('SELECT nickname FROM users WHERE id = ?').get(me);
+  db.transaction(() => {
+    const rid = db.prepare('INSERT INTO reports (reporter_id, reported_id, reporter_nick, reported_nick, reason, details) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(me, id, reporter.nickname, target.nickname, b.reason, details).lastInsertRowid;
+    const msgs = db.prepare(`SELECT from_id, body, created_at FROM messages
+      WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?) ORDER BY id DESC LIMIT 200`).all(me, id, id, me).reverse();
+    const ins = db.prepare('INSERT INTO report_messages (report_id, from_reporter, body, sent_at) VALUES (?, ?, ?, ?)');
+    msgs.forEach(m => ins.run(rid, m.from_id === me ? 1 : 0, m.body, m.created_at));
+    if (b.block) db.prepare('INSERT OR IGNORE INTO blocks (blocker_id, blocked_id) VALUES (?, ?)').run(me, id);
+  })();
+  res.status(201).json({ ok: true, blocked: !!b.block });
 }));
 
 // ── Администрация ──
@@ -491,6 +584,7 @@ app.get('/api/admin/stats', requireAdmin, wrap((req, res) => {
     photos: one('SELECT COUNT(*) c FROM photos'),
     likes: one('SELECT COUNT(*) c FROM likes'),
     online: one("SELECT COUNT(*) c FROM users WHERE role <> 'admin' AND last_seen >= datetime('now', '-5 minutes')"),
+    openReports: one("SELECT COUNT(*) c FROM reports WHERE status = 'open'"),
     newToday: one("SELECT COUNT(*) c FROM users WHERE role <> 'admin' AND is_demo = 0 AND created_at >= datetime('now', '-1 day')"),
     byCity: byCity.map(r => ({ city: r.city, count: r.c })),
     byGender: Object.fromEntries(byGender.map(r => [r.gender, r.c])),
@@ -519,6 +613,60 @@ app.delete('/api/admin/users/:id', requireAdmin, wrap((req, res) => {
   const files = db.prepare('SELECT filename FROM photos WHERE user_id = ?').all(id);
   db.prepare('DELETE FROM users WHERE id = ?').run(id);
   files.forEach(f => fs.rm(path.join(db.UPLOAD_DIR, f.filename), { force: true }, () => {}));
+  res.json({ ok: true });
+}));
+
+// ── Доклади (админ) ──
+// Администраторът вижда разговор САМО като част от доклад (снимка от момента на докладването),
+// не може да разглежда произволни чатове. Всяко отваряне се записва в журнала.
+const REPORT_STATUSES = ['open', 'upheld', 'dismissed'];
+const reportRow = r => ({
+  id: r.id, reporterNick: r.reporter_nick, reportedNick: r.reported_nick, reason: r.reason, reasonLabel: REPORT_REASONS[r.reason] || r.reason,
+  status: r.status, createdAt: iso(r.created_at), resolvedAt: r.resolved_at ? iso(r.resolved_at) : null,
+});
+
+app.get('/api/admin/reports', requireAdmin, wrap((req, res) => {
+  const st = REPORT_STATUSES.includes(req.query.status) ? req.query.status : null;
+  const rows = db.prepare(`SELECT r.*, (SELECT COUNT(*) FROM report_messages m WHERE m.report_id = r.id) AS msgs
+    FROM reports r ${st ? 'WHERE r.status = ?' : ''} ORDER BY (r.status = 'open') DESC, r.id DESC LIMIT 200`).all(...(st ? [st] : []));
+  const counts = Object.fromEntries(REPORT_STATUSES.map(k => [k, 0]));
+  db.prepare('SELECT status, COUNT(*) c FROM reports GROUP BY status').all().forEach(r => { counts[r.status] = r.c; });
+  res.json({ counts, reports: rows.map(r => ({ ...reportRow(r), messages: r.msgs })) });
+}));
+
+app.get('/api/admin/reports/:id', requireAdmin, wrap((req, res) => {
+  const r = db.prepare('SELECT * FROM reports WHERE id = ?').get(Number(req.params.id));
+  if (!r) return bad(res, 'Докладът не е намерен.', 404);
+  db.prepare("INSERT INTO audit_log (admin_id, action, report_id) VALUES (?, 'view_report', ?)").run(req.session.userId, r.id);
+  const views = db.prepare("SELECT COUNT(*) c FROM audit_log WHERE action = 'view_report' AND report_id = ?").get(r.id).c;
+  const msgs = db.prepare('SELECT id, from_reporter, body, sent_at FROM report_messages WHERE report_id = ? ORDER BY id').all(r.id);
+  let reported = null;
+  if (r.reported_id) {
+    const u = db.prepare('SELECT * FROM users WHERE id = ?').get(r.reported_id);
+    if (u) {
+      reported = { id: u.id, nickname: u.nickname, age: ageFrom(u.birth_date), city: u.city, gender: u.gender, bio: u.bio, isDemo: !!u.is_demo, createdAt: iso(u.created_at),
+        photos: db.prepare('SELECT COUNT(*) c FROM photos WHERE user_id = ?').get(u.id).c,
+        otherReports: db.prepare('SELECT COUNT(*) c FROM reports WHERE reported_id = ? AND id <> ?').get(u.id, r.id).c };
+    }
+  }
+  res.json({
+    report: { ...reportRow(r), details: r.details, adminNote: r.admin_note, reporterStillExists: !!r.reporter_id, reportedStillExists: !!reported },
+    reported,
+    messages: msgs.map(m => ({ id: m.id, fromReporter: !!m.from_reporter, from: m.from_reporter ? r.reporter_nick : r.reported_nick, body: m.body, at: iso(m.sent_at) })),
+    views,
+  });
+}));
+
+app.put('/api/admin/reports/:id', requireAdmin, wrap((req, res) => {
+  const id = Number(req.params.id), b = req.body || {};
+  const r = db.prepare('SELECT id FROM reports WHERE id = ?').get(id);
+  if (!r) return bad(res, 'Докладът не е намерен.', 404);
+  if (!REPORT_STATUSES.includes(b.status)) return bad(res, 'Невалиден статус.');
+  const note = String(b.note || '').trim();
+  if (note.length > 500) return bad(res, 'Бележката може да е до 500 символа.');
+  if (b.status === 'open') db.prepare("UPDATE reports SET status = 'open', admin_note = ?, resolved_by = NULL, resolved_at = NULL WHERE id = ?").run(note, id);
+  else db.prepare("UPDATE reports SET status = ?, admin_note = ?, resolved_by = ?, resolved_at = datetime('now') WHERE id = ?").run(b.status, note, req.session.userId, id);
+  db.prepare('INSERT INTO audit_log (admin_id, action, report_id) VALUES (?, ?, ?)').run(req.session.userId, 'report_' + b.status, id);
   res.json({ ok: true });
 }));
 

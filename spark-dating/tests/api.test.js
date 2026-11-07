@@ -293,3 +293,147 @@ test('админ маршрутите са затворени за обикно�
     assert.equal((await c('GET', '/api/me')).data.user.role, 'user');
   } finally { delete process.env.DEMO_ADMIN; }
 });
+
+// ───────── Чат, блокиране и доклади ─────────
+async function two() {
+  const a = client(), b = client();
+  const ua = (await a('POST', '/api/register', reg())).data.user;
+  const ub = (await b('POST', '/api/register', reg())).data.user;
+  return { a, b, ua, ub };
+}
+async function adminClient() {
+  process.env.DEMO_ADMIN = '1';
+  const c = client();
+  await c('POST', '/api/demo-admin');
+  delete process.env.DEMO_ADMIN;
+  return c;
+}
+
+test('чат: изпращане, непрочетени, прочитане', async () => {
+  const { a, b, ua, ub } = await two();
+  assert.equal((await a('POST', `/api/chats/${ub.id}`, { body: '  Здравей!  ' })).status, 201);
+  assert.equal((await b('GET', '/api/chats/unread')).data.unread, 1);
+  const list = await b('GET', '/api/chats');
+  assert.equal(list.data.chats[0].profile.id, ua.id);
+  assert.equal(list.data.chats[0].unread, 1);
+  assert.equal(list.data.chats[0].last.body, 'Здравей!');
+  const thread = await b('GET', `/api/chats/${ua.id}`);
+  assert.deepEqual(thread.data.messages.map(m => [m.body, m.mine]), [['Здравей!', false]]);
+  assert.equal((await b('GET', '/api/chats/unread')).data.unread, 0);
+  await b('POST', `/api/chats/${ua.id}`, { body: 'Здрасти' });
+  assert.deepEqual((await a('GET', `/api/chats/${ub.id}`)).data.messages.map(m => m.mine), [true, false]);
+});
+
+test('чат: валидации, себе си, админ, лимит и без вход', async () => {
+  const { a, ua, ub } = await two();
+  assert.equal((await client()('GET', '/api/chats')).status, 401);
+  assert.equal((await a('POST', `/api/chats/${ub.id}`, { body: '   ' })).status, 400);
+  assert.equal((await a('POST', `/api/chats/${ub.id}`, { body: 'x'.repeat(1001) })).status, 400);
+  assert.equal((await a('POST', `/api/chats/${ua.id}`, { body: 'сам на себе си' })).status, 403);
+  const adminId = require('../server/db').prepare("SELECT id FROM users WHERE role = 'admin'").get().id;
+  assert.equal((await a('POST', `/api/chats/${adminId}`, { body: 'здрасти админ' })).status, 403);
+  assert.equal((await a('GET', '/api/chats/999999')).status, 404);
+  let last;
+  for (let i = 0; i < 22; i++) last = await a('POST', `/api/chats/${ub.id}`, { body: 'спам ' + i });
+  assert.equal(last.status, 429);
+});
+
+test('доклад: валидации и дубликати', async () => {
+  const { a, ua, ub } = await two();
+  assert.equal((await client()('POST', `/api/profiles/${ub.id}/report`, { reason: 'spam' })).status, 401);
+  assert.equal((await a('POST', `/api/profiles/${ub.id}/report`, { reason: 'измислено' })).status, 400);
+  assert.equal((await a('POST', `/api/profiles/${ub.id}/report`, { reason: 'spam', details: 'x'.repeat(501) })).status, 400);
+  assert.equal((await a('POST', `/api/profiles/${ua.id}/report`, { reason: 'spam' })).status, 400);
+  assert.equal((await a('POST', '/api/profiles/999999/report', { reason: 'spam' })).status, 404);
+  assert.equal((await a('POST', `/api/profiles/${ub.id}/report`, { reason: 'spam', details: 'тест' })).status, 201);
+  assert.equal((await a('POST', `/api/profiles/${ub.id}/report`, { reason: 'spam' })).status, 409);
+});
+
+test('доклад: админът вижда казуса и снимка на разговора, журналът го записва', async () => {
+  const { a, b, ua, ub } = await two();
+  await b('POST', `/api/chats/${ua.id}`, { body: 'Купи от мен: shop.example' });
+  await a('POST', `/api/chats/${ub.id}`, { body: 'Не, благодаря' });
+  await b('POST', `/api/chats/${ua.id}`, { body: 'Последен шанс!!!' });
+  await a('POST', `/api/profiles/${ub.id}/report`, { reason: 'scam', details: 'Опитва да ми продаде нещо' });
+  // съобщение СЛЕД доклада не влиза в снимката
+  await b('POST', `/api/chats/${ua.id}`, { body: 'по-късно съобщение' });
+
+  const admin = await adminClient();
+  const list = await admin('GET', '/api/admin/reports?status=open');
+  assert.equal(list.status, 200);
+  const item = list.data.reports.find(r => r.reportedNick === ub.nickname);
+  assert.ok(item && item.status === 'open' && item.messages === 3 && item.reasonLabel);
+  assert.ok(list.data.counts.open >= 3); // 2 примерни + този
+
+  const d1 = await admin('GET', `/api/admin/reports/${item.id}`);
+  assert.deepEqual(d1.data.messages.map(m => [m.fromReporter, m.body]),
+    [[false, 'Купи от мен: shop.example'], [true, 'Не, благодаря'], [false, 'Последен шанс!!!']]);
+  assert.equal(d1.data.messages[0].from, ub.nickname);
+  assert.equal(d1.data.report.details, 'Опитва да ми продаде нещо');
+  assert.equal(d1.data.reported.nickname, ub.nickname);
+  assert.equal(d1.data.views, 1);
+  assert.equal((await admin('GET', `/api/admin/reports/${item.id}`)).data.views, 2);
+
+  // решение
+  assert.equal((await admin('PUT', `/api/admin/reports/${item.id}`, { status: 'upheld', note: 'Явна измама.' })).status, 200);
+  const d2 = (await admin('GET', `/api/admin/reports/${item.id}`)).data.report;
+  assert.equal(d2.status, 'upheld'); assert.equal(d2.adminNote, 'Явна измама.'); assert.ok(d2.resolvedAt);
+  assert.equal((await admin('PUT', `/api/admin/reports/${item.id}`, { status: 'нищо' })).status, 400);
+  assert.equal((await admin('PUT', `/api/admin/reports/999999`, { status: 'open' })).status, 404);
+  assert.equal((await admin('PUT', `/api/admin/reports/${item.id}`, { status: 'open' })).status, 200);
+});
+
+test('админът НЕ може да чете произволни чатове', async () => {
+  const { a, ua, ub } = await two();
+  await a('POST', `/api/chats/${ub.id}`, { body: 'лично съобщение' });
+  const admin = await adminClient();
+  // чат маршрутите връщат само собствените разговори на админа (няма такива)
+  assert.equal((await admin('GET', `/api/chats/${ub.id}`)).data.messages.length, 0);
+  assert.equal((await admin('GET', '/api/chats')).data.chats.length, 0);
+  assert.equal((await admin('GET', `/api/admin/chats/${ua.id}`)).status, 404);
+  // без доклад съобщението не е достъпно никъде в админ API
+  const all = JSON.stringify((await admin('GET', '/api/admin/reports?status=all')).data);
+  assert.ok(!all.includes('лично съобщение'));
+});
+
+test('докладите са само за админ', async () => {
+  const { a, ub } = await two();
+  await a('POST', `/api/profiles/${ub.id}/report`, { reason: 'spam' });
+  assert.equal((await a('GET', '/api/admin/reports')).status, 403);
+  assert.equal((await a('GET', '/api/admin/reports/1')).status, 403);
+  assert.equal((await a('PUT', '/api/admin/reports/1', { status: 'dismissed' })).status, 403);
+  assert.equal((await client()('GET', '/api/admin/reports')).status, 401);
+});
+
+test('блокиране при доклад: без чат, без профил, без списък', async () => {
+  const { a, b, ua, ub } = await two();
+  assert.equal((await a('POST', `/api/profiles/${ub.id}/report`, { reason: 'harassment', block: true })).data.blocked, true);
+  assert.equal((await b('POST', `/api/chats/${ua.id}`, { body: 'здрасти' })).status, 403);
+  assert.equal((await a('POST', `/api/chats/${ub.id}`, { body: 'здрасти' })).status, 403);
+  assert.equal((await a('GET', `/api/profiles/${ub.id}`)).status, 404);
+  assert.equal((await b('GET', `/api/profiles/${ua.id}`)).status, 404);
+  assert.equal((await b('POST', `/api/profiles/${ua.id}/like`)).status, 404);
+  const seen = (await a('GET', '/api/profiles?limit=48&sort=new')).data.profiles;
+  assert.ok(!seen.some(p => p.id === ub.id));
+});
+
+test('доказателствата остават, когато докладваният изтрие акаунта си', async () => {
+  const { a, b, ua, ub } = await two();
+  const pass = 'supersecret1';
+  await b('POST', `/api/chats/${ua.id}`, { body: 'неприлично съобщение' });
+  await a('POST', `/api/profiles/${ub.id}/report`, { reason: 'harassment' });
+  assert.equal((await b('DELETE', '/api/me', { password: pass })).status, 200);
+  const admin = await adminClient();
+  const rep = (await admin('GET', '/api/admin/reports?status=open')).data.reports.find(r => r.reportedNick === ub.nickname);
+  assert.ok(rep);
+  const d = (await admin('GET', `/api/admin/reports/${rep.id}`)).data;
+  assert.equal(d.report.reportedStillExists, false);
+  assert.equal(d.reported, null);
+  assert.equal(d.messages[0].body, 'неприлично съобщение');
+});
+
+test('примерните доклади са заредени и броят отворени е в статистиката', async () => {
+  const admin = await adminClient();
+  assert.ok((await admin('GET', '/api/admin/stats')).data.openReports >= 2);
+  assert.ok((await admin('GET', '/api/chats/unread')).data.openReports >= 2);
+});

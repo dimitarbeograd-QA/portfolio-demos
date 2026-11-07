@@ -6,13 +6,26 @@ const bcrypt = require('bcryptjs');
 const db = require('./db');
 const { CITIES, INTERESTS } = require('./constants');
 
-const { PEOPLE, randomInterests } = require('./seed-data');
+const { PEOPLE, randomInterests, SAMPLE_REPORTS } = require('./seed-data');
 
 function birthFor(age, i) {
   const d = new Date();
   d.setFullYear(d.getFullYear() - age);
   d.setMonth((i * 5) % 12, 1 + ((i * 11) % 27));
   return d.toISOString().slice(0, 10);
+}
+
+function seedReports() {
+  const idOf = nick => db.prepare('SELECT id FROM users WHERE nickname_key = ?').get(nick.toLowerCase()).id;
+  const insR = db.prepare(`INSERT INTO reports (reporter_id, reported_id, reporter_nick, reported_nick, reason, details, created_at)
+                           VALUES (?, ?, ?, ?, ?, ?, datetime('now', ?))`);
+  const insM = db.prepare("INSERT INTO report_messages (report_id, from_reporter, body, sent_at) VALUES (?, ?, ?, datetime('now', ?))");
+  db.transaction(() => {
+    for (const r of SAMPLE_REPORTS) {
+      const rid = insR.run(idOf(r.reporter), idOf(r.reported), r.reporter, r.reported, r.reason, r.details, `-${r.ago} minutes`).lastInsertRowid;
+      r.msgs.forEach(([who, text, ago]) => insM.run(rid, who === 'r' ? 1 : 0, text, `-${ago} minutes`));
+    }
+  })();
 }
 
 function seedDemo() {
@@ -36,6 +49,7 @@ function seedDemo() {
     });
   });
   tx();
+  seedReports();
   return PEOPLE.length;
 }
 

@@ -250,6 +250,40 @@ input[type=color] { padding: 2px; height: 2.4rem; width: 3.4rem; cursor: pointer
 .tbl tbody tr:hover { background: var(--faint); }
 @media (max-width: 520px) { .bar { grid-template-columns: 6.5rem 1fr 1.6rem; } }
 
+/* ── Съобщения ── */
+.badge { display: inline-block; min-width: 1.25rem; padding: 0 .35rem; margin-left: .35rem; border-radius: 999px; background: var(--accent); color: #04101c; font-size: .72rem; font-weight: 800; line-height: 1.25rem; text-align: center; box-shadow: var(--glow-shadow); }
+.chatlayout { display: grid; grid-template-columns: 300px 1fr; gap: 1rem; height: calc(100vh - 12rem); min-height: 460px; }
+.chatside, .chatthread { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.chatlist { overflow-y: auto; flex: 1; padding: .4rem; }
+.chatitem { display: flex; align-items: center; gap: .7rem; width: 100%; text-align: left; font: inherit; color: var(--text); background: transparent; border: var(--bw) solid transparent; border-radius: calc(var(--radius) * .6); padding: .55rem; cursor: pointer; transition: background .2s, border-color .2s; }
+.chatitem:hover { background: var(--faint); } .chatitem.on { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); }
+.chatitem img, .mini { border-radius: 50%; object-fit: cover; flex: none; background: var(--faint); }
+.chatitem .ci { display: grid; min-width: 0; flex: 1; } .chatitem b { color: var(--heading); }
+.chatitem small { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chatthread .win-head h2 { margin: 0; font-size: 1.02rem; } .chatthread .win-head h2 a { color: var(--heading); }
+.msgs, .transcript { display: flex; flex-direction: column; gap: .45rem; overflow-y: auto; padding: 1rem; flex: 1; min-height: 0; }
+.transcript { flex: none; max-height: 46vh; min-height: 9rem; border: var(--bw) solid var(--border); border-radius: calc(var(--radius) * .6); background: color-mix(in srgb, var(--bg) 60%, var(--surface)); }
+.bubble { max-width: 78%; padding: .5rem .8rem; border-radius: 16px; display: grid; gap: .15rem; overflow-wrap: anywhere; white-space: pre-wrap; animation: pop .3s var(--ease) both; }
+.bubble time { font-size: .7rem; opacity: .65; justify-self: end; }
+.bubble .from { font-weight: 700; opacity: .85; }
+.bubble.mine { align-self: flex-end; background: color-mix(in srgb, var(--accent) 28%, var(--surface)); border-bottom-right-radius: 4px; color: var(--heading); }
+.bubble.theirs { align-self: flex-start; background: var(--faint); border-bottom-left-radius: 4px; }
+.bubble.accused { align-self: flex-start; background: color-mix(in srgb, var(--danger) 16%, var(--surface)); border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); border-bottom-left-radius: 4px; }
+.daysep { align-self: center; font-size: .74rem; color: var(--muted); padding: .1rem .7rem; border-radius: 999px; background: var(--faint); }
+.composer { display: flex; gap: .6rem; padding: .7rem; border-top: var(--bw) solid var(--border); align-items: flex-end; } .composer textarea { min-height: 0; resize: none; }
+.notice { margin: 0; padding: .4rem 1rem; } p.notice { padding: .5rem .8rem; border-radius: 10px; background: var(--faint); margin: .6rem 0; }
+.backbtn { display: none; }
+@media (max-width: 800px) {
+  .chatlayout { grid-template-columns: 1fr; height: calc(100vh - 14rem); }
+  .chatlayout.open .chatside, .chatlayout:not(.open) .chatthread { display: none; }
+  .backbtn { display: inline-block; margin-left: 0; }
+}
+/* ── Доклади ── */
+.replist { display: grid; gap: .6rem; }
+.rep { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; padding: .65rem .8rem; border: var(--bw) solid var(--border); border-radius: calc(var(--radius) * .6); background: var(--faint); }
+.rep .who { flex: 1 1 14rem; min-width: 0; overflow-wrap: anywhere; }
+.tag.st-open { border-color: var(--accent); color: var(--heading); } .tag.st-upheld { border-color: var(--danger); color: var(--danger); } .tag.st-dismissed { border-color: var(--ok); color: var(--ok); }
+
 /* ── Тостове ── */
 #toasts { position: fixed; z-index: 200; bottom: 1rem; left: 50%; transform: translateX(-50%); display: grid; gap: .5rem; width: min(92vw, 420px); pointer-events: none; }
 .toast { pointer-events: auto; padding: .7rem 1rem; border-radius: 14px; background: var(--surface); color: var(--heading); border: var(--bw) solid var(--accent); box-shadow: var(--glow-shadow), 0 10px 30px rgba(0,0,0,.5); animation: fadeUp .35s var(--ease) both; }

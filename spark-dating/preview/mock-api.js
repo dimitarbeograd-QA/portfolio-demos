@@ -5,8 +5,9 @@
   const KEY = 'spark.preview.v1';
   window.confirm = () => true; // в прегледа диалозите са недостъпни
   const MIN_AGE = 18, MAX_PHOTOS = 6;
-  let db = { users: [], likes: [], seq: 1000, session: null };
+  let db = { users: [], likes: [], seq: 1000, session: null, messages: [], blocks: [], reports: null, rseq: 0 };
   try { const raw = localStorage.getItem(KEY); if (raw) db = JSON.parse(raw); } catch { /* без storage */ }
+  db.messages = db.messages || []; db.blocks = db.blocks || [];
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* ignore */ } };
 
   let demo = D.people.map((p, i) => ({ ...p, id: i + 1, isDemo: true, photos: [], lastMin: (i * 37) % 600, likesBase: (i * 5) % 7, created: i }));
@@ -14,6 +15,9 @@
   demo = demo.filter(d => !db.gone.includes(d.id));
   const all = () => demo.concat(db.users);
   const people = () => all().filter(u => u.role !== 'admin'); // админът не е в публичните списъци
+  const blocked = (a, b) => db.blocks.some(x => (x.from === a && x.to === b) || (x.from === b && x.to === a));
+  const iso = ms => new Date(ms).toISOString();
+  const visibleMsg = m => m.at <= Date.now();
   const ageFrom = b => { const d = new Date(b), n = new Date(); let a = n.getFullYear() - d.getFullYear(); if (n < new Date(n.getFullYear(), d.getMonth(), d.getDate())) a--; return a; };
   const hash = s => { let h = 5381; for (const c of s) h = ((h * 33) ^ c.codePointAt(0)) >>> 0; return String(h); };
   const NICK = /^[\p{L}\p{N}][\p{L}\p{N} _.-]{1,18}[\p{L}\p{N}]$/u, USER = /^[A-Za-z0-9_.-]{3,30}$/;
@@ -37,7 +41,7 @@
 
   route('GET', /^\/api\/meta$/, () => ok({
     cities: D.cities.map(name => ({ name, count: people().filter(u => u.city === name).length })),
-    interests: D.interests, minAge: MIN_AGE, maxPhotos: MAX_PHOTOS, total: people().length, demoAdmin: true,
+    interests: D.interests, minAge: MIN_AGE, maxPhotos: MAX_PHOTOS, total: people().length, demoAdmin: true, reportReasons: D.reportReasons,
   }));
   route('GET', /^\/api\/me$/, () => ok({ user: meUser() ? full(meUser()) : null }));
 
@@ -108,7 +112,7 @@
   }));
 
   route('GET', /^\/api\/profiles$/, authed(({ q, me }) => {
-    let list = people().filter(u => u.id !== me.id);
+    let list = people().filter(u => u.id !== me.id && !blocked(u.id, me.id));
     if (q.get('city')) list = list.filter(u => u.city === q.get('city'));
     if (q.get('gender')) list = list.filter(u => u.gender === q.get('gender'));
     const age = u => (u.isDemo ? u.age : ageFrom(u.birthDate));
@@ -125,11 +129,11 @@
     return ok({ total: list.length, offset, profiles: list.slice(offset, offset + limit).map(u => pub(u, me.id)) });
   }));
   route('GET', /^\/api\/profiles\/(\d+)$/, authed(({ m, me }) => {
-    const u = people().find(x => x.id === Number(m[1])); return u ? ok({ profile: pub(u, me.id) }) : bad('Профилът не е намерен.', 404);
+    const u = people().find(x => x.id === Number(m[1])); return u && !blocked(u.id, me.id) ? ok({ profile: pub(u, me.id) }) : bad('Профилът не е намерен.', 404);
   }));
   route('POST', /^\/api\/profiles\/(\d+)\/like$/, authed(({ m, me }) => {
     const id = Number(m[1]), u = people().find(x => x.id === id);
-    if (!u) return bad('Профилът не е намерен.', 404);
+    if (!u || blocked(id, me.id)) return bad('Профилът не е намерен.', 404);
     if (id === me.id) return bad('Не можете да харесате себе си.');
     const i = db.likes.findIndex(l => l.from === me.id && l.to === id);
     if (i >= 0) db.likes.splice(i, 1); else db.likes.push({ from: me.id, to: id });
@@ -151,7 +155,7 @@
     const ps = people(), real = ps.filter(u => !u.isDemo), by = {};
     ps.forEach(u => { by[u.city] = (by[u.city] || 0) + 1; });
     const g = {}; ps.forEach(u => { g[u.gender] = (g[u.gender] || 0) + 1; });
-    return ok({ users: ps.length, real: real.length, demo: ps.length - real.length, photos: ps.reduce((n, u) => n + u.photos.length, 0), likes: db.likes.length,
+    return ok({ users: ps.length, real: real.length, demo: ps.length - real.length, openReports: (db.reports || []).filter(r => r.status === 'open').length, photos: ps.reduce((n, u) => n + u.photos.length, 0), likes: db.likes.length,
       online: ps.filter(u => !u.isDemo || u.lastMin < 5).length, newToday: real.length,
       byCity: Object.entries(by).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([city, count]) => ({ city, count })), byGender: g });
   }));
@@ -167,6 +171,90 @@
     if (u.role === 'admin') return bad('Администраторски акаунт не може да се изтрива.', 403);
     if (u.isDemo) { demo.splice(demo.indexOf(u), 1); db.gone.push(id); } else db.users = db.users.filter(x => x.id !== id);
     db.likes = db.likes.filter(l => l.from !== id && l.to !== id); save(); return ok({ ok: true });
+  }));
+
+  // ── Примерни доклади (от демо данните) ──
+  if (!db.reports) {
+    const idOf = nick => demo.find(d => d.nickname === nick).id;
+    db.reports = D.sampleReports.map((r, i) => ({
+      id: i + 1, reporterId: idOf(r.reporter), reportedId: idOf(r.reported), reporterNick: r.reporter, reportedNick: r.reported, reason: r.reason, details: r.details,
+      status: 'open', note: '', created: Date.now() - r.ago * 60000, resolvedAt: null, views: 0,
+      msgs: r.msgs.map(([who, body, ago]) => ({ fromReporter: who === 'r', body, at: Date.now() - ago * 60000 })),
+    }));
+    db.rseq = db.reports.length; save();
+  }
+
+  // ── Съобщения ──
+  const CANNED = ['Здравей! Радвам се, че ми писа 😊', 'Звучи интересно, разкажи ми повече.', 'Хаха, добре :) Какво обичаш да правиш през свободното си време?', 'Може би. Как мина денят ти?', 'Супер, и аз мисля така!'];
+  const thread = (a, b) => db.messages.filter(m => visibleMsg(m) && ((m.from === a && m.to === b) || (m.from === b && m.to === a))).sort((x, y) => x.id - y.id);
+  const peerOk = (id, me) => id !== me.id && people().some(u => u.id === id) && !blocked(id, me.id);
+  const rate = {};
+  route('GET', /^\/api\/chats\/unread$/, authed(({ me }) => ok({
+    unread: db.messages.filter(m => visibleMsg(m) && m.to === me.id && !m.read).length,
+    openReports: me.role === 'admin' ? db.reports.filter(r => r.status === 'open').length : 0 })));
+  route('GET', /^\/api\/chats$/, authed(({ me }) => {
+    const peers = new Map();
+    for (const m of db.messages.filter(visibleMsg)) {
+      if (m.from !== me.id && m.to !== me.id) continue;
+      const o = m.from === me.id ? m.to : m.from; peers.set(o, m);
+    }
+    const chats = [...peers.entries()].filter(([o]) => peerOk(o, me)).sort((a, b) => b[1].id - a[1].id).map(([o, last]) => ({
+      profile: pub(people().find(u => u.id === o), me.id), unread: db.messages.filter(m => visibleMsg(m) && m.from === o && m.to === me.id && !m.read).length,
+      last: { body: last.body, mine: last.from === me.id, at: iso(last.at) } }));
+    return ok({ chats });
+  }));
+  route('GET', /^\/api\/chats\/(\d+)$/, authed(({ m, me }) => {
+    const id = Number(m[1]); if (!peerOk(id, me)) return bad('Разговорът не е намерен.', 404);
+    const list = thread(me.id, id); db.messages.forEach(x => { if (x.to === me.id && x.from === id && visibleMsg(x)) x.read = true; }); save();
+    return ok({ profile: pub(people().find(u => u.id === id), me.id), messages: list.slice(-200).map(x => ({ id: x.id, mine: x.from === me.id, body: x.body, at: iso(x.at) })) });
+  }));
+  route('POST', /^\/api\/chats\/(\d+)$/, authed(({ m, body: b, me }) => {
+    const id = Number(m[1]); if (!peerOk(id, me)) return bad('Не можете да пишете на този профил.', 403);
+    const text = String(b.body || '').trim();
+    if (!text) return bad('Съобщението е празно.'); if (text.length > 1000) return bad('Съобщението може да е до 1000 символа.');
+    const now = Date.now(); rate[me.id] = (rate[me.id] || []).filter(t => now - t < 60000);
+    if (rate[me.id].length >= 20) return bad('Изпращате твърде бързо. Изчакайте малко.', 429); rate[me.id].push(now);
+    const msg = { id: ++db.seq, from: me.id, to: id, body: text, at: now, read: false }; db.messages.push(msg);
+    const other = demo.find(d => d.id === id);
+    if (other) db.messages.push({ id: ++db.seq, from: id, to: me.id, body: CANNED[db.messages.length % CANNED.length], at: now + 2500, read: false }); // демо профилите отговарят
+    save(); return ok({ message: { id: msg.id, mine: true, body: msg.body, at: iso(msg.at) } }, 201);
+  }));
+
+  // ── Доклади ──
+  route('POST', /^\/api\/profiles\/(\d+)\/report$/, authed(({ m, body: b, me }) => {
+    const id = Number(m[1]);
+    if (id === me.id) return bad('Не можете да докладвате себе си.');
+    const target = people().find(u => u.id === id); if (!target) return bad('Профилът не е намерен.', 404);
+    if (!Object.hasOwn(D.reportReasons, b.reason)) return bad('Изберете причина за доклада.');
+    const details = String(b.details || '').trim(); if (details.length > 500) return bad('Описанието може да е до 500 символа.');
+    if (db.reports.some(r => r.reporterId === me.id && r.reportedId === id && r.status === 'open')) return bad('Вече сте докладвали този профил. Администраторите разглеждат доклада.', 409);
+    db.reports.push({ id: ++db.rseq, reporterId: me.id, reportedId: id, reporterNick: me.nickname, reportedNick: target.nickname, reason: b.reason, details, status: 'open', note: '', created: Date.now(), resolvedAt: null, views: 0,
+      msgs: thread(me.id, id).slice(-200).map(x => ({ fromReporter: x.from === me.id, body: x.body, at: x.at })) });
+    if (b.block && !blocked(me.id, id)) db.blocks.push({ from: me.id, to: id });
+    save(); return ok({ ok: true, blocked: !!b.block }, 201);
+  }));
+  const LABEL = k => D.reportReasons[k] || k;
+  const rrow = r => ({ id: r.id, reporterNick: r.reporterNick, reportedNick: r.reportedNick, reason: r.reason, reasonLabel: LABEL(r.reason), status: r.status, createdAt: iso(r.created), resolvedAt: r.resolvedAt ? iso(r.resolvedAt) : null });
+  route('GET', /^\/api\/admin\/reports$/, adminOnly(({ q }) => {
+    const st = ['open', 'upheld', 'dismissed'].includes(q.get('status')) ? q.get('status') : null;
+    const counts = { open: 0, upheld: 0, dismissed: 0 }; db.reports.forEach(r => counts[r.status]++);
+    const list = db.reports.filter(r => !st || r.status === st).sort((a, b) => (b.status === 'open') - (a.status === 'open') || b.id - a.id);
+    return ok({ counts, reports: list.map(r => ({ ...rrow(r), messages: r.msgs.length })) });
+  }));
+  route('GET', /^\/api\/admin\/reports\/(\d+)$/, adminOnly(({ m }) => {
+    const r = db.reports.find(x => x.id === Number(m[1])); if (!r) return bad('Докладът не е намерен.', 404);
+    r.views++; save();
+    const u = all().find(x => x.id === r.reportedId);
+    const reported = u ? { id: u.id, nickname: u.nickname, age: ageOf(u), city: u.city, gender: u.gender, bio: u.bio, isDemo: !!u.isDemo, createdAt: iso(Date.now() - (u.created || 0) * 1000), photos: u.photos.length,
+      otherReports: db.reports.filter(x => x.reportedId === u.id && x.id !== r.id).length } : null;
+    return ok({ report: { ...rrow(r), details: r.details, adminNote: r.note, reporterStillExists: !!all().find(x => x.id === r.reporterId), reportedStillExists: !!u }, reported,
+      messages: r.msgs.map((x, i) => ({ id: i + 1, fromReporter: x.fromReporter, from: x.fromReporter ? r.reporterNick : r.reportedNick, body: x.body, at: iso(x.at) })), views: r.views });
+  }));
+  route('PUT', /^\/api\/admin\/reports\/(\d+)$/, adminOnly(({ m, body: b }) => {
+    const r = db.reports.find(x => x.id === Number(m[1])); if (!r) return bad('Докладът не е намерен.', 404);
+    if (!['open', 'upheld', 'dismissed'].includes(b.status)) return bad('Невалиден статус.');
+    const note = String(b.note || '').trim(); if (note.length > 500) return bad('Бележката може да е до 500 символа.');
+    r.status = b.status; r.note = note; r.resolvedAt = b.status === 'open' ? null : Date.now(); save(); return ok({ ok: true });
   }));
 
   const realFetch = window.fetch.bind(window);

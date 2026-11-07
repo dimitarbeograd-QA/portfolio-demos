@@ -118,7 +118,23 @@ function loadLocalTheme() {
 }
 
 /* ═══════════ Състояние ═══════════ */
-const state = { me: null, meta: null };
+const state = { me: null, meta: null, unread: 0, openReports: 0 };
+let chatWith = null;                 // с кого е отворен чатът
+let viewTimer = null, badgeTimer = null;
+const stopViewTimer = () => { if (viewTimer) { clearInterval(viewTimer); viewTimer = null; } };
+async function refreshBadges() {
+  if (!state.me) return;
+  try {
+    const r = await api('GET', '/api/chats/unread');
+    if (r.unread !== state.unread || r.openReports !== state.openReports) { state.unread = r.unread; state.openReports = r.openReports; renderChrome(); }
+  } catch { /* следващият опит ще мине */ }
+}
+function startBadges() { if (badgeTimer) return; refreshBadges(); badgeTimer = setInterval(refreshBadges, 20000); }
+function stopBadges() { if (badgeTimer) { clearInterval(badgeTimer); badgeTimer = null; } state.unread = 0; state.openReports = 0; }
+const fmtTime = at => new Date(at).toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit' });
+const fmtDate = at => new Date(at).toLocaleDateString('bg-BG', { day: 'numeric', month: 'short' });
+const fmtWhen = at => (new Date(at).toDateString() === new Date().toDateString() ? fmtTime(at) : `${fmtDate(at)}, ${fmtTime(at)}`);
+const badge = n => (n > 0 ? h('span', { class: 'badge', 'aria-label': `${n} нови`, text: n > 99 ? '99+' : String(n) }) : null);
 const disc = {
   city: '', q: '', gender: '', ageMin: '', ageMax: '', interests: new Set(), withPhoto: false,
   online: false, lookingForMe: false, sort: 'active', profiles: [], total: 0, loading: false,
@@ -130,9 +146,12 @@ function renderChrome() {
   const route = currentRoute();
   const nav = clear($('#nav'));
   if (state.me) {
-    [['#/discover', 'Открий хора', 'discover'], ['#/profile', 'Моят профил', 'profile'], ['#/settings', 'Дизайн и настройки', 'settings']]
-      .concat(state.me.role === 'admin' ? [['#/admin', '🛡️ Админ', 'admin']] : [])
-      .forEach(([href, label, key]) => nav.append(h('a', { href, text: label, class: route === key ? 'on' : '', 'aria-current': route === key ? 'page' : null })));
+    const isAdmin = state.me.role === 'admin';
+    [['#/discover', 'Открий хора', 'discover', 0]]
+      .concat(isAdmin ? [] : [['#/messages', '💬 Съобщения', 'messages', state.unread]])
+      .concat([['#/profile', 'Моят профил', 'profile', 0], ['#/settings', 'Дизайн и настройки', 'settings', 0]])
+      .concat(isAdmin ? [['#/admin', '🛡️ Админ', 'admin', state.openReports]] : [])
+      .forEach(([href, label, key, n]) => nav.append(h('a', { href, class: route === key ? 'on' : '', 'aria-current': route === key ? 'page' : null }, label, badge(n))));
   }
   const box = clear($('#userbox'));
   box.className = 'userbox';
@@ -148,7 +167,7 @@ function renderChrome() {
 
 async function logout() {
   try { await api('POST', '/api/logout'); } catch { /* ignore */ }
-  state.me = null; disc.profiles = [];
+  state.me = null; disc.profiles = []; chatWith = null; stopBadges();
   location.hash = '#/';
   route();
   toast('Излязохте от профила си.');
@@ -421,7 +440,10 @@ function openProfile(p) {
         cur.likedMe && !cur.isMe ? h('p', {}, h('span', { class: 'tag', text: '💙 Харесва те' })) : null,
         h('h3', { text: 'За мен' }), h('p', { class: 'bio', text: cur.bio || 'Още няма био.' }),
         cur.interests.length ? [h('h3', { text: 'Интереси' }), h('div', { class: 'chips' }, cur.interests.map(t => h('span', { class: 'tag', text: t })))] : null,
-        h('div', { class: 'actions' }, likeBtn, cur.isMe ? h('a', { class: 'btn ghost', href: '#/profile', text: 'Редактирай профила', onclick: closeModal }) : null))));
+        h('div', { class: 'actions' }, likeBtn,
+          cur.isMe || state.me.role === 'admin' ? null : h('button', { class: 'btn ghost', type: 'button', text: '💬 Пиши', onclick: () => openChat(cur.id) }),
+          cur.isMe || state.me.role === 'admin' ? null : h('button', { class: 'btn danger', type: 'button', text: '🚩 Докладвай', onclick: () => reportDialog(cur) }),
+          cur.isMe ? h('a', { class: 'btn ghost', href: '#/profile', text: 'Редактирай профила', onclick: closeModal }) : null))));
   };
   render();
   openModal(body, { title: 'Профил' });
@@ -594,12 +616,141 @@ function deleteAccountDialog() {
   { narrow: true, title: 'Изтриване на профил' });
 }
 
+/* ═══════════ Съобщения и докладване ═══════════ */
+function openChat(id) {
+  chatWith = id;
+  closeModal();
+  if (location.hash === '#/messages') route(); else location.hash = '#/messages';
+}
+
+function reportDialog(p) {
+  const reasons = state.meta.reportReasons;
+  const err = h('div', { class: 'err', role: 'alert' });
+  const reason = h('select', { id: 'rp-reason' }, h('option', { value: '', text: 'Избери причина…' }), Object.entries(reasons).map(([k, t]) => h('option', { value: k, text: t })));
+  const details = h('textarea', { id: 'rp-details', maxlength: '500', placeholder: 'Какво се случи? (по желание, до 500 символа)', style: 'min-height:6rem' });
+  const block = h('input', { type: 'checkbox', id: 'rp-block', checked: true });
+  const btn = h('button', { class: 'btn danger', type: 'submit', text: 'Изпрати доклада' });
+  openModal(h('form', { novalidate: true, onsubmit: async e => {
+    e.preventDefault(); err.textContent = '';
+    if (!reason.value) { err.textContent = 'Изберете причина за доклада.'; return; }
+    btn.disabled = true;
+    try {
+      const r = await api('POST', `/api/profiles/${p.id}/report`, { reason: reason.value, details: details.value, block: block.checked });
+      closeModal();
+      if (r.blocked) { disc.profiles = disc.profiles.filter(x => x.id !== p.id); if (chatWith === p.id) chatWith = null; }
+      toast(r.blocked ? 'Докладът е изпратен и профилът е блокиран.' : 'Докладът е изпратен. Благодарим ти!');
+      if (r.blocked) route();
+    } catch (x) { err.textContent = x.message; btn.disabled = false; }
+  } },
+    h('p', {}, 'Докладваш ', h('b', { text: p.nickname }), '. Администратор ще прегледа случая.'),
+    h('div', { class: 'field' }, h('label', { for: 'rp-reason', text: 'Причина' }), reason),
+    h('div', { class: 'field' }, h('label', { for: 'rp-details', text: 'Подробности' }), details),
+    h('div', { class: 'checkline' }, block, h('label', { for: 'rp-block', text: 'Блокирай този човек (няма да можете да си пишете и да се виждате)' })),
+    h('p', { class: 'hint notice', text: '🔒 С подаването на доклада позволяваш на администратор да прегледа вашата размяна на съобщения с този човек, за да прецени дали докладът е основателен. Другите ти разговори остават лични.' }),
+    err, h('div', { class: 'actions' }, btn, h('button', { class: 'btn ghost', type: 'button', text: 'Отказ', onclick: closeModal }))),
+  { narrow: true, title: 'Докладване на профил' });
+}
+
+function viewMessages() {
+  const v = clear($('#view'));
+  const listBox = h('div', { class: 'chatlist', role: 'list' });
+  const threadBox = h('section', { class: 'win chatthread', 'aria-label': 'Разговор' });
+  const layout = h('div', { class: 'chatlayout' + (chatWith ? ' open' : '') },
+    h('aside', { class: 'win chatside', 'aria-label': 'Разговори' },
+      h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: 'Разговори' })), listBox),
+    threadBox);
+  v.append(h('h1', { text: 'Съобщения' }), layout);
+
+  let chats = [], sig = '', peer = null, msgs = [];
+  const toBottom = () => { const m = $('.msgs', threadBox); if (m) m.scrollTop = m.scrollHeight; };
+
+  function renderList() {
+    clear(listBox);
+    if (!chats.length) { listBox.append(h('p', { class: 'dim', style: 'padding:1rem', text: 'Още нямаш разговори. Отвори профил от „Открий хора“ и натисни „Пиши“.' })); return; }
+    chats.forEach(c => listBox.append(h('button', { class: 'chatitem' + (c.profile.id === chatWith ? ' on' : ''), type: 'button', role: 'listitem', onclick: () => { chatWith = c.profile.id; layout.classList.add('open'); renderList(); loadThread(true); } },
+      h('img', { src: mainPhoto(c.profile), alt: '', width: '44', height: '44' }),
+      h('span', { class: 'ci' }, h('b', { text: c.profile.nickname }), h('small', { text: (c.last.mine ? 'Ти: ' : '') + c.last.body })),
+      badge(c.unread))));
+  }
+  async function loadList() {
+    try { chats = (await api('GET', '/api/chats')).chats; renderList(); } catch (x) { if (x.status !== 0) toast(x.message, true); }
+  }
+
+  function renderThread(force) {
+    if (!chatWith) {
+      clear(threadBox).append(h('div', { class: 'empty-state' }, h('div', { class: 'big', text: '💬' }), h('h3', { text: 'Избери разговор' }), h('p', { text: 'Или отвори нечий профил и натисни „Пиши“.' })));
+      return;
+    }
+    if (!peer || peer.id !== chatWith) { clear(threadBox).append(h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Зареждане' })); sig = ''; return; }
+    const nextSig = msgs.length + ':' + (msgs.length ? msgs[msgs.length - 1].id : 0) + ':' + (peer ? peer.id : 0);
+    if (!force && nextSig === sig) return;
+    sig = nextSig;
+    const keep = $('textarea', threadBox);
+    const draft = keep ? keep.value : '';
+    const list = h('div', { class: 'msgs', 'aria-live': 'polite' });
+    let day = '';
+    if (!msgs.length) list.append(h('p', { class: 'dim', style: 'text-align:center;margin:auto', text: `Напиши първото съобщение на ${peer.nickname}.` }));
+    for (const m of msgs) {
+      const d = fmtDate(m.at);
+      if (d !== day) { day = d; list.append(h('div', { class: 'daysep', text: d })); }
+      list.append(h('div', { class: 'bubble ' + (m.mine ? 'mine' : 'theirs') }, h('span', { text: m.body }), h('time', { datetime: m.at, text: fmtTime(m.at) })));
+    }
+    const input = h('textarea', { id: 'chat-input', rows: '2', maxlength: '1000', placeholder: 'Напиши съобщение…', 'aria-label': 'Съобщение',
+      onkeydown: e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } } });
+    input.value = draft;
+    const sendBtn = h('button', { class: 'btn', type: 'button', text: 'Изпрати', onclick: send });
+    async function send() {
+      const body = input.value.trim();
+      if (!body) return;
+      sendBtn.disabled = true;
+      try {
+        const r = await api('POST', `/api/chats/${peer.id}`, { body });
+        msgs.push(r.message); input.value = ''; renderThread(true); toBottom(); loadList();
+      } catch (x) { toast(x.message, true); } finally { sendBtn.disabled = false; }
+    }
+    clear(threadBox).append(
+      h('div', { class: 'win-head' },
+        h('button', { class: 'xbtn backbtn', type: 'button', 'aria-label': 'Към разговорите', text: '←', onclick: () => { chatWith = null; layout.classList.remove('open'); renderList(); renderThread(true); } }),
+        h('img', { class: 'mini', src: mainPhoto(peer), alt: '', width: '32', height: '32' }),
+        h('h2', {}, h('a', { href: '#/messages', text: peer.nickname, onclick: e => { e.preventDefault(); openProfile(peer); } }), ` · ${peer.city}`),
+        h('button', { class: 'btn danger sm', style: 'margin-left:auto', type: 'button', text: '🚩 Докладвай', onclick: () => reportDialog(peer) })),
+      list,
+      h('p', { class: 'hint notice', text: '🔒 Разговорът е личен. При подаден доклад администратор може да прегледа размяната ви с докладвания човек.' }),
+      h('div', { class: 'composer' }, input, sendBtn));
+    toBottom();
+    if (draft) input.focus();
+  }
+
+  async function loadThread(initial) {
+    if (!chatWith) { renderThread(true); return; }
+    try {
+      const r = await api('GET', `/api/chats/${chatWith}`);
+      const grew = r.messages.length !== msgs.length;
+      peer = r.profile; msgs = r.messages;
+      renderThread(initial);
+      if (initial || grew) toBottom();
+      if (initial || grew) loadList();
+      refreshBadges();
+    } catch (x) {
+      if (x.status === 404) { chatWith = null; layout.classList.remove('open'); renderThread(true); loadList(); } else if (x.status !== 0) toast(x.message, true);
+    }
+  }
+
+  renderThread(true);
+  loadList();
+  if (chatWith) loadThread(true);
+  viewTimer = setInterval(() => { loadList(); if (chatWith) loadThread(false); }, 5000);
+}
+
 /* ═══════════ Администрация ═══════════ */
 function viewAdmin() {
   const v = clear($('#view'));
   const head = t => h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: t }));
   const tiles = h('div', { class: 'tiles' });
   const bars = h('div', { class: 'bars' });
+  const repBox = h('div', { class: 'replist' });
+  const repFilters = h('div', { class: 'chips', style: 'margin-bottom:.9rem', role: 'group', 'aria-label': 'Филтър на докладите' });
+  let repFilter = 'open';
   const tbody = h('tbody');
   const count = h('span', { class: 'dim' });
   v.append(h('h1', { text: 'Админ панел' }),
@@ -611,7 +762,10 @@ function viewAdmin() {
       h('section', { class: 'win enter', style: '--i:2' }, head('🧭 Бърз достъп'), h('div', { class: 'win-body' },
         h('p', { class: 'dim', text: 'Разгледай сайта като потребител:' }),
         h('div', { class: 'actions' }, h('a', { class: 'btn', href: '#/discover', text: 'Открий хора' }), h('a', { class: 'btn ghost', href: '#/profile', text: 'Моят профил' }), h('a', { class: 'btn ghost', href: '#/settings', text: 'Дизайн' }))))),
-    h('section', { class: 'win enter', style: '--i:3' }, head('👥 Потребители'), h('div', { class: 'win-body' },
+    h('section', { class: 'win enter', style: '--i:3', id: 'reportsWin' }, head('🚩 Доклади'), h('div', { class: 'win-body' },
+      h('p', { class: 'dim', text: 'Разговорът се вижда само към доклад (снимка от момента на докладването). Всяко отваряне се записва в журнал.' }),
+      repFilters, repBox)),
+    h('section', { class: 'win enter', style: '--i:4' }, head('👥 Потребители'), h('div', { class: 'win-body' },
       h('div', { class: 'citybar' }, h('input', { type: 'search', placeholder: 'Търси по никнейм или потребителско име', 'aria-label': 'Търсене на потребители', style: 'max-width:26rem',
         oninput: debounce(e => loadUsers(e.target.value), 250) }), count),
       h('div', { class: 'tblwrap' }, h('table', { class: 'tbl' },
@@ -620,7 +774,7 @@ function viewAdmin() {
   async function loadStats() {
     try {
       const st = await api('GET', '/api/admin/stats');
-      clear(tiles).append(...[['Профили', st.users], ['Реални', st.real], ['Демо', st.demo], ['Снимки', st.photos], ['Харесвания', st.likes], ['Онлайн', st.online], ['Нови за 24ч', st.newToday]]
+      clear(tiles).append(...[['Профили', st.users], ['Реални', st.real], ['Демо', st.demo], ['Снимки', st.photos], ['Харесвания', st.likes], ['Отворени доклади', st.openReports], ['Онлайн', st.online], ['Нови за 24ч', st.newToday]]
         .map(([l, n]) => h('div', { class: 'tile' }, h('b', { text: String(n) }), h('span', { text: l }))));
       const max = Math.max(1, ...st.byCity.map(c => c.count));
       clear(bars).append(...st.byCity.slice(0, 12).map(c => h('div', { class: 'bar' },
@@ -647,26 +801,108 @@ function viewAdmin() {
       }
     } catch (x) { toast(x.message, true); }
   }
-  loadStats(); loadUsers();
+  const STATUS = { open: 'Отворен', upheld: 'Основателен', dismissed: 'Неоснователен' };
+  async function loadReports() {
+    try {
+      const r = await api('GET', '/api/admin/reports?status=' + repFilter);
+      const total = r.counts.open + r.counts.upheld + r.counts.dismissed;
+      clear(repFilters).append(...[['open', `Отворени (${r.counts.open})`], ['upheld', `Основателни (${r.counts.upheld})`], ['dismissed', `Неоснователни (${r.counts.dismissed})`], ['all', `Всички (${total})`]]
+        .map(([k, t]) => h('button', { class: 'chip', type: 'button', text: t, 'aria-pressed': String(repFilter === k), onclick: () => { repFilter = k; loadReports(); } })));
+      clear(repBox);
+      if (!r.reports.length) { repBox.append(h('p', { class: 'dim', text: repFilter === 'open' ? 'Няма отворени доклади. 🎉' : 'Няма доклади в тази група.' })); }
+      for (const x of r.reports) {
+        repBox.append(h('div', { class: 'rep' },
+          h('div', { class: 'who' }, h('b', { text: x.reportedNick }), h('span', { class: 'dim', text: ` докладван от ${x.reporterNick}` })),
+          h('span', { class: 'tag', text: x.reasonLabel }),
+          h('span', { class: 'dim', text: `${fmtWhen(x.createdAt)} · 💬 ${x.messages}` }),
+          h('span', { class: 'tag st-' + x.status, text: STATUS[x.status] }),
+          h('button', { class: 'btn sm', type: 'button', text: 'Разгледай', onclick: () => openCase(x.id, () => { loadReports(); loadStats(); refreshBadges(); }) })));
+      }
+    } catch (x) { toast(x.message, true); }
+  }
+
+  loadStats(); loadReports(); loadUsers();
+}
+
+// Казус: данни за доклада + снимка на разговора + решение на администратора.
+async function openCase(id, changed) {
+  let d;
+  try { d = await api('GET', `/api/admin/reports/${id}`); } catch (x) { toast(x.message, true); return; }
+  const r = d.report, STATUS = { open: 'Отворен', upheld: 'Основателен', dismissed: 'Неоснователен' };
+  const note = h('textarea', { id: 'case-note', maxlength: '500', placeholder: 'Бележка към решението (по желание)', style: 'min-height:5rem' });
+  note.value = r.adminNote || '';
+  const decide = async status => {
+    try { await api('PUT', `/api/admin/reports/${id}`, { status, note: note.value }); toast(status === 'open' ? 'Докладът е върнат като отворен.' : 'Решението е записано.'); closeModal(); changed && changed(); }
+    catch (x) { toast(x.message, true); }
+  };
+  let armed = false;
+  const delBtn = h('button', { class: 'btn danger', type: 'button', text: 'Изтрий профила на докладвания' });
+  delBtn.addEventListener('click', async () => {
+    if (!armed) { armed = true; delBtn.textContent = 'Сигурен ли си? Натисни пак'; setTimeout(() => { armed = false; delBtn.textContent = 'Изтрий профила на докладвания'; }, 3500); return; }
+    try { await api('DELETE', `/api/admin/users/${d.reported.id}`); toast('Профилът е изтрит. Доказателствата в доклада остават.'); closeModal(); changed && changed(); }
+    catch (x) { toast(x.message, true); }
+  });
+
+  const transcript = h('div', { class: 'transcript', tabindex: '0', 'aria-label': 'Разговор към момента на доклада' });
+  if (!d.messages.length) transcript.append(h('p', { class: 'dim', style: 'margin:auto;text-align:center', text: 'Към момента на доклада няма разменени съобщения между двамата.' }));
+  let day = '';
+  for (const m of d.messages) {
+    const dd = fmtDate(m.at);
+    if (dd !== day) { day = dd; transcript.append(h('div', { class: 'daysep', text: dd })); }
+    transcript.append(h('div', { class: 'bubble ' + (m.fromReporter ? 'mine' : 'accused') }, h('small', { class: 'from', text: m.from + (m.fromReporter ? ' (докладва)' : ' (докладван)') }), h('span', { text: m.body }), h('time', { datetime: m.at, text: fmtTime(m.at) })));
+  }
+
+  const rep = d.reported;
+  openModal(h('div', {},
+    h('div', { class: 'two' },
+      h('div', {},
+        h('dl', { class: 'facts' },
+          h('dt', { text: 'Статус' }), h('dd', {}, h('span', { class: 'tag st-' + r.status, text: STATUS[r.status] })),
+          h('dt', { text: 'Причина' }), h('dd', { text: r.reasonLabel }),
+          h('dt', { text: 'Подаден' }), h('dd', { text: fmtWhen(r.createdAt) }),
+          h('dt', { text: 'Докладва' }), h('dd', { text: r.reporterNick + (r.reporterStillExists ? '' : ' (акаунтът е изтрит)') }),
+          h('dt', { text: 'Докладван' }), h('dd', { text: r.reportedNick + (rep ? '' : ' (акаунтът е изтрит)') }),
+          h('dt', { text: 'Прегледи' }), h('dd', { text: `${d.views}× от администратори` })),
+        h('h3', { text: 'Описание от докладващия' }),
+        h('p', { class: 'bio', text: r.details || 'Без описание.' }),
+        rep ? [h('h3', { text: 'Докладваният профил' }),
+          h('p', { class: 'dim', text: `${rep.age} г. · ${rep.city} · ${rep.photos} снимки · в сайта от ${fmtDate(rep.createdAt)}` }),
+          h('p', { class: 'bio', text: rep.bio || 'Няма био.' }),
+          rep.otherReports ? h('p', {}, h('span', { class: 'tag st-upheld', text: `⚠️ Още ${rep.otherReports} доклада срещу този профил` })) : null] : null),
+      h('div', {},
+        h('h3', { text: 'Разговор (снимка към момента на доклада)' }),
+        h('p', { class: 'hint', text: 'Показан е само разговорът между тези двама души. Останалите чатове не са достъпни.' }),
+        transcript)),
+    h('div', { class: 'field', style: 'margin-top:1rem' }, h('label', { for: 'case-note', text: 'Бележка на администратора' }), note),
+    h('div', { class: 'actions' },
+      r.status !== 'upheld' ? h('button', { class: 'btn', type: 'button', text: '✔ Основателен', onclick: () => decide('upheld') }) : null,
+      r.status !== 'dismissed' ? h('button', { class: 'btn ghost', type: 'button', text: '✖ Неоснователен', onclick: () => decide('dismissed') }) : null,
+      r.status !== 'open' ? h('button', { class: 'btn ghost', type: 'button', text: '↺ Върни като отворен', onclick: () => decide('open') }) : null,
+      rep && d.reported ? delBtn : null),
+    h('p', { class: 'hint', text: 'Отварянето на този доклад е записано в журнала.' })),
+  { title: `Доклад #${r.id}` });
 }
 
 /* ═══════════ Маршрутизация ═══════════ */
 function currentRoute() {
   const r = (location.hash || '#/').replace(/^#\/?/, '').split('?')[0];
-  return ['discover', 'profile', 'settings', 'admin'].includes(r) ? r : '';
+  return ['discover', 'profile', 'settings', 'admin', 'messages'].includes(r) ? r : '';
 }
 function route() {
   closeModal();
+  stopViewTimer();
   let r = currentRoute();
   if (!state.me && r !== 'settings') r = '';
   if (r === 'admin' && !(state.me && state.me.role === 'admin')) r = state.me ? 'discover' : '';
+  if (r === 'messages' && !(state.me && state.me.role !== 'admin')) r = state.me ? 'discover' : '';
+  if (state.me) startBadges(); else stopBadges();
   if (state.me && r === '') { r = 'discover'; history.replaceState(null, '', '#/discover'); }
   renderChrome();
   if (!state.meta) return;
-  ({ '': viewLanding, discover: viewDiscover, profile: viewProfile, settings: viewSettings, admin: viewAdmin })[r]();
+  ({ '': viewLanding, discover: viewDiscover, profile: viewProfile, settings: viewSettings, admin: viewAdmin, messages: viewMessages })[r]();
   window.scrollTo(0, 0);
   const main = $('#view'); if (main) main.focus({ preventScroll: true });
-  document.title = ({ '': 'Spark — запознанства', discover: 'Открий хора · Spark', profile: 'Моят профил · Spark', settings: 'Дизайн и настройки · Spark', admin: 'Админ · Spark' })[r];
+  document.title = ({ '': 'Spark — запознанства', discover: 'Открий хора · Spark', profile: 'Моят профил · Spark', settings: 'Дизайн и настройки · Spark', admin: 'Админ · Spark', messages: 'Съобщения · Spark' })[r];
 }
 
 /* ═══════════ Старт ═══════════ */

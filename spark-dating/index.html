@@ -252,6 +252,40 @@ input[type=color] { padding: 2px; height: 2.4rem; width: 3.4rem; cursor: pointer
 .tbl tbody tr:hover { background: var(--faint); }
 @media (max-width: 520px) { .bar { grid-template-columns: 6.5rem 1fr 1.6rem; } }
 
+/* ── Съобщения ── */
+.badge { display: inline-block; min-width: 1.25rem; padding: 0 .35rem; margin-left: .35rem; border-radius: 999px; background: var(--accent); color: #04101c; font-size: .72rem; font-weight: 800; line-height: 1.25rem; text-align: center; box-shadow: var(--glow-shadow); }
+.chatlayout { display: grid; grid-template-columns: 300px 1fr; gap: 1rem; height: calc(100vh - 12rem); min-height: 460px; }
+.chatside, .chatthread { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.chatlist { overflow-y: auto; flex: 1; padding: .4rem; }
+.chatitem { display: flex; align-items: center; gap: .7rem; width: 100%; text-align: left; font: inherit; color: var(--text); background: transparent; border: var(--bw) solid transparent; border-radius: calc(var(--radius) * .6); padding: .55rem; cursor: pointer; transition: background .2s, border-color .2s; }
+.chatitem:hover { background: var(--faint); } .chatitem.on { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); }
+.chatitem img, .mini { border-radius: 50%; object-fit: cover; flex: none; background: var(--faint); }
+.chatitem .ci { display: grid; min-width: 0; flex: 1; } .chatitem b { color: var(--heading); }
+.chatitem small { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chatthread .win-head h2 { margin: 0; font-size: 1.02rem; } .chatthread .win-head h2 a { color: var(--heading); }
+.msgs, .transcript { display: flex; flex-direction: column; gap: .45rem; overflow-y: auto; padding: 1rem; flex: 1; min-height: 0; }
+.transcript { flex: none; max-height: 46vh; min-height: 9rem; border: var(--bw) solid var(--border); border-radius: calc(var(--radius) * .6); background: color-mix(in srgb, var(--bg) 60%, var(--surface)); }
+.bubble { max-width: 78%; padding: .5rem .8rem; border-radius: 16px; display: grid; gap: .15rem; overflow-wrap: anywhere; white-space: pre-wrap; animation: pop .3s var(--ease) both; }
+.bubble time { font-size: .7rem; opacity: .65; justify-self: end; }
+.bubble .from { font-weight: 700; opacity: .85; }
+.bubble.mine { align-self: flex-end; background: color-mix(in srgb, var(--accent) 28%, var(--surface)); border-bottom-right-radius: 4px; color: var(--heading); }
+.bubble.theirs { align-self: flex-start; background: var(--faint); border-bottom-left-radius: 4px; }
+.bubble.accused { align-self: flex-start; background: color-mix(in srgb, var(--danger) 16%, var(--surface)); border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); border-bottom-left-radius: 4px; }
+.daysep { align-self: center; font-size: .74rem; color: var(--muted); padding: .1rem .7rem; border-radius: 999px; background: var(--faint); }
+.composer { display: flex; gap: .6rem; padding: .7rem; border-top: var(--bw) solid var(--border); align-items: flex-end; } .composer textarea { min-height: 0; resize: none; }
+.notice { margin: 0; padding: .4rem 1rem; } p.notice { padding: .5rem .8rem; border-radius: 10px; background: var(--faint); margin: .6rem 0; }
+.backbtn { display: none; }
+@media (max-width: 800px) {
+  .chatlayout { grid-template-columns: 1fr; height: calc(100vh - 14rem); }
+  .chatlayout.open .chatside, .chatlayout:not(.open) .chatthread { display: none; }
+  .backbtn { display: inline-block; margin-left: 0; }
+}
+/* ── Доклади ── */
+.replist { display: grid; gap: .6rem; }
+.rep { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; padding: .65rem .8rem; border: var(--bw) solid var(--border); border-radius: calc(var(--radius) * .6); background: var(--faint); }
+.rep .who { flex: 1 1 14rem; min-width: 0; overflow-wrap: anywhere; }
+.tag.st-open { border-color: var(--accent); color: var(--heading); } .tag.st-upheld { border-color: var(--danger); color: var(--danger); } .tag.st-dismissed { border-color: var(--ok); color: var(--ok); }
+
 /* ── Тостове ── */
 #toasts { position: fixed; z-index: 200; bottom: 1rem; left: 50%; transform: translateX(-50%); display: grid; gap: .5rem; width: min(92vw, 420px); pointer-events: none; }
 .toast { pointer-events: auto; padding: .7rem 1rem; border-radius: 14px; background: var(--surface); color: var(--heading); border: var(--bw) solid var(--accent); box-shadow: var(--glow-shadow), 0 10px 30px rgba(0,0,0,.5); animation: fadeUp .35s var(--ease) both; }
@@ -285,7 +319,7 @@ html, body { height: auto; }
 <footer class="foot"><span>© Spark · само за лица над 18 години</span><span class="dim">Профилите с значка „демо“ са примерни.</span></footer>
 <div id="modalRoot"></div>
 <div id="toasts" role="status" aria-live="polite"></div>
-<script>window.__SPARK_PREVIEW__ = {"cities":["София","Пловдив","Варна","Бургас","Русе","Стара Загора","Плевен","Сливен","Добрич","Шумен","Перник","Хасково","Ямбол","Пазарджик","Благоевград","Велико Търново","Враца","Габрово","Асеновград","Видин","Казанлък","Кюстендил","Кърджали","Монтана","Димитровград","Търговище","Разград","Силистра","Смолян","Ловеч","Банско","Несебър"],"interests":["Пътуване","Музика","Спорт","Кино","Книги","Готвене","Планина","Танци","Фотография","Технологии","Изкуство","Кучета","Котки","Йога","Игри","Море"],"people":[{"nickname":"Мила","gender":"female","age":27,"city":"София","bio":"Обичам дългите разходки из Витоша и доброто кафе. Търся някой, с когото да се смея на глупави неща.","interests":["Кино","Фотография","Йога"],"lookingFor":"any"},{"nickname":"Радо","gender":"male","age":31,"city":"София","bio":"Програмист през деня, готвач през уикенда. Правя най-добрата паста карбонара в квартала.","interests":["Изкуство","Море","Книги","Технологии"],"lookingFor":"female"},{"nickname":"Ники","gender":"male","age":29,"city":"София","bio":"Колоездя, снимам и събирам плочи. Вярвам, че най-добрите разговори са след полунощ.","interests":["Музика","Планина","Кучета","Пътуване","Готвене"],"lookingFor":"female"},{"nickname":"Дара","gender":"female","age":34,"city":"София","bio":"Дизайнер, мама на един пухкав котарак. Обожавам арт изложби и малки кафенета.","interests":["Фотография","Йога","Спорт","Танци","Котки","Музика"],"lookingFor":"male"},{"nickname":"Явор","gender":"male","age":38,"city":"Пловдив","bio":"Роден и израснал в Стария град. Свиря на китара и търся сериозна връзка.","interests":["Море","Книги","Технологии"],"lookingFor":"female"},{"nickname":"Теди","gender":"female","age":25,"city":"Пловдив","bio":"Учителка по английски. Танцувам салса и мечтая да обиколя света с раница.","interests":["Планина","Кучета","Пътуване","Готвене"],"lookingFor":"male"},{"nickname":"Живко","gender":"male","age":33,"city":"Пловдив","bio":"Архитект, влюбен в стари къщи. Обичам планината, виното и добрите книги.","interests":["Йога","Спорт","Танци","Котки","Музика"],"lookingFor":"female"},{"nickname":"Криси","gender":"female","age":30,"city":"Варна","bio":"Морето е моят дом. Сърфирам, плувам и пия кафе на плажа до късна есен.","interests":["Книги","Технологии","Игри","Кино","Фотография","Йога"],"lookingFor":"male"},{"nickname":"Боби","gender":"male","age":35,"city":"Варна","bio":"Капитан на малка яхта и голям мечтател. Търся спътник за дълги пътешествия.","interests":["Кучета","Пътуване","Готвене"],"lookingFor":"female"},{"nickname":"Вики","gender":"female","age":28,"city":"Варна","bio":"Фотограф. Ловя залези и усмивки. Обичам кучета повече от повечето хора.","interests":["Спорт","Танци","Котки","Музика"],"lookingFor":"any"},{"nickname":"Стефан","gender":"male","age":40,"city":"Бургас","bio":"Готвач в морски ресторант. Обичам риба, джаз и дълги разговори на брега.","interests":["Технологии","Игри","Кино","Фотография","Йога"],"lookingFor":"female"},{"nickname":"Ели","gender":"female","age":26,"city":"Бургас","bio":"Йога инструктор. Търся спокойствие, добро настроение и честни хора.","interests":["Пътуване","Готвене","Изкуство","Море","Книги","Технологии"],"lookingFor":"male"},{"nickname":"Любо","gender":"male","age":32,"city":"Русе","bio":"Инженер и запален пътешественик. Обичам дунавските залези и стария добър рок.","interests":["Танци","Котки","Музика"],"lookingFor":"female"},{"nickname":"Нели","gender":"female","age":36,"city":"Русе","bio":"Библиотекарка с голяма домашна библиотека. Ще те убедя да прочетеш любимата ми книга.","interests":["Игри","Кино","Фотография","Йога"],"lookingFor":"male"},{"nickname":"Данчо","gender":"male","age":27,"city":"Стара Загора","bio":"Футболист аматьор, любител на добрата музика и още по-добрата компания.","interests":["Готвене","Изкуство","Море","Книги","Технологии"],"lookingFor":"female"},{"nickname":"Таня","gender":"female","age":31,"city":"Стара Загора","bio":"Лекарка с чувство за хумор. Ходя на планина, когато мога, и спя, когато не мога.","interests":["Котки","Музика","Планина","Кучета","Пътуване","Готвене"],"lookingFor":"male"},{"nickname":"Митко","gender":"male","age":45,"city":"Плевен","bio":"Бизнесмен, баща на две големи деца. Търся приятелка и партньор за пътуване.","interests":["Кино","Фотография","Йога"],"lookingFor":"female"},{"nickname":"Гери","gender":"female","age":29,"city":"Плевен","bio":"Обичам да рисувам и да гледам стари филми. Кафе или чай?","interests":["Изкуство","Море","Книги","Технологии"],"lookingFor":"male"},{"nickname":"Пешо","gender":"male","age":34,"city":"Велико Търново","bio":"Историк и екскурзовод. Ще ти покажа Царевец, както никой друг.","interests":["Музика","Планина","Кучета","Пътуване","Готвене"],"lookingFor":"any"},{"nickname":"Лидия","gender":"female","age":32,"city":"Велико Търново","bio":"Работя в хотел, мечтая за собствено кафене. Обичам планината и котките.","interests":["Фотография","Йога","Спорт","Танци","Котки","Музика"],"lookingFor":"male"},{"nickname":"Краси","gender":"female","age":24,"city":"Благоевград","bio":"Студентка по психология. Скиор, пътешественик и любител на добрата музика.","interests":["Море","Книги","Технологии"],"lookingFor":"male"},{"nickname":"Сашо","gender":"male","age":28,"city":"Благоевград","bio":"Сноубордист и планинар. Търся някой, който не се страхува от студ.","interests":["Планина","Кучета","Пътуване","Готвене"],"lookingFor":"female"},{"nickname":"Мариян","gender":"male","age":37,"city":"Добрич","bio":"Фермер с модерен поглед. Обичам природата, спокойствието и истинските хора.","interests":["Йога","Спорт","Танци","Котки","Музика"],"lookingFor":"female"},{"nickname":"Жана","gender":"female","age":33,"city":"Добрич","bio":"Журналистка. Любопитна съм към всичко и всички — разкажи ми история.","interests":["Книги","Технологии","Игри","Кино","Фотография","Йога"],"lookingFor":"male"},{"nickname":"Георги","gender":"male","age":30,"city":"Шумен","bio":"Музикант в местна група. Свирим по кръчмите и обичаме публиката.","interests":["Кучета","Пътуване","Готвене"],"lookingFor":"female"},{"nickname":"Ани","gender":"female","age":27,"city":"Шумен","bio":"Козметик и любител на фитнеса. Търся позитивен човек без драма.","interests":["Спорт","Танци","Котки","Музика"],"lookingFor":"male"},{"nickname":"Тони","gender":"male","age":41,"city":"Габрово","bio":"Занаятчия, правя дърворезба. Хуморът ми е габровски, сърцето ми — широко.","interests":["Технологии","Игри","Кино","Фотография","Йога"],"lookingFor":"female"},{"nickname":"Мими","gender":"female","age":35,"city":"Габрово","bio":"Аниматорка в детски център. Обичам смеха, танците и вкусната храна.","interests":["Пътуване","Готвене","Изкуство","Море","Книги","Технологии"],"lookingFor":"any"},{"nickname":"Венци","gender":"male","age":26,"city":"Хасково","bio":"Мениджър в IT фирма. Играя геймърски турнири и пия много кафе.","interests":["Танци","Котки","Музика"],"lookingFor":"female"},{"nickname":"Радост","gender":"female","age":29,"city":"Хасково","bio":"Обичам пътуванията, добрия чай и хората, които ме разсмиват.","interests":["Игри","Кино","Фотография","Йога"],"lookingFor":"male"},{"nickname":"Борко","gender":"male","age":52,"city":"Видин","bio":"Вдовец с добро сърце. Обичам риболова, разходките и спокойните вечери.","interests":["Готвене","Изкуство","Море","Книги","Технологии"],"lookingFor":"female"},{"nickname":"Силви","gender":"female","age":48,"city":"Сливен","bio":"Учителка, обичам градината си. Търся сериозен, грижовен мъж.","interests":["Котки","Музика","Планина","Кучета","Пътуване","Готвене"],"lookingFor":"male"},{"nickname":"Влади","gender":"male","age":31,"city":"Пазарджик","bio":"Треньор по плуване. Спортувам всеки ден и обичам здравословната храна.","interests":["Кино","Фотография","Йога"],"lookingFor":"female"},{"nickname":"Яна","gender":"female","age":25,"city":"Банско","bio":"Работя в ски училище. Зимата е любимият ми сезон, а лятото — за походи.","interests":["Изкуство","Море","Книги","Технологии"],"lookingFor":"male"},{"nickname":"Калоян","gender":"male","age":29,"city":"Несебър","bio":"Сервитьор през лятото, музикант през зимата. Обичам морския въздух.","interests":["Музика","Планина","Кучета","Пътуване","Готвене"],"lookingFor":"female"},{"nickname":"Мариела","gender":"female","age":39,"city":"Перник","bio":"Счетоводителка с тайна страст към танците. Търся мъж със чувство за ритъм.","interests":["Фотография","Йога","Спорт","Танци","Котки","Музика"],"lookingFor":"male"},{"nickname":"Деян","gender":"male","age":36,"city":"Кюстендил","bio":"Любител на черешите, планината и добрата компания. Обичам да готвя на открито.","interests":["Море","Книги","Технологии"],"lookingFor":"any"},{"nickname":"Вили","gender":"female","age":23,"city":"Смолян","bio":"Студентка и планинар. Обичам Родопите, народната музика и вкусните баници.","interests":["Планина","Кучета","Пътуване","Готвене"],"lookingFor":"male"}]};</script>
+<script>window.__SPARK_PREVIEW__ = {"cities":["София","Пловдив","Варна","Бургас","Русе","Стара Загора","Плевен","Сливен","Добрич","Шумен","Перник","Хасково","Ямбол","Пазарджик","Благоевград","Велико Търново","Враца","Габрово","Асеновград","Видин","Казанлък","Кюстендил","Кърджали","Монтана","Димитровград","Търговище","Разград","Силистра","Смолян","Ловеч","Банско","Несебър"],"interests":["Пътуване","Музика","Спорт","Кино","Книги","Готвене","Планина","Танци","Фотография","Технологии","Изкуство","Кучета","Котки","Йога","Игри","Море"],"people":[{"nickname":"Мила","gender":"female","age":27,"city":"София","bio":"Обичам дългите разходки из Витоша и доброто кафе. Търся някой, с когото да се смея на глупави неща.","interests":["Кино","Фотография","Йога"],"lookingFor":"any"},{"nickname":"Радо","gender":"male","age":31,"city":"София","bio":"Програмист през деня, готвач през уикенда. Правя най-добрата паста карбонара в квартала.","interests":["Изкуство","Море","Книги","Технологии"],"lookingFor":"female"},{"nickname":"Ники","gender":"male","age":29,"city":"София","bio":"Колоездя, снимам и събирам плочи. Вярвам, че най-добрите разговори са след полунощ.","interests":["Музика","Планина","Кучета","Пътуване","Готвене"],"lookingFor":"female"},{"nickname":"Дара","gender":"female","age":34,"city":"София","bio":"Дизайнер, мама на един пухкав котарак. Обожавам арт изложби и малки кафенета.","interests":["Фотография","Йога","Спорт","Танци","Котки","Музика"],"lookingFor":"male"},{"nickname":"Явор","gender":"male","age":38,"city":"Пловдив","bio":"Роден и израснал в Стария град. Свиря на китара и търся сериозна връзка.","interests":["Море","Книги","Технологии"],"lookingFor":"female"},{"nickname":"Теди","gender":"female","age":25,"city":"Пловдив","bio":"Учителка по английски. Танцувам салса и мечтая да обиколя света с раница.","interests":["Планина","Кучета","Пътуване","Готвене"],"lookingFor":"male"},{"nickname":"Живко","gender":"male","age":33,"city":"Пловдив","bio":"Архитект, влюбен в стари къщи. Обичам планината, виното и добрите книги.","interests":["Йога","Спорт","Танци","Котки","Музика"],"lookingFor":"female"},{"nickname":"Криси","gender":"female","age":30,"city":"Варна","bio":"Морето е моят дом. Сърфирам, плувам и пия кафе на плажа до късна есен.","interests":["Книги","Технологии","Игри","Кино","Фотография","Йога"],"lookingFor":"male"},{"nickname":"Боби","gender":"male","age":35,"city":"Варна","bio":"Капитан на малка яхта и голям мечтател. Търся спътник за дълги пътешествия.","interests":["Кучета","Пътуване","Готвене"],"lookingFor":"female"},{"nickname":"Вики","gender":"female","age":28,"city":"Варна","bio":"Фотограф. Ловя залези и усмивки. Обичам кучета повече от повечето хора.","interests":["Спорт","Танци","Котки","Музика"],"lookingFor":"any"},{"nickname":"Стефан","gender":"male","age":40,"city":"Бургас","bio":"Готвач в морски ресторант. Обичам риба, джаз и дълги разговори на брега.","interests":["Технологии","Игри","Кино","Фотография","Йога"],"lookingFor":"female"},{"nickname":"Ели","gender":"female","age":26,"city":"Бургас","bio":"Йога инструктор. Търся спокойствие, добро настроение и честни хора.","interests":["Пътуване","Готвене","Изкуство","Море","Книги","Технологии"],"lookingFor":"male"},{"nickname":"Любо","gender":"male","age":32,"city":"Русе","bio":"Инженер и запален пътешественик. Обичам дунавските залези и стария добър рок.","interests":["Танци","Котки","Музика"],"lookingFor":"female"},{"nickname":"Нели","gender":"female","age":36,"city":"Русе","bio":"Библиотекарка с голяма домашна библиотека. Ще те убедя да прочетеш любимата ми книга.","interests":["Игри","Кино","Фотография","Йога"],"lookingFor":"male"},{"nickname":"Данчо","gender":"male","age":27,"city":"Стара Загора","bio":"Футболист аматьор, любител на добрата музика и още по-добрата компания.","interests":["Готвене","Изкуство","Море","Книги","Технологии"],"lookingFor":"female"},{"nickname":"Таня","gender":"female","age":31,"city":"Стара Загора","bio":"Лекарка с чувство за хумор. Ходя на планина, когато мога, и спя, когато не мога.","interests":["Котки","Музика","Планина","Кучета","Пътуване","Готвене"],"lookingFor":"male"},{"nickname":"Митко","gender":"male","age":45,"city":"Плевен","bio":"Бизнесмен, баща на две големи деца. Търся приятелка и партньор за пътуване.","interests":["Кино","Фотография","Йога"],"lookingFor":"female"},{"nickname":"Гери","gender":"female","age":29,"city":"Плевен","bio":"Обичам да рисувам и да гледам стари филми. Кафе или чай?","interests":["Изкуство","Море","Книги","Технологии"],"lookingFor":"male"},{"nickname":"Пешо","gender":"male","age":34,"city":"Велико Търново","bio":"Историк и екскурзовод. Ще ти покажа Царевец, както никой друг.","interests":["Музика","Планина","Кучета","Пътуване","Готвене"],"lookingFor":"any"},{"nickname":"Лидия","gender":"female","age":32,"city":"Велико Търново","bio":"Работя в хотел, мечтая за собствено кафене. Обичам планината и котките.","interests":["Фотография","Йога","Спорт","Танци","Котки","Музика"],"lookingFor":"male"},{"nickname":"Краси","gender":"female","age":24,"city":"Благоевград","bio":"Студентка по психология. Скиор, пътешественик и любител на добрата музика.","interests":["Море","Книги","Технологии"],"lookingFor":"male"},{"nickname":"Сашо","gender":"male","age":28,"city":"Благоевград","bio":"Сноубордист и планинар. Търся някой, който не се страхува от студ.","interests":["Планина","Кучета","Пътуване","Готвене"],"lookingFor":"female"},{"nickname":"Мариян","gender":"male","age":37,"city":"Добрич","bio":"Фермер с модерен поглед. Обичам природата, спокойствието и истинските хора.","interests":["Йога","Спорт","Танци","Котки","Музика"],"lookingFor":"female"},{"nickname":"Жана","gender":"female","age":33,"city":"Добрич","bio":"Журналистка. Любопитна съм към всичко и всички — разкажи ми история.","interests":["Книги","Технологии","Игри","Кино","Фотография","Йога"],"lookingFor":"male"},{"nickname":"Георги","gender":"male","age":30,"city":"Шумен","bio":"Музикант в местна група. Свирим по кръчмите и обичаме публиката.","interests":["Кучета","Пътуване","Готвене"],"lookingFor":"female"},{"nickname":"Ани","gender":"female","age":27,"city":"Шумен","bio":"Козметик и любител на фитнеса. Търся позитивен човек без драма.","interests":["Спорт","Танци","Котки","Музика"],"lookingFor":"male"},{"nickname":"Тони","gender":"male","age":41,"city":"Габрово","bio":"Занаятчия, правя дърворезба. Хуморът ми е габровски, сърцето ми — широко.","interests":["Технологии","Игри","Кино","Фотография","Йога"],"lookingFor":"female"},{"nickname":"Мими","gender":"female","age":35,"city":"Габрово","bio":"Аниматорка в детски център. Обичам смеха, танците и вкусната храна.","interests":["Пътуване","Готвене","Изкуство","Море","Книги","Технологии"],"lookingFor":"any"},{"nickname":"Венци","gender":"male","age":26,"city":"Хасково","bio":"Мениджър в IT фирма. Играя геймърски турнири и пия много кафе.","interests":["Танци","Котки","Музика"],"lookingFor":"female"},{"nickname":"Радост","gender":"female","age":29,"city":"Хасково","bio":"Обичам пътуванията, добрия чай и хората, които ме разсмиват.","interests":["Игри","Кино","Фотография","Йога"],"lookingFor":"male"},{"nickname":"Борко","gender":"male","age":52,"city":"Видин","bio":"Вдовец с добро сърце. Обичам риболова, разходките и спокойните вечери.","interests":["Готвене","Изкуство","Море","Книги","Технологии"],"lookingFor":"female"},{"nickname":"Силви","gender":"female","age":48,"city":"Сливен","bio":"Учителка, обичам градината си. Търся сериозен, грижовен мъж.","interests":["Котки","Музика","Планина","Кучета","Пътуване","Готвене"],"lookingFor":"male"},{"nickname":"Влади","gender":"male","age":31,"city":"Пазарджик","bio":"Треньор по плуване. Спортувам всеки ден и обичам здравословната храна.","interests":["Кино","Фотография","Йога"],"lookingFor":"female"},{"nickname":"Яна","gender":"female","age":25,"city":"Банско","bio":"Работя в ски училище. Зимата е любимият ми сезон, а лятото — за походи.","interests":["Изкуство","Море","Книги","Технологии"],"lookingFor":"male"},{"nickname":"Калоян","gender":"male","age":29,"city":"Несебър","bio":"Сервитьор през лятото, музикант през зимата. Обичам морския въздух.","interests":["Музика","Планина","Кучета","Пътуване","Готвене"],"lookingFor":"female"},{"nickname":"Мариела","gender":"female","age":39,"city":"Перник","bio":"Счетоводителка с тайна страст към танците. Търся мъж със чувство за ритъм.","interests":["Фотография","Йога","Спорт","Танци","Котки","Музика"],"lookingFor":"male"},{"nickname":"Деян","gender":"male","age":36,"city":"Кюстендил","bio":"Любител на черешите, планината и добрата компания. Обичам да готвя на открито.","interests":["Море","Книги","Технологии"],"lookingFor":"any"},{"nickname":"Вили","gender":"female","age":23,"city":"Смолян","bio":"Студентка и планинар. Обичам Родопите, народната музика и вкусните баници.","interests":["Планина","Кучета","Пътуване","Готвене"],"lookingFor":"male"}],"reportReasons":{"harassment":"Тормоз или обиди","spam":"Спам или реклама","scam":"Измама или искане на пари","fake":"Фалшив профил","photos":"Неподходящи снимки","underage":"Изглежда непълнолетен","other":"Друго"},"sampleReports":[{"reporter":"Краси","reported":"Сашо","reason":"spam","ago":130,"details":"Праща ми един и същ линк за „инвестиции“ и не спира.","msgs":[["d","Здравей! Имам оферта, която ще ти хареса.",190],["r","Здрасти, каква оферта?",188],["d","Влагаш 200 лв. и ги удвояваш всяка седмица: invest.example/vip",186],["r","Не ме интересува. Не ми пиши повече.",150],["d","Само се регистрирай по линка и не пропускай шанса!",140]]},{"reporter":"Данчо","reported":"Ани","reason":"harassment","ago":1500,"details":"Не ми отговаря нормално и ме обижда.","msgs":[["r","Здравей, как си?",1600],["d","Здрасти, добре съм :)",1590],["r","Искаш ли да пием кафе днес?",1580],["d","Днес съм заета, може в събота?",1575],["r","Ти просто ме игнорираш!",1560]]}]};</script>
 <script>
 // Статичен преглед: имитира /api/* в браузъра (без сървър). Данните са само в този браузър.
 (() => {
@@ -294,8 +328,9 @@ html, body { height: auto; }
   const KEY = 'spark.preview.v1';
   window.confirm = () => true; // в прегледа диалозите са недостъпни
   const MIN_AGE = 18, MAX_PHOTOS = 6;
-  let db = { users: [], likes: [], seq: 1000, session: null };
+  let db = { users: [], likes: [], seq: 1000, session: null, messages: [], blocks: [], reports: null, rseq: 0 };
   try { const raw = localStorage.getItem(KEY); if (raw) db = JSON.parse(raw); } catch { /* без storage */ }
+  db.messages = db.messages || []; db.blocks = db.blocks || [];
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* ignore */ } };
 
   let demo = D.people.map((p, i) => ({ ...p, id: i + 1, isDemo: true, photos: [], lastMin: (i * 37) % 600, likesBase: (i * 5) % 7, created: i }));
@@ -303,6 +338,9 @@ html, body { height: auto; }
   demo = demo.filter(d => !db.gone.includes(d.id));
   const all = () => demo.concat(db.users);
   const people = () => all().filter(u => u.role !== 'admin'); // админът не е в публичните списъци
+  const blocked = (a, b) => db.blocks.some(x => (x.from === a && x.to === b) || (x.from === b && x.to === a));
+  const iso = ms => new Date(ms).toISOString();
+  const visibleMsg = m => m.at <= Date.now();
   const ageFrom = b => { const d = new Date(b), n = new Date(); let a = n.getFullYear() - d.getFullYear(); if (n < new Date(n.getFullYear(), d.getMonth(), d.getDate())) a--; return a; };
   const hash = s => { let h = 5381; for (const c of s) h = ((h * 33) ^ c.codePointAt(0)) >>> 0; return String(h); };
   const NICK = /^[\p{L}\p{N}][\p{L}\p{N} _.-]{1,18}[\p{L}\p{N}]$/u, USER = /^[A-Za-z0-9_.-]{3,30}$/;
@@ -326,7 +364,7 @@ html, body { height: auto; }
 
   route('GET', /^\/api\/meta$/, () => ok({
     cities: D.cities.map(name => ({ name, count: people().filter(u => u.city === name).length })),
-    interests: D.interests, minAge: MIN_AGE, maxPhotos: MAX_PHOTOS, total: people().length, demoAdmin: true,
+    interests: D.interests, minAge: MIN_AGE, maxPhotos: MAX_PHOTOS, total: people().length, demoAdmin: true, reportReasons: D.reportReasons,
   }));
   route('GET', /^\/api\/me$/, () => ok({ user: meUser() ? full(meUser()) : null }));
 
@@ -397,7 +435,7 @@ html, body { height: auto; }
   }));
 
   route('GET', /^\/api\/profiles$/, authed(({ q, me }) => {
-    let list = people().filter(u => u.id !== me.id);
+    let list = people().filter(u => u.id !== me.id && !blocked(u.id, me.id));
     if (q.get('city')) list = list.filter(u => u.city === q.get('city'));
     if (q.get('gender')) list = list.filter(u => u.gender === q.get('gender'));
     const age = u => (u.isDemo ? u.age : ageFrom(u.birthDate));
@@ -414,11 +452,11 @@ html, body { height: auto; }
     return ok({ total: list.length, offset, profiles: list.slice(offset, offset + limit).map(u => pub(u, me.id)) });
   }));
   route('GET', /^\/api\/profiles\/(\d+)$/, authed(({ m, me }) => {
-    const u = people().find(x => x.id === Number(m[1])); return u ? ok({ profile: pub(u, me.id) }) : bad('Профилът не е намерен.', 404);
+    const u = people().find(x => x.id === Number(m[1])); return u && !blocked(u.id, me.id) ? ok({ profile: pub(u, me.id) }) : bad('Профилът не е намерен.', 404);
   }));
   route('POST', /^\/api\/profiles\/(\d+)\/like$/, authed(({ m, me }) => {
     const id = Number(m[1]), u = people().find(x => x.id === id);
-    if (!u) return bad('Профилът не е намерен.', 404);
+    if (!u || blocked(id, me.id)) return bad('Профилът не е намерен.', 404);
     if (id === me.id) return bad('Не можете да харесате себе си.');
     const i = db.likes.findIndex(l => l.from === me.id && l.to === id);
     if (i >= 0) db.likes.splice(i, 1); else db.likes.push({ from: me.id, to: id });
@@ -440,7 +478,7 @@ html, body { height: auto; }
     const ps = people(), real = ps.filter(u => !u.isDemo), by = {};
     ps.forEach(u => { by[u.city] = (by[u.city] || 0) + 1; });
     const g = {}; ps.forEach(u => { g[u.gender] = (g[u.gender] || 0) + 1; });
-    return ok({ users: ps.length, real: real.length, demo: ps.length - real.length, photos: ps.reduce((n, u) => n + u.photos.length, 0), likes: db.likes.length,
+    return ok({ users: ps.length, real: real.length, demo: ps.length - real.length, openReports: (db.reports || []).filter(r => r.status === 'open').length, photos: ps.reduce((n, u) => n + u.photos.length, 0), likes: db.likes.length,
       online: ps.filter(u => !u.isDemo || u.lastMin < 5).length, newToday: real.length,
       byCity: Object.entries(by).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([city, count]) => ({ city, count })), byGender: g });
   }));
@@ -456,6 +494,90 @@ html, body { height: auto; }
     if (u.role === 'admin') return bad('Администраторски акаунт не може да се изтрива.', 403);
     if (u.isDemo) { demo.splice(demo.indexOf(u), 1); db.gone.push(id); } else db.users = db.users.filter(x => x.id !== id);
     db.likes = db.likes.filter(l => l.from !== id && l.to !== id); save(); return ok({ ok: true });
+  }));
+
+  // ── Примерни доклади (от демо данните) ──
+  if (!db.reports) {
+    const idOf = nick => demo.find(d => d.nickname === nick).id;
+    db.reports = D.sampleReports.map((r, i) => ({
+      id: i + 1, reporterId: idOf(r.reporter), reportedId: idOf(r.reported), reporterNick: r.reporter, reportedNick: r.reported, reason: r.reason, details: r.details,
+      status: 'open', note: '', created: Date.now() - r.ago * 60000, resolvedAt: null, views: 0,
+      msgs: r.msgs.map(([who, body, ago]) => ({ fromReporter: who === 'r', body, at: Date.now() - ago * 60000 })),
+    }));
+    db.rseq = db.reports.length; save();
+  }
+
+  // ── Съобщения ──
+  const CANNED = ['Здравей! Радвам се, че ми писа 😊', 'Звучи интересно, разкажи ми повече.', 'Хаха, добре :) Какво обичаш да правиш през свободното си време?', 'Може би. Как мина денят ти?', 'Супер, и аз мисля така!'];
+  const thread = (a, b) => db.messages.filter(m => visibleMsg(m) && ((m.from === a && m.to === b) || (m.from === b && m.to === a))).sort((x, y) => x.id - y.id);
+  const peerOk = (id, me) => id !== me.id && people().some(u => u.id === id) && !blocked(id, me.id);
+  const rate = {};
+  route('GET', /^\/api\/chats\/unread$/, authed(({ me }) => ok({
+    unread: db.messages.filter(m => visibleMsg(m) && m.to === me.id && !m.read).length,
+    openReports: me.role === 'admin' ? db.reports.filter(r => r.status === 'open').length : 0 })));
+  route('GET', /^\/api\/chats$/, authed(({ me }) => {
+    const peers = new Map();
+    for (const m of db.messages.filter(visibleMsg)) {
+      if (m.from !== me.id && m.to !== me.id) continue;
+      const o = m.from === me.id ? m.to : m.from; peers.set(o, m);
+    }
+    const chats = [...peers.entries()].filter(([o]) => peerOk(o, me)).sort((a, b) => b[1].id - a[1].id).map(([o, last]) => ({
+      profile: pub(people().find(u => u.id === o), me.id), unread: db.messages.filter(m => visibleMsg(m) && m.from === o && m.to === me.id && !m.read).length,
+      last: { body: last.body, mine: last.from === me.id, at: iso(last.at) } }));
+    return ok({ chats });
+  }));
+  route('GET', /^\/api\/chats\/(\d+)$/, authed(({ m, me }) => {
+    const id = Number(m[1]); if (!peerOk(id, me)) return bad('Разговорът не е намерен.', 404);
+    const list = thread(me.id, id); db.messages.forEach(x => { if (x.to === me.id && x.from === id && visibleMsg(x)) x.read = true; }); save();
+    return ok({ profile: pub(people().find(u => u.id === id), me.id), messages: list.slice(-200).map(x => ({ id: x.id, mine: x.from === me.id, body: x.body, at: iso(x.at) })) });
+  }));
+  route('POST', /^\/api\/chats\/(\d+)$/, authed(({ m, body: b, me }) => {
+    const id = Number(m[1]); if (!peerOk(id, me)) return bad('Не можете да пишете на този профил.', 403);
+    const text = String(b.body || '').trim();
+    if (!text) return bad('Съобщението е празно.'); if (text.length > 1000) return bad('Съобщението може да е до 1000 символа.');
+    const now = Date.now(); rate[me.id] = (rate[me.id] || []).filter(t => now - t < 60000);
+    if (rate[me.id].length >= 20) return bad('Изпращате твърде бързо. Изчакайте малко.', 429); rate[me.id].push(now);
+    const msg = { id: ++db.seq, from: me.id, to: id, body: text, at: now, read: false }; db.messages.push(msg);
+    const other = demo.find(d => d.id === id);
+    if (other) db.messages.push({ id: ++db.seq, from: id, to: me.id, body: CANNED[db.messages.length % CANNED.length], at: now + 2500, read: false }); // демо профилите отговарят
+    save(); return ok({ message: { id: msg.id, mine: true, body: msg.body, at: iso(msg.at) } }, 201);
+  }));
+
+  // ── Доклади ──
+  route('POST', /^\/api\/profiles\/(\d+)\/report$/, authed(({ m, body: b, me }) => {
+    const id = Number(m[1]);
+    if (id === me.id) return bad('Не можете да докладвате себе си.');
+    const target = people().find(u => u.id === id); if (!target) return bad('Профилът не е намерен.', 404);
+    if (!Object.hasOwn(D.reportReasons, b.reason)) return bad('Изберете причина за доклада.');
+    const details = String(b.details || '').trim(); if (details.length > 500) return bad('Описанието може да е до 500 символа.');
+    if (db.reports.some(r => r.reporterId === me.id && r.reportedId === id && r.status === 'open')) return bad('Вече сте докладвали този профил. Администраторите разглеждат доклада.', 409);
+    db.reports.push({ id: ++db.rseq, reporterId: me.id, reportedId: id, reporterNick: me.nickname, reportedNick: target.nickname, reason: b.reason, details, status: 'open', note: '', created: Date.now(), resolvedAt: null, views: 0,
+      msgs: thread(me.id, id).slice(-200).map(x => ({ fromReporter: x.from === me.id, body: x.body, at: x.at })) });
+    if (b.block && !blocked(me.id, id)) db.blocks.push({ from: me.id, to: id });
+    save(); return ok({ ok: true, blocked: !!b.block }, 201);
+  }));
+  const LABEL = k => D.reportReasons[k] || k;
+  const rrow = r => ({ id: r.id, reporterNick: r.reporterNick, reportedNick: r.reportedNick, reason: r.reason, reasonLabel: LABEL(r.reason), status: r.status, createdAt: iso(r.created), resolvedAt: r.resolvedAt ? iso(r.resolvedAt) : null });
+  route('GET', /^\/api\/admin\/reports$/, adminOnly(({ q }) => {
+    const st = ['open', 'upheld', 'dismissed'].includes(q.get('status')) ? q.get('status') : null;
+    const counts = { open: 0, upheld: 0, dismissed: 0 }; db.reports.forEach(r => counts[r.status]++);
+    const list = db.reports.filter(r => !st || r.status === st).sort((a, b) => (b.status === 'open') - (a.status === 'open') || b.id - a.id);
+    return ok({ counts, reports: list.map(r => ({ ...rrow(r), messages: r.msgs.length })) });
+  }));
+  route('GET', /^\/api\/admin\/reports\/(\d+)$/, adminOnly(({ m }) => {
+    const r = db.reports.find(x => x.id === Number(m[1])); if (!r) return bad('Докладът не е намерен.', 404);
+    r.views++; save();
+    const u = all().find(x => x.id === r.reportedId);
+    const reported = u ? { id: u.id, nickname: u.nickname, age: ageOf(u), city: u.city, gender: u.gender, bio: u.bio, isDemo: !!u.isDemo, createdAt: iso(Date.now() - (u.created || 0) * 1000), photos: u.photos.length,
+      otherReports: db.reports.filter(x => x.reportedId === u.id && x.id !== r.id).length } : null;
+    return ok({ report: { ...rrow(r), details: r.details, adminNote: r.note, reporterStillExists: !!all().find(x => x.id === r.reporterId), reportedStillExists: !!u }, reported,
+      messages: r.msgs.map((x, i) => ({ id: i + 1, fromReporter: x.fromReporter, from: x.fromReporter ? r.reporterNick : r.reportedNick, body: x.body, at: iso(x.at) })), views: r.views });
+  }));
+  route('PUT', /^\/api\/admin\/reports\/(\d+)$/, adminOnly(({ m, body: b }) => {
+    const r = db.reports.find(x => x.id === Number(m[1])); if (!r) return bad('Докладът не е намерен.', 404);
+    if (!['open', 'upheld', 'dismissed'].includes(b.status)) return bad('Невалиден статус.');
+    const note = String(b.note || '').trim(); if (note.length > 500) return bad('Бележката може да е до 500 символа.');
+    r.status = b.status; r.note = note; r.resolvedAt = b.status === 'open' ? null : Date.now(); save(); return ok({ ok: true });
   }));
 
   const realFetch = window.fetch.bind(window);
@@ -600,7 +722,23 @@ function loadLocalTheme() {
 }
 
 /* ═══════════ Състояние ═══════════ */
-const state = { me: null, meta: null };
+const state = { me: null, meta: null, unread: 0, openReports: 0 };
+let chatWith = null;                 // с кого е отворен чатът
+let viewTimer = null, badgeTimer = null;
+const stopViewTimer = () => { if (viewTimer) { clearInterval(viewTimer); viewTimer = null; } };
+async function refreshBadges() {
+  if (!state.me) return;
+  try {
+    const r = await api('GET', '/api/chats/unread');
+    if (r.unread !== state.unread || r.openReports !== state.openReports) { state.unread = r.unread; state.openReports = r.openReports; renderChrome(); }
+  } catch { /* следващият опит ще мине */ }
+}
+function startBadges() { if (badgeTimer) return; refreshBadges(); badgeTimer = setInterval(refreshBadges, 20000); }
+function stopBadges() { if (badgeTimer) { clearInterval(badgeTimer); badgeTimer = null; } state.unread = 0; state.openReports = 0; }
+const fmtTime = at => new Date(at).toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit' });
+const fmtDate = at => new Date(at).toLocaleDateString('bg-BG', { day: 'numeric', month: 'short' });
+const fmtWhen = at => (new Date(at).toDateString() === new Date().toDateString() ? fmtTime(at) : `${fmtDate(at)}, ${fmtTime(at)}`);
+const badge = n => (n > 0 ? h('span', { class: 'badge', 'aria-label': `${n} нови`, text: n > 99 ? '99+' : String(n) }) : null);
 const disc = {
   city: '', q: '', gender: '', ageMin: '', ageMax: '', interests: new Set(), withPhoto: false,
   online: false, lookingForMe: false, sort: 'active', profiles: [], total: 0, loading: false,
@@ -612,9 +750,12 @@ function renderChrome() {
   const route = currentRoute();
   const nav = clear($('#nav'));
   if (state.me) {
-    [['#discover', 'Открий хора', 'discover'], ['#profile', 'Моят профил', 'profile'], ['#settings', 'Дизайн и настройки', 'settings']]
-      .concat(state.me.role === 'admin' ? [['#/admin', '🛡️ Админ', 'admin']] : [])
-      .forEach(([href, label, key]) => nav.append(h('a', { href, text: label, class: route === key ? 'on' : '', 'aria-current': route === key ? 'page' : null })));
+    const isAdmin = state.me.role === 'admin';
+    [['#discover', 'Открий хора', 'discover', 0]]
+      .concat(isAdmin ? [] : [['#/messages', '💬 Съобщения', 'messages', state.unread]])
+      .concat([['#profile', 'Моят профил', 'profile', 0], ['#settings', 'Дизайн и настройки', 'settings', 0]])
+      .concat(isAdmin ? [['#/admin', '🛡️ Админ', 'admin', state.openReports]] : [])
+      .forEach(([href, label, key, n]) => nav.append(h('a', { href, class: route === key ? 'on' : '', 'aria-current': route === key ? 'page' : null }, label, badge(n))));
   }
   const box = clear($('#userbox'));
   box.className = 'userbox';
@@ -630,7 +771,7 @@ function renderChrome() {
 
 async function logout() {
   try { await api('POST', '/api/logout'); } catch { /* ignore */ }
-  state.me = null; disc.profiles = [];
+  state.me = null; disc.profiles = []; chatWith = null; stopBadges();
   location.hash = '#';
   route();
   toast('Излязохте от профила си.');
@@ -903,7 +1044,10 @@ function openProfile(p) {
         cur.likedMe && !cur.isMe ? h('p', {}, h('span', { class: 'tag', text: '💙 Харесва те' })) : null,
         h('h3', { text: 'За мен' }), h('p', { class: 'bio', text: cur.bio || 'Още няма био.' }),
         cur.interests.length ? [h('h3', { text: 'Интереси' }), h('div', { class: 'chips' }, cur.interests.map(t => h('span', { class: 'tag', text: t })))] : null,
-        h('div', { class: 'actions' }, likeBtn, cur.isMe ? h('a', { class: 'btn ghost', href: '#profile', text: 'Редактирай профила', onclick: closeModal }) : null))));
+        h('div', { class: 'actions' }, likeBtn,
+          cur.isMe || state.me.role === 'admin' ? null : h('button', { class: 'btn ghost', type: 'button', text: '💬 Пиши', onclick: () => openChat(cur.id) }),
+          cur.isMe || state.me.role === 'admin' ? null : h('button', { class: 'btn danger', type: 'button', text: '🚩 Докладвай', onclick: () => reportDialog(cur) }),
+          cur.isMe ? h('a', { class: 'btn ghost', href: '#profile', text: 'Редактирай профила', onclick: closeModal }) : null))));
   };
   render();
   openModal(body, { title: 'Профил' });
@@ -1076,12 +1220,141 @@ function deleteAccountDialog() {
   { narrow: true, title: 'Изтриване на профил' });
 }
 
+/* ═══════════ Съобщения и докладване ═══════════ */
+function openChat(id) {
+  chatWith = id;
+  closeModal();
+  if (location.hash === '#/messages') route(); else location.hash = '#/messages';
+}
+
+function reportDialog(p) {
+  const reasons = state.meta.reportReasons;
+  const err = h('div', { class: 'err', role: 'alert' });
+  const reason = h('select', { id: 'rp-reason' }, h('option', { value: '', text: 'Избери причина…' }), Object.entries(reasons).map(([k, t]) => h('option', { value: k, text: t })));
+  const details = h('textarea', { id: 'rp-details', maxlength: '500', placeholder: 'Какво се случи? (по желание, до 500 символа)', style: 'min-height:6rem' });
+  const block = h('input', { type: 'checkbox', id: 'rp-block', checked: true });
+  const btn = h('button', { class: 'btn danger', type: 'submit', text: 'Изпрати доклада' });
+  openModal(h('form', { novalidate: true, onsubmit: async e => {
+    e.preventDefault(); err.textContent = '';
+    if (!reason.value) { err.textContent = 'Изберете причина за доклада.'; return; }
+    btn.disabled = true;
+    try {
+      const r = await api('POST', `/api/profiles/${p.id}/report`, { reason: reason.value, details: details.value, block: block.checked });
+      closeModal();
+      if (r.blocked) { disc.profiles = disc.profiles.filter(x => x.id !== p.id); if (chatWith === p.id) chatWith = null; }
+      toast(r.blocked ? 'Докладът е изпратен и профилът е блокиран.' : 'Докладът е изпратен. Благодарим ти!');
+      if (r.blocked) route();
+    } catch (x) { err.textContent = x.message; btn.disabled = false; }
+  } },
+    h('p', {}, 'Докладваш ', h('b', { text: p.nickname }), '. Администратор ще прегледа случая.'),
+    h('div', { class: 'field' }, h('label', { for: 'rp-reason', text: 'Причина' }), reason),
+    h('div', { class: 'field' }, h('label', { for: 'rp-details', text: 'Подробности' }), details),
+    h('div', { class: 'checkline' }, block, h('label', { for: 'rp-block', text: 'Блокирай този човек (няма да можете да си пишете и да се виждате)' })),
+    h('p', { class: 'hint notice', text: '🔒 С подаването на доклада позволяваш на администратор да прегледа вашата размяна на съобщения с този човек, за да прецени дали докладът е основателен. Другите ти разговори остават лични.' }),
+    err, h('div', { class: 'actions' }, btn, h('button', { class: 'btn ghost', type: 'button', text: 'Отказ', onclick: closeModal }))),
+  { narrow: true, title: 'Докладване на профил' });
+}
+
+function viewMessages() {
+  const v = clear($('#view'));
+  const listBox = h('div', { class: 'chatlist', role: 'list' });
+  const threadBox = h('section', { class: 'win chatthread', 'aria-label': 'Разговор' });
+  const layout = h('div', { class: 'chatlayout' + (chatWith ? ' open' : '') },
+    h('aside', { class: 'win chatside', 'aria-label': 'Разговори' },
+      h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: 'Разговори' })), listBox),
+    threadBox);
+  v.append(h('h1', { text: 'Съобщения' }), layout);
+
+  let chats = [], sig = '', peer = null, msgs = [];
+  const toBottom = () => { const m = $('.msgs', threadBox); if (m) m.scrollTop = m.scrollHeight; };
+
+  function renderList() {
+    clear(listBox);
+    if (!chats.length) { listBox.append(h('p', { class: 'dim', style: 'padding:1rem', text: 'Още нямаш разговори. Отвори профил от „Открий хора“ и натисни „Пиши“.' })); return; }
+    chats.forEach(c => listBox.append(h('button', { class: 'chatitem' + (c.profile.id === chatWith ? ' on' : ''), type: 'button', role: 'listitem', onclick: () => { chatWith = c.profile.id; layout.classList.add('open'); renderList(); loadThread(true); } },
+      h('img', { src: mainPhoto(c.profile), alt: '', width: '44', height: '44' }),
+      h('span', { class: 'ci' }, h('b', { text: c.profile.nickname }), h('small', { text: (c.last.mine ? 'Ти: ' : '') + c.last.body })),
+      badge(c.unread))));
+  }
+  async function loadList() {
+    try { chats = (await api('GET', '/api/chats')).chats; renderList(); } catch (x) { if (x.status !== 0) toast(x.message, true); }
+  }
+
+  function renderThread(force) {
+    if (!chatWith) {
+      clear(threadBox).append(h('div', { class: 'empty-state' }, h('div', { class: 'big', text: '💬' }), h('h3', { text: 'Избери разговор' }), h('p', { text: 'Или отвори нечий профил и натисни „Пиши“.' })));
+      return;
+    }
+    if (!peer || peer.id !== chatWith) { clear(threadBox).append(h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Зареждане' })); sig = ''; return; }
+    const nextSig = msgs.length + ':' + (msgs.length ? msgs[msgs.length - 1].id : 0) + ':' + (peer ? peer.id : 0);
+    if (!force && nextSig === sig) return;
+    sig = nextSig;
+    const keep = $('textarea', threadBox);
+    const draft = keep ? keep.value : '';
+    const list = h('div', { class: 'msgs', 'aria-live': 'polite' });
+    let day = '';
+    if (!msgs.length) list.append(h('p', { class: 'dim', style: 'text-align:center;margin:auto', text: `Напиши първото съобщение на ${peer.nickname}.` }));
+    for (const m of msgs) {
+      const d = fmtDate(m.at);
+      if (d !== day) { day = d; list.append(h('div', { class: 'daysep', text: d })); }
+      list.append(h('div', { class: 'bubble ' + (m.mine ? 'mine' : 'theirs') }, h('span', { text: m.body }), h('time', { datetime: m.at, text: fmtTime(m.at) })));
+    }
+    const input = h('textarea', { id: 'chat-input', rows: '2', maxlength: '1000', placeholder: 'Напиши съобщение…', 'aria-label': 'Съобщение',
+      onkeydown: e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } } });
+    input.value = draft;
+    const sendBtn = h('button', { class: 'btn', type: 'button', text: 'Изпрати', onclick: send });
+    async function send() {
+      const body = input.value.trim();
+      if (!body) return;
+      sendBtn.disabled = true;
+      try {
+        const r = await api('POST', `/api/chats/${peer.id}`, { body });
+        msgs.push(r.message); input.value = ''; renderThread(true); toBottom(); loadList();
+      } catch (x) { toast(x.message, true); } finally { sendBtn.disabled = false; }
+    }
+    clear(threadBox).append(
+      h('div', { class: 'win-head' },
+        h('button', { class: 'xbtn backbtn', type: 'button', 'aria-label': 'Към разговорите', text: '←', onclick: () => { chatWith = null; layout.classList.remove('open'); renderList(); renderThread(true); } }),
+        h('img', { class: 'mini', src: mainPhoto(peer), alt: '', width: '32', height: '32' }),
+        h('h2', {}, h('a', { href: '#/messages', text: peer.nickname, onclick: e => { e.preventDefault(); openProfile(peer); } }), ` · ${peer.city}`),
+        h('button', { class: 'btn danger sm', style: 'margin-left:auto', type: 'button', text: '🚩 Докладвай', onclick: () => reportDialog(peer) })),
+      list,
+      h('p', { class: 'hint notice', text: '🔒 Разговорът е личен. При подаден доклад администратор може да прегледа размяната ви с докладвания човек.' }),
+      h('div', { class: 'composer' }, input, sendBtn));
+    toBottom();
+    if (draft) input.focus();
+  }
+
+  async function loadThread(initial) {
+    if (!chatWith) { renderThread(true); return; }
+    try {
+      const r = await api('GET', `/api/chats/${chatWith}`);
+      const grew = r.messages.length !== msgs.length;
+      peer = r.profile; msgs = r.messages;
+      renderThread(initial);
+      if (initial || grew) toBottom();
+      if (initial || grew) loadList();
+      refreshBadges();
+    } catch (x) {
+      if (x.status === 404) { chatWith = null; layout.classList.remove('open'); renderThread(true); loadList(); } else if (x.status !== 0) toast(x.message, true);
+    }
+  }
+
+  renderThread(true);
+  loadList();
+  if (chatWith) loadThread(true);
+  viewTimer = setInterval(() => { loadList(); if (chatWith) loadThread(false); }, 5000);
+}
+
 /* ═══════════ Администрация ═══════════ */
 function viewAdmin() {
   const v = clear($('#view'));
   const head = t => h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: t }));
   const tiles = h('div', { class: 'tiles' });
   const bars = h('div', { class: 'bars' });
+  const repBox = h('div', { class: 'replist' });
+  const repFilters = h('div', { class: 'chips', style: 'margin-bottom:.9rem', role: 'group', 'aria-label': 'Филтър на докладите' });
+  let repFilter = 'open';
   const tbody = h('tbody');
   const count = h('span', { class: 'dim' });
   v.append(h('h1', { text: 'Админ панел' }),
@@ -1093,7 +1366,10 @@ function viewAdmin() {
       h('section', { class: 'win enter', style: '--i:2' }, head('🧭 Бърз достъп'), h('div', { class: 'win-body' },
         h('p', { class: 'dim', text: 'Разгледай сайта като потребител:' }),
         h('div', { class: 'actions' }, h('a', { class: 'btn', href: '#discover', text: 'Открий хора' }), h('a', { class: 'btn ghost', href: '#profile', text: 'Моят профил' }), h('a', { class: 'btn ghost', href: '#settings', text: 'Дизайн' }))))),
-    h('section', { class: 'win enter', style: '--i:3' }, head('👥 Потребители'), h('div', { class: 'win-body' },
+    h('section', { class: 'win enter', style: '--i:3', id: 'reportsWin' }, head('🚩 Доклади'), h('div', { class: 'win-body' },
+      h('p', { class: 'dim', text: 'Разговорът се вижда само към доклад (снимка от момента на докладването). Всяко отваряне се записва в журнал.' }),
+      repFilters, repBox)),
+    h('section', { class: 'win enter', style: '--i:4' }, head('👥 Потребители'), h('div', { class: 'win-body' },
       h('div', { class: 'citybar' }, h('input', { type: 'search', placeholder: 'Търси по никнейм или потребителско име', 'aria-label': 'Търсене на потребители', style: 'max-width:26rem',
         oninput: debounce(e => loadUsers(e.target.value), 250) }), count),
       h('div', { class: 'tblwrap' }, h('table', { class: 'tbl' },
@@ -1102,7 +1378,7 @@ function viewAdmin() {
   async function loadStats() {
     try {
       const st = await api('GET', '/api/admin/stats');
-      clear(tiles).append(...[['Профили', st.users], ['Реални', st.real], ['Демо', st.demo], ['Снимки', st.photos], ['Харесвания', st.likes], ['Онлайн', st.online], ['Нови за 24ч', st.newToday]]
+      clear(tiles).append(...[['Профили', st.users], ['Реални', st.real], ['Демо', st.demo], ['Снимки', st.photos], ['Харесвания', st.likes], ['Отворени доклади', st.openReports], ['Онлайн', st.online], ['Нови за 24ч', st.newToday]]
         .map(([l, n]) => h('div', { class: 'tile' }, h('b', { text: String(n) }), h('span', { text: l }))));
       const max = Math.max(1, ...st.byCity.map(c => c.count));
       clear(bars).append(...st.byCity.slice(0, 12).map(c => h('div', { class: 'bar' },
@@ -1129,26 +1405,108 @@ function viewAdmin() {
       }
     } catch (x) { toast(x.message, true); }
   }
-  loadStats(); loadUsers();
+  const STATUS = { open: 'Отворен', upheld: 'Основателен', dismissed: 'Неоснователен' };
+  async function loadReports() {
+    try {
+      const r = await api('GET', '/api/admin/reports?status=' + repFilter);
+      const total = r.counts.open + r.counts.upheld + r.counts.dismissed;
+      clear(repFilters).append(...[['open', `Отворени (${r.counts.open})`], ['upheld', `Основателни (${r.counts.upheld})`], ['dismissed', `Неоснователни (${r.counts.dismissed})`], ['all', `Всички (${total})`]]
+        .map(([k, t]) => h('button', { class: 'chip', type: 'button', text: t, 'aria-pressed': String(repFilter === k), onclick: () => { repFilter = k; loadReports(); } })));
+      clear(repBox);
+      if (!r.reports.length) { repBox.append(h('p', { class: 'dim', text: repFilter === 'open' ? 'Няма отворени доклади. 🎉' : 'Няма доклади в тази група.' })); }
+      for (const x of r.reports) {
+        repBox.append(h('div', { class: 'rep' },
+          h('div', { class: 'who' }, h('b', { text: x.reportedNick }), h('span', { class: 'dim', text: ` докладван от ${x.reporterNick}` })),
+          h('span', { class: 'tag', text: x.reasonLabel }),
+          h('span', { class: 'dim', text: `${fmtWhen(x.createdAt)} · 💬 ${x.messages}` }),
+          h('span', { class: 'tag st-' + x.status, text: STATUS[x.status] }),
+          h('button', { class: 'btn sm', type: 'button', text: 'Разгледай', onclick: () => openCase(x.id, () => { loadReports(); loadStats(); refreshBadges(); }) })));
+      }
+    } catch (x) { toast(x.message, true); }
+  }
+
+  loadStats(); loadReports(); loadUsers();
+}
+
+// Казус: данни за доклада + снимка на разговора + решение на администратора.
+async function openCase(id, changed) {
+  let d;
+  try { d = await api('GET', `/api/admin/reports/${id}`); } catch (x) { toast(x.message, true); return; }
+  const r = d.report, STATUS = { open: 'Отворен', upheld: 'Основателен', dismissed: 'Неоснователен' };
+  const note = h('textarea', { id: 'case-note', maxlength: '500', placeholder: 'Бележка към решението (по желание)', style: 'min-height:5rem' });
+  note.value = r.adminNote || '';
+  const decide = async status => {
+    try { await api('PUT', `/api/admin/reports/${id}`, { status, note: note.value }); toast(status === 'open' ? 'Докладът е върнат като отворен.' : 'Решението е записано.'); closeModal(); changed && changed(); }
+    catch (x) { toast(x.message, true); }
+  };
+  let armed = false;
+  const delBtn = h('button', { class: 'btn danger', type: 'button', text: 'Изтрий профила на докладвания' });
+  delBtn.addEventListener('click', async () => {
+    if (!armed) { armed = true; delBtn.textContent = 'Сигурен ли си? Натисни пак'; setTimeout(() => { armed = false; delBtn.textContent = 'Изтрий профила на докладвания'; }, 3500); return; }
+    try { await api('DELETE', `/api/admin/users/${d.reported.id}`); toast('Профилът е изтрит. Доказателствата в доклада остават.'); closeModal(); changed && changed(); }
+    catch (x) { toast(x.message, true); }
+  });
+
+  const transcript = h('div', { class: 'transcript', tabindex: '0', 'aria-label': 'Разговор към момента на доклада' });
+  if (!d.messages.length) transcript.append(h('p', { class: 'dim', style: 'margin:auto;text-align:center', text: 'Към момента на доклада няма разменени съобщения между двамата.' }));
+  let day = '';
+  for (const m of d.messages) {
+    const dd = fmtDate(m.at);
+    if (dd !== day) { day = dd; transcript.append(h('div', { class: 'daysep', text: dd })); }
+    transcript.append(h('div', { class: 'bubble ' + (m.fromReporter ? 'mine' : 'accused') }, h('small', { class: 'from', text: m.from + (m.fromReporter ? ' (докладва)' : ' (докладван)') }), h('span', { text: m.body }), h('time', { datetime: m.at, text: fmtTime(m.at) })));
+  }
+
+  const rep = d.reported;
+  openModal(h('div', {},
+    h('div', { class: 'two' },
+      h('div', {},
+        h('dl', { class: 'facts' },
+          h('dt', { text: 'Статус' }), h('dd', {}, h('span', { class: 'tag st-' + r.status, text: STATUS[r.status] })),
+          h('dt', { text: 'Причина' }), h('dd', { text: r.reasonLabel }),
+          h('dt', { text: 'Подаден' }), h('dd', { text: fmtWhen(r.createdAt) }),
+          h('dt', { text: 'Докладва' }), h('dd', { text: r.reporterNick + (r.reporterStillExists ? '' : ' (акаунтът е изтрит)') }),
+          h('dt', { text: 'Докладван' }), h('dd', { text: r.reportedNick + (rep ? '' : ' (акаунтът е изтрит)') }),
+          h('dt', { text: 'Прегледи' }), h('dd', { text: `${d.views}× от администратори` })),
+        h('h3', { text: 'Описание от докладващия' }),
+        h('p', { class: 'bio', text: r.details || 'Без описание.' }),
+        rep ? [h('h3', { text: 'Докладваният профил' }),
+          h('p', { class: 'dim', text: `${rep.age} г. · ${rep.city} · ${rep.photos} снимки · в сайта от ${fmtDate(rep.createdAt)}` }),
+          h('p', { class: 'bio', text: rep.bio || 'Няма био.' }),
+          rep.otherReports ? h('p', {}, h('span', { class: 'tag st-upheld', text: `⚠️ Още ${rep.otherReports} доклада срещу този профил` })) : null] : null),
+      h('div', {},
+        h('h3', { text: 'Разговор (снимка към момента на доклада)' }),
+        h('p', { class: 'hint', text: 'Показан е само разговорът между тези двама души. Останалите чатове не са достъпни.' }),
+        transcript)),
+    h('div', { class: 'field', style: 'margin-top:1rem' }, h('label', { for: 'case-note', text: 'Бележка на администратора' }), note),
+    h('div', { class: 'actions' },
+      r.status !== 'upheld' ? h('button', { class: 'btn', type: 'button', text: '✔ Основателен', onclick: () => decide('upheld') }) : null,
+      r.status !== 'dismissed' ? h('button', { class: 'btn ghost', type: 'button', text: '✖ Неоснователен', onclick: () => decide('dismissed') }) : null,
+      r.status !== 'open' ? h('button', { class: 'btn ghost', type: 'button', text: '↺ Върни като отворен', onclick: () => decide('open') }) : null,
+      rep && d.reported ? delBtn : null),
+    h('p', { class: 'hint', text: 'Отварянето на този доклад е записано в журнала.' })),
+  { title: `Доклад #${r.id}` });
 }
 
 /* ═══════════ Маршрутизация ═══════════ */
 function currentRoute() {
   const r = (location.hash || '#').replace(/^#\/?/, '').split('?')[0];
-  return ['discover', 'profile', 'settings', 'admin'].includes(r) ? r : '';
+  return ['discover', 'profile', 'settings', 'admin', 'messages'].includes(r) ? r : '';
 }
 function route() {
   closeModal();
+  stopViewTimer();
   let r = currentRoute();
   if (!state.me && r !== 'settings') r = '';
   if (r === 'admin' && !(state.me && state.me.role === 'admin')) r = state.me ? 'discover' : '';
+  if (r === 'messages' && !(state.me && state.me.role !== 'admin')) r = state.me ? 'discover' : '';
+  if (state.me) startBadges(); else stopBadges();
   if (state.me && r === '') { r = 'discover'; history.replaceState(null, '', '#discover'); }
   renderChrome();
   if (!state.meta) return;
-  ({ '': viewLanding, discover: viewDiscover, profile: viewProfile, settings: viewSettings, admin: viewAdmin })[r]();
+  ({ '': viewLanding, discover: viewDiscover, profile: viewProfile, settings: viewSettings, admin: viewAdmin, messages: viewMessages })[r]();
   window.scrollTo(0, 0);
   const main = $('#view'); if (main) main.focus({ preventScroll: true });
-  document.title = ({ '': 'Spark — запознанства', discover: 'Открий хора · Spark', profile: 'Моят профил · Spark', settings: 'Дизайн и настройки · Spark', admin: 'Админ · Spark' })[r];
+  document.title = ({ '': 'Spark — запознанства', discover: 'Открий хора · Spark', profile: 'Моят профил · Spark', settings: 'Дизайн и настройки · Spark', admin: 'Админ · Spark', messages: 'Съобщения · Spark' })[r];
 }
 
 /* ═══════════ Старт ═══════════ */

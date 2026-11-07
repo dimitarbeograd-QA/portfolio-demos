@@ -53,6 +53,59 @@ db.exec(`
     PRIMARY KEY (from_id, to_id)
   );
 
+  CREATE TABLE IF NOT EXISTS messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    to_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    body       TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    read_at    TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_msg_pair ON messages(from_id, to_id, id);
+  CREATE INDEX IF NOT EXISTS idx_msg_unread ON messages(to_id, read_at);
+
+  CREATE TABLE IF NOT EXISTS blocks (
+    blocker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    blocked_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (blocker_id, blocked_id)
+  );
+
+  -- Докладите пазят никнеймовете и снимка на разговора: остават читаеми дори ако някой изтрие акаунта си.
+  CREATE TABLE IF NOT EXISTS reports (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    reporter_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    reported_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    reporter_nick TEXT NOT NULL,
+    reported_nick TEXT NOT NULL,
+    reason        TEXT NOT NULL,
+    details       TEXT NOT NULL DEFAULT '',
+    status        TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','upheld','dismissed')),
+    admin_note    TEXT NOT NULL DEFAULT '',
+    resolved_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    resolved_at   TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, id);
+
+  CREATE TABLE IF NOT EXISTS report_messages (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_id     INTEGER NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+    from_reporter INTEGER NOT NULL,
+    body          TEXT NOT NULL,
+    sent_at       TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_rm_report ON report_messages(report_id, id);
+
+  -- Журнал: кой администратор кога е отварял доклад (и съответно разговора в него).
+  CREATE TABLE IF NOT EXISTS audit_log (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    admin_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    action     TEXT NOT NULL,
+    report_id  INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS sessions (
     sid     TEXT PRIMARY KEY,
     data    TEXT NOT NULL,

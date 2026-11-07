@@ -13,9 +13,18 @@ const INTERESTS = [
   'Йога', 'Игри', 'Море',
 ];
 
+const REPORT_REASONS = {
+  harassment: 'Тормоз или обиди',
+  spam: 'Спам или реклама',
+  scam: 'Измама или искане на пари',
+  fake: 'Фалшив профил',
+  photos: 'Неподходящи снимки',
+  underage: 'Изглежда непълнолетен',
+  other: 'Друго',
+};
 const GENDERS = ['male', 'female', 'other'];
 const LOOKING = ['male', 'female', 'any'];
 const MIN_AGE = 18;
 const MAX_PHOTOS = 6;
 
-module.exports = { CITIES, INTERESTS, GENDERS, LOOKING, MIN_AGE, MAX_PHOTOS };
+module.exports = { REPORT_REASONS, CITIES, INTERESTS, GENDERS, LOOKING, MIN_AGE, MAX_PHOTOS };
