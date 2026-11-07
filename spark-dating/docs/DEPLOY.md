@@ -40,6 +40,8 @@ HTTPS иска име (домейн). Безплатно: поддомейн о�
 
 ## Стъпки (Oracle Always Free + Docker)
 
+> Бърз път: след стъпка 1 (VM + портове) пусни на сървъра `deploy/bootstrap.sh` – той върши стъпки 2–5 (Docker, ufw, клониране, тайни в `.env`, `docker compose up`). Още не е изпробван на реална машина. Стъпки 6–7 (админ + 2FA) остават ръчни.
+
 1. Създай VM (Ubuntu 22.04/24.04), отвори портове **80 и 443** в Security List **и** във ufw/iptables на машината. Вход по SSH само с ключ.
 2. `sudo apt update && sudo apt install -y docker.io docker-compose-v2 git ufw && sudo usermod -aG docker $USER` (излез и влез пак).
 3. `git clone -b claude/add-spark-dating https://github.com/dimitarbeograd-QA/portfolio-demos && cd portfolio-demos/spark-dating/deploy`

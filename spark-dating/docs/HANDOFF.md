@@ -21,6 +21,7 @@ Node 22, Express 4, better-sqlite3, bcryptjs, express-session (SQLite store), no
 - **Разгръщане (подготвено, НЕ пуснато):** `Dockerfile`, `deploy/docker-compose.yml` (web + admin + backup + Caddy, отделни волюми), `deploy/Caddyfile`, `deploy/.env.example`, `docs/DEPLOY.md`.
 
 ## Предстои / за следваща сесия
+0. **Състояние на публикуването:** добавен `deploy/bootstrap.sh` (неизпробван на реална машина). Потребителят избра DuckDNS, няма SMTP (препоръчан Brevo) и не е сигурен дали има Oracle акаунт. Чакаме го да създаде VM, поддомейни и SMTP ключ; от облачната сесия няма достъп до неговия браузър/компютър.
 1. **Публикуване** (изисква акаунт на потребителя): Oracle Cloud Always Free VM + Docker + домейн (DuckDNS или платен) – следвай `docs/DEPLOY.md`. Docker образът/compose **не са тествани на работеща машина** (тук няма стартиран Docker демон) – очаквай дребни поправки при първо пускане. Нужен е истински SMTP (`SMTP_URL`), иначе в production не стартира.
 2. След пускане: създай админ (`docker compose run --rm -it admin node scripts/create-admin.js <име>`), добави 2FA ключа в приложение, ограничи `ADMIN_ALLOW_IPS`, настрой изтегляне на копията извън машината, провери възстановяване от копие.
 3. По избор: отваряне на PR за публикуване на статичното демо в GitHub Pages (`spark-dating/`) – потребителят още не е отговорил.
