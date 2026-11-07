@@ -1,0 +1,8 @@
+node_modules
+data
+tests
+preview
+docs
+.git
+*.md
+index.html

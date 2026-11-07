@@ -1,0 +1,14 @@
+# HTTPS сертификатите (Let's Encrypt) се вземат и подновяват автоматично.
+{$SITE_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:3100
+}
+
+# Администрацията е на ОТДЕЛЕН адрес. Достъпът може да се ограничи по IP (ADMIN_ALLOW_IPS), а за по-добра защита –
+# сложи адреса зад Cloudflare Access / VPN. Който не е в списъка, получава 404 и не разбира, че там има нещо.
+{$ADMIN_DOMAIN} {
+	@denied not remote_ip {$ADMIN_ALLOW_IPS}
+	respond @denied 404
+	encode zstd gzip
+	reverse_proxy admin:3200
+}

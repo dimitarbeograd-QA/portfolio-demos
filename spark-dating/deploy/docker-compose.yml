@@ -1,0 +1,77 @@
+# Публичен сайт + отделна администрация + резервни копия + HTTPS (Caddy).  Старт: docker compose --env-file .env up -d --build
+# Изолация: админ акаунтите/сесиите са във волюм admin-data, който е монтиран САМО в админ контейнера;
+# резервните копия са във волюм backups, достъпен САМО за админ контейнера и контейнера за копия (не и за публичния сайт).
+name: spark
+services:
+  web:
+    build: ..
+    restart: unless-stopped
+    environment:
+      APP_MODE: public
+      PORT: "3100"
+      TRUST_PROXY: "1"
+      SESSION_SECRET: ${SESSION_SECRET:?задай SESSION_SECRET}
+      SMTP_URL: ${SMTP_URL:?задай SMTP_URL (истинска поща за потвърждение)}
+      MAIL_FROM: ${MAIL_FROM:-Spark <no-reply@example.com>}
+      ICE_SERVERS: ${ICE_SERVERS:-}
+      BACKUP: "0"
+      SEED_DEMO: "0"
+    volumes: [ "data:/data" ]
+    read_only: true
+    tmpfs: [ "/tmp" ]
+    cap_drop: [ ALL ]
+    security_opt: [ "no-new-privileges:true" ]
+    networks: [ internal ]
+
+  admin:
+    build: ..
+    restart: unless-stopped
+    command: ["node", "server/admin-index.js"]
+    environment:
+      APP_MODE: admin
+      ADMIN_PORT: "3200"
+      ADMIN_HOST: 0.0.0.0           # слуша само във вътрешната мрежа; навън го показва Caddy на отделен адрес
+      TRUST_PROXY: "1"
+      SESSION_SECRET: ${SESSION_SECRET:?}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:?задай ADMIN_SESSION_SECRET (различен от SESSION_SECRET)}
+      ADMIN_DB: /admin-data/admin.db
+      BACKUP_DIR: /backups
+      SMTP_URL: ${SMTP_URL}
+      SEED_DEMO: "0"
+    volumes: [ "data:/data", "admin-data:/admin-data", "backups:/backups" ]
+    read_only: true
+    tmpfs: [ "/tmp" ]
+    cap_drop: [ ALL ]
+    security_opt: [ "no-new-privileges:true" ]
+    networks: [ internal ]
+
+  backup:
+    build: ..
+    restart: unless-stopped
+    entrypoint: ["sh", "-c", "while true; do node scripts/backup.js; sleep 21600; done"]   # на всеки 6 часа
+    environment: { BACKUP_DIR: /backups, BACKUP_KEEP: "28" }
+    volumes: [ "data:/data", "backups:/backups" ]
+    cap_drop: [ ALL ]
+    security_opt: [ "no-new-privileges:true" ]
+    networks: [ internal ]
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: [ "80:80", "443:443" ]
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?задай SITE_DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:?задай ADMIN_DOMAIN}
+      ADMIN_ALLOW_IPS: ${ADMIN_ALLOW_IPS:-0.0.0.0/0 ::/0}
+    volumes: [ "./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config" ]
+    networks: [ internal, default ]
+    depends_on: [ web, admin ]
+
+networks:
+  internal: {}
+volumes:
+  data: {}
+  admin-data: {}
+  backups: {}
+  caddy_data: {}
+  caddy_config: {}

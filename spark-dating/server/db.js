@@ -170,6 +170,16 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_rm_report ON report_messages(report_id, id);
 
   -- Журнал: кой администратор кога е отварял доклад (и съответно разговора в него).
+  -- Сигурностен журнал: неуспешни влизания, блокирани заявки, админ входове (без пароли и лични данни).
+  CREATE TABLE IF NOT EXISTS security_events (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind       TEXT NOT NULL,
+    ip         TEXT NOT NULL DEFAULT '',
+    detail     TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_secev_time ON security_events(created_at);
+
   CREATE TABLE IF NOT EXISTS audit_log (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     admin_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,

@@ -1272,3 +1272,112 @@ test('лични стикери и икони: качване, изпращан�
   assert.equal((await fetch(base + sent.data.message.attachment.url, { headers: { cookie: b.cookie() } })).status, 200);
   assert.equal((await a('GET', '/api/stickers')).data.stickers.length, 0);
 });
+
+// ── Защити ──
+const sec = require('../server/security');
+const adbx = require('../server/admin-db');
+const bcryptx = require('bcryptjs');
+
+test('защити: TOTP по RFC 6238, ограничител, слаби пароли', async () => {
+  const secret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ'; // "12345678901234567890"
+  assert.equal(sec.hotp(secret, Math.floor(59 / 30)), '287082');
+  assert.equal(sec.hotp(secret, Math.floor(1111111109 / 30)), '081804');
+  assert.equal(sec.totpCheck(secret, '287082', 59000), 1);
+  assert.equal(sec.totpCheck(secret, '287082', 59000 + 30000), 1, '±1 интервал');
+  assert.equal(sec.totpCheck(secret, '287082', 59000 + 120000), null);
+  assert.equal(sec.totpCheck(secret, 'abcdef', 59000), null);
+  assert.match(sec.newTotpSecret(), /^[A-Z2-7]{32}$/);
+  assert.ok(sec.weakPassword('password1') && sec.weakPassword('aaaaaaaa') && !sec.weakPassword('Tr0ub4dor&3x'));
+  const lim = sec.limiter({ windowMs: 1000, max: 3, name: 't' });
+  const run = () => { let st = 200; lim({ ip: '1.2.3.4' }, { setHeader() {}, status(c) { st = c; return { json() {} }; } }, () => {}); return st; };
+  assert.deepEqual([run(), run(), run(), run()], [200, 200, 200, 429]);
+});
+
+test('защити: хедъри и CSRF (чужд Origin се отхвърля)', async () => {
+  const r = await fetch(base + '/api/meta');
+  assert.match(r.headers.get('content-security-policy'), /object-src 'none'/);
+  assert.equal(r.headers.get('cross-origin-opener-policy'), 'same-origin');
+  assert.match(r.headers.get('permissions-policy'), /geolocation=\(self\)/);
+  assert.equal(r.headers.get('x-frame-options'), 'DENY');
+  const post = headers => fetch(base + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify({ username: 'x', password: 'y' }) });
+  assert.equal((await post({ Origin: 'https://evil.example' })).status, 403);
+  assert.equal((await post({ Origin: 'null' })).status, 403);
+  assert.equal((await post({ 'Sec-Fetch-Site': 'cross-site' })).status, 403);
+  assert.equal((await post({ Origin: base })).status, 401, 'същият произход минава (стига до проверката на данните)');
+  assert.equal((await post({})).status, 401, 'без Origin (не-браузър) минава');
+  const ev = dbx.prepare("SELECT COUNT(*) c FROM security_events WHERE kind LIKE 'csrf%'").get().c;
+  assert.ok(ev >= 1, 'блокирането се записва в журнала');
+});
+
+test('защити: вход за администратор – парола + 2FA, повторен код, заключване', async () => {
+  const secret = sec.newTotpSecret();
+  const shadow = dbx.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1").get().id;
+  adbx.prepare('INSERT INTO admin_accounts (username, password_hash, totp_secret, shadow_user_id) VALUES (?, ?, ?, ?)').run('boss', bcryptx.hashSync('Correct-Horse-Battery-9', 4), secret, shadow);
+  const code = (off = 0) => sec.hotp(secret, Math.floor(Date.now() / 30000) + off);
+  const login = (c, body) => c('POST', '/api/admin-auth/login', body);
+  const c = client();
+  assert.equal((await login(c, { username: 'boss', password: 'Correct-Horse-Battery-9', code: '000000' })).status, 401, 'грешен код');
+  assert.equal((await login(c, { username: 'boss', password: 'wrong-wrong-wrong', code: code() })).status, 401, 'грешна парола');
+  assert.equal((await login(c, { username: 'nobody', password: 'x', code: code() })).status, 401, 'непознат потребител – същият отговор');
+  const ok = await login(c, { username: 'boss', password: 'Correct-Horse-Battery-9', code: code() });
+  assert.equal(ok.status, 200); assert.equal(ok.data.user.role, 'admin');
+  assert.equal((await c('GET', '/api/admin/stats')).status, 200);
+  // същият код не се приема втори път (против подслушване/повторно изпращане)
+  assert.equal((await login(client(), { username: 'boss', password: 'Correct-Horse-Battery-9', code: code() })).status, 401);
+  // 5 неуспеха → заключване и с верни данни
+  const bad5 = client();
+  for (let i = 0; i < 5; i++) await login(bad5, { username: 'boss', password: 'nope-nope-nope', code: '123456' });
+  assert.equal((await login(client(), { username: 'boss', password: 'Correct-Horse-Battery-9', code: code(1) })).status, 429);
+  assert.ok(dbx.prepare("SELECT COUNT(*) c FROM security_events WHERE kind = 'admin-locked'").get().c >= 1);
+  adbx.prepare('UPDATE admin_accounts SET locked_until = 0, fails = 0').run();
+});
+
+test('защити: лимит на необратимите действия и журнал на сигурността', async () => {
+  const admin = await adminClient();
+  const adminId = dbx.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1").get().id;
+  for (let i = 0; i < 10; i++) dbx.prepare("INSERT INTO audit_log (admin_id, action) VALUES (?, 'erase_user')").run(adminId);
+  const victim = client(); const u = (await victim('POST', '/api/register', reg())).data.user;
+  const r = await admin('DELETE', `/api/admin/users/${u.id}`);
+  assert.equal(r.status, 429);
+  assert.ok(dbx.prepare('SELECT 1 FROM users WHERE id = ?').get(u.id), 'профилът не е изтрит');
+  dbx.prepare("DELETE FROM audit_log WHERE action = 'erase_user'").run();
+  assert.equal((await admin('DELETE', `/api/admin/users/${u.id}`)).status, 200);
+  const s = await admin('GET', '/api/admin/security');
+  assert.equal(s.status, 200); assert.ok(Array.isArray(s.data.events));
+  assert.equal((await client()('GET', '/api/admin/security')).status, 401);
+});
+
+test('защити: паролите над 72 байта и слабите се отхвърлят', async () => {
+  const c = client();
+  assert.equal((await c('POST', '/api/register', reg({ password: 'x'.repeat(80) }))).status, 400);
+  assert.equal((await c('POST', '/api/register', reg({ password: 'password1' }))).status, 400);
+});
+
+// Отделни процеси: публичният няма админ част; админският няма публичен вход.
+test('разделяне: public режим без админ маршрути, admin режим само за администрацията', async () => {
+  const { spawn } = require('node:child_process');
+  const path = require('node:path'), os = require('node:os'), fs = require('node:fs');
+  const root = path.join(__dirname, '..');
+  const tmp = fs.mkdtempSync(os.tmpdir() + '/spark-mode-');
+  const start = (file, port, extra) => {
+    const child = spawn(process.execPath, [path.join(root, file)], { env: { ...process.env, NODE_ENV: 'development', DATA_DIR: tmp, SEED_DEMO: '0', BACKUP: '0', DEMO_ADMIN: '', ...extra }, stdio: 'ignore' });
+    return child;
+  };
+  const waitUp = async port => { for (let i = 0; i < 60; i++) { try { const r = await fetch(`http://127.0.0.1:${port}/healthz`); if (r.ok) return; } catch { /* още не слуша */ } await new Promise(r => setTimeout(r, 150)); } throw new Error('не стартира'); };
+  const pub = start('server/index.js', 3917, { APP_MODE: 'public', PORT: '3917', HOST: '127.0.0.1' });
+  const adm = start('server/admin-index.js', 3918, { ADMIN_PORT: '3918' });
+  try {
+    await waitUp(3917); await waitUp(3918);
+    const g = async (port, p, o) => { const r = await fetch(`http://127.0.0.1:${port}${p}`, o); return { status: r.status, data: await r.json().catch(() => ({})) }; };
+    assert.equal((await g(3917, '/api/admin/stats')).status, 404, 'публичният сайт няма админ API');
+    assert.equal((await g(3917, '/api/admin-auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 404);
+    assert.equal((await g(3917, '/api/meta')).data.mode, 'public');
+    assert.equal((await g(3918, '/api/meta')).data.mode, 'admin');
+    assert.equal((await g(3918, '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'a', password: 'b' }) })).status, 404, 'в админ режим няма обикновен вход');
+    assert.equal((await g(3918, '/api/profiles')).status, 404, 'и никакви потребителски маршрути');
+    assert.equal((await g(3918, '/api/admin/stats')).status, 401);
+    assert.equal((await g(3918, '/api/admin-auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'x', password: 'y', code: '000000' }) })).status, 401);
+    const h = await fetch('http://127.0.0.1:3918/'); assert.match(h.headers.get('x-robots-tag'), /noindex/); assert.equal(h.headers.get('cache-control'), 'no-store');
+    assert.ok(fs.existsSync(path.join(tmp, 'admin.db')), 'админ базата е отделен файл');
+  } finally { pub.kill(); adm.kill(); }
+});

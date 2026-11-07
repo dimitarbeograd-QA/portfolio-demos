@@ -23,40 +23,80 @@ if (isProd && !process.env.SESSION_SECRET) {
 if (isProd && process.env.DEMO_ADMIN === '1') {
   throw new Error('DEMO_ADMIN=1 (вход без парола) е забранен в production.');
 }
-const demoAdminOn = () => process.env.DEMO_ADMIN === '1' && !isProd;
+const security = require('./security');
+const backup = require('./backup');
+// Режим: all = всичко в един процес (разработка, демо, тестове); public = публичният сайт БЕЗ админ част;
+// admin = само администрацията (отделен процес, порт, адрес, бисквитка, база за акаунтите и 2FA).
+const MODE = process.env.APP_MODE || 'all';
+if (!['all', 'public', 'admin'].includes(MODE)) throw new Error('APP_MODE трябва да е all, public или admin.');
+if (isProd && MODE === 'all') throw new Error('В production задай APP_MODE=public (сайтът) и отделен процес с APP_MODE=admin (администрацията).');
+const IS_ADMIN_APP = MODE === 'admin';
+const adb = MODE === 'public' ? null : require('./admin-db');
+const demoAdminOn = () => process.env.DEMO_ADMIN === '1' && !isProd && MODE === 'all';
+const rateOn = process.env.NODE_ENV !== 'test' || process.env.RATE_LIMIT === 'on';
+const secLogLast = new Map();
+function secLog(kind, req, detail = '') {
+  try {
+    const k = kind + '|' + (req && req.ip), now = Date.now();
+    if (secLogLast.get(k) > now - 60000 && /^(rate|csrf)/.test(kind)) return; // не пълним журнала при наводнение
+    secLogLast.set(k, now); if (secLogLast.size > 5000) secLogLast.clear();
+    db.prepare('INSERT INTO security_events (kind, ip, detail) VALUES (?, ?, ?)').run(kind, String((req && req.ip) || '').slice(0, 64), String(detail).slice(0, 200));
+    db.prepare("DELETE FROM security_events WHERE created_at < datetime('now', '-30 days')").run();
+  } catch { /* журналът не бива да чупи заявката */ }
+}
 
 const app = express();
 app.disable('x-powered-by');
 if (process.env.TRUST_PROXY) app.set('trust proxy', 1);
 
-// ── Защитни хедъри ──
-app.use((req, res, next) => {
-  res.setHeader('Content-Security-Policy',
-    "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; " +
-    "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Referrer-Policy', 'same-origin');
-  res.setHeader('X-Frame-Options', 'DENY');
-  next();
-});
+// ── Защитни хедъри, CSRF, ограничаване на заявките ──
+app.use(security.headers({ prod: isProd, admin: IS_ADMIN_APP }));
+app.get('/healthz', (req, res) => res.type('text').send('ok'));
+// Публичният процес изобщо няма админ маршрути; админският пуска само администрацията.
+if (MODE === 'public') app.use(['/api/admin', '/api/admin-auth'], (req, res) => bad(res, 'Няма такъв маршрут.', 404));
+if (IS_ADMIN_APP) {
+  const ok = /^\/api\/(admin\/|admin-auth\/|meta$|me$|logout$|files\/)/;
+  app.use('/api', (req, res, next) => (ok.test(req.originalUrl.split('?')[0]) ? next() : bad(res, 'Няма такъв маршрут.', 404)));
+}
+app.use(security.csrf((req, why) => secLog(why, req, req.method + ' ' + req.path)));
+if (rateOn) {
+  const hit = (req, name) => secLog('rate-limit', req, name);
+  app.use('/api', security.limiter({ windowMs: 60e3, max: 900, name: 'api', onHit: hit }));
+  app.use(['/api/login', '/api/register', '/api/verify', '/api/admin-auth'], security.limiter({ windowMs: 15 * 60e3, max: 40, name: 'auth', onHit: hit }));
+  app.use(['/api/chats/:id/attachments', '/api/stickers', '/api/me/photos'], security.limiter({ windowMs: 10 * 60e3, max: 120, name: 'upload', onHit: hit }));
+}
 
 app.use(express.json({ limit: '64kb' }));
 // Снимките идват като data URL в JSON → по-голям лимит само за този маршрут.
 const bigJson = express.json({ limit: '5mb' });
 
+// Администраторската сесия е отделна бисквитка и отделна база; кратка и „плъзгаща се“ (30 мин. без действие), най-много 8 часа.
+const ADMIN_IDLE_MS = 30 * 60e3, ADMIN_MAX_MS = 8 * 3600e3;
 app.use(session({
-  name: 'spark.sid',
-  secret: process.env.SESSION_SECRET || 'dev-only-secret-change-me',
-  store: new SqliteStore(db),
+  name: (isProd ? '__Host-' : '') + (IS_ADMIN_APP ? 'spark.admin' : 'spark.sid'),
+  secret: (IS_ADMIN_APP && process.env.ADMIN_SESSION_SECRET) || process.env.SESSION_SECRET || 'dev-only-secret-change-me',
+  store: new SqliteStore(IS_ADMIN_APP ? adb : db),
   resave: false,
   saveUninitialized: false,
+  rolling: IS_ADMIN_APP,
   cookie: {
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: IS_ADMIN_APP ? 'strict' : 'lax',
     secure: isProd,
-    maxAge: 7 * 24 * 3600 * 1000,
+    maxAge: IS_ADMIN_APP ? ADMIN_IDLE_MS : 7 * 24 * 3600 * 1000,
   },
 }));
+if (IS_ADMIN_APP) {
+  if (isProd && !process.env.ADMIN_SESSION_SECRET) throw new Error('ADMIN_SESSION_SECRET е задължителен за админ процеса (различен от SESSION_SECRET).');
+  // Сесията е валидна само ако акаунтът още съществува (отнемане на достъп = изтриване от admin.db) и не е по-стара от 8 ч.
+  app.use((req, res, next) => {
+    const s = req.session;
+    if (s && s.userId && (!s.adminId || Date.now() - (s.loginAt || 0) > ADMIN_MAX_MS || !adb.prepare('SELECT 1 FROM admin_accounts WHERE id = ?').get(s.adminId))) {
+      return s.destroy(() => next());
+    }
+    next();
+  });
+}
 
 // ── Помощни функции ──
 const wrap = fn => (req, res, next) => { try { fn(req, res, next); } catch (e) { next(e); } };
@@ -264,6 +304,7 @@ app.get('/api/meta', (req, res) => {
     maxPhotos: MAX_PHOTOS,
     total: db.prepare(`SELECT COUNT(*) c FROM users u WHERE u.role <> 'admin' AND ${VISIBLE_SQL}`).get().c,
     demoAdmin: demoAdminOn(),
+    mode: MODE,
     reportReasons: REPORT_REASONS,
     goals: GOALS,
     mailDev: mailer.mode === 'dev',
@@ -328,6 +369,8 @@ app.post('/api/register', wrap((req, res) => {
   const em = checkEmail(b.email);
   if (em.err) return bad(res, em.err, em.status);
   if (password.length < 8) return bad(res, 'Паролата трябва да е поне 8 символа.');
+  if (Buffer.byteLength(password) > 72) return bad(res, 'Паролата може да е до 72 байта (около 70 знака).');
+  if (security.weakPassword(password)) return bad(res, 'Паролата е твърде лесна за отгатване. Избери друга.');
   if (Buffer.byteLength(password) > 72) return bad(res, 'Паролата е твърде дълга (макс. 72 байта).');
   if (!validBirth(b.birthDate)) return bad(res, 'Невалидна дата на раждане.');
   const age = ageFrom(b.birthDate);
@@ -411,14 +454,14 @@ app.post('/api/login', wrap((req, res) => {
   }
   const key = failKey(req, username);
   if (tooMany(key)) return bad(res, 'Твърде много неуспешни опити. Опитайте отново след 15 минути.', 429);
-  const row = db.prepare('SELECT id, password_hash, is_demo FROM users WHERE username = ?').get(username.trim());
+  const row = db.prepare('SELECT id, password_hash, is_demo, role FROM users WHERE username = ?').get(username.trim());
   // Винаги правим bcrypt сравнение – не издаваме дали името съществува по време на отговора.
-  const ok = bcrypt.compareSync(password, row ? row.password_hash : DUMMY_HASH) && row && !row.is_demo;
+  const ok = bcrypt.compareSync(password, row ? row.password_hash : DUMMY_HASH) && row && !row.is_demo && !(MODE !== 'all' && row.role === 'admin');
   if (!ok) {
     if (!row && db.prepare('SELECT 1 FROM deregistered WHERE username_key = ?').get(username.trim().toLowerCase())) {
       return badc(res, 'Този профил е дерегистриран заради нарушение на правилата на сайта.', 403, 'deregistered');
     }
-    noteFail(key); return bad(res, 'Грешно потребителско име или парола.', 401);
+    noteFail(key); secLog('login-fail', req); return bad(res, 'Грешно потребителско име или парола.', 401);
   }
   attempts.delete(key);
   req.session.regenerate(err => {
@@ -528,6 +571,7 @@ app.put('/api/me/password', requireAny, wrap((req, res) => {
   const id = req.session.userId;
   if (typeof current !== 'string' || typeof next !== 'string') return bad(res, 'Липсват данни.');
   if (next.length < 8 || Buffer.byteLength(next) > 72) return bad(res, 'Новата парола трябва да е 8–72 символа.');
+  if (security.weakPassword(next)) return bad(res, 'Паролата е твърде лесна за отгатване. Избери друга.');
   const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(id);
   if (!bcrypt.compareSync(current, row.password_hash)) return bad(res, 'Текущата парола е грешна.', 403);
   db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(next, 10), id);
@@ -1308,9 +1352,63 @@ function requireAdmin(req, res, next) {
   requireAuth(req, res, () => {
     const r = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
     if (!r || r.role !== 'admin') return bad(res, 'Нямате достъп.', 403);
+    if (IS_ADMIN_APP && !req.session.adminId) return bad(res, 'Нямате достъп.', 403);
     next();
   });
 }
+
+// ── Вход за администратори: парола + код от приложение (TOTP), отделна база, заключване след грешки ──
+const ADMIN_DUMMY = bcrypt.hashSync('dummy-admin-password', 12);
+if (adb) {
+  app.post('/api/admin-auth/login', wrap((req, res) => {
+    const { username, password, code } = req.body || {};
+    if (typeof username !== 'string' || typeof password !== 'string' || typeof code !== 'string') return bad(res, 'Въведете потребител, парола и код.');
+    const acct = adb.prepare('SELECT * FROM admin_accounts WHERE username = ?').get(username.trim());
+    const generic = () => { secLog('admin-login-fail', req); return bad(res, 'Грешни данни за вход.', 401); };
+    if (acct && acct.locked_until > Date.now()) { secLog('admin-locked', req); return bad(res, 'Акаунтът е временно заключен. Опитайте по-късно.', 429); }
+    const passOk = bcrypt.compareSync(password, acct ? acct.password_hash : ADMIN_DUMMY) && !!acct;
+    const step = acct ? security.totpCheck(acct.totp_secret, code) : null;
+    if (!passOk || !step || step <= acct.last_totp_step) {
+      if (acct) {
+        const fails = acct.fails + 1;
+        adb.prepare('UPDATE admin_accounts SET fails = ?, locked_until = ? WHERE id = ?').run(fails >= 5 ? 0 : fails, fails >= 5 ? Date.now() + 15 * 60e3 : 0, acct.id);
+      }
+      return generic();
+    }
+    adb.prepare('UPDATE admin_accounts SET fails = 0, locked_until = 0, last_totp_step = ? WHERE id = ?').run(step, acct.id);
+    req.session.regenerate(err => {
+      if (err) return bad(res, 'Грешка при създаване на сесия.', 500);
+      req.session.userId = acct.shadow_user_id; req.session.adminId = acct.id; req.session.loginAt = Date.now();
+      secLog('admin-login', req, acct.username);
+      res.json({ user: meOf(acct.shadow_user_id) });
+    });
+  }));
+}
+
+// Необратимите действия (изтриване/дерегистрация): ограничение за брой на час, пресен 2FA код (в админ режим),
+// и резервно копие на базата ПРЕДИ действието – така и откраднат админ достъп не може бързо и безследно да затрие профили.
+const DESTRUCTIVE_PER_HOUR = Number(process.env.DESTRUCTIVE_PER_HOUR) || 10;
+function guardDestructive(req, res, action) {
+  const admin = req.session.userId;
+  if (db.prepare("SELECT COUNT(*) c FROM audit_log WHERE action IN ('erase_user','deregister') AND created_at >= datetime('now', '-1 hour')").get().c >= DESTRUCTIVE_PER_HOUR) {
+    secLog('destructive-cap', req, action); bad(res, `Достигнат е лимитът от ${DESTRUCTIVE_PER_HOUR} необратими действия на час. Опитай по-късно.`, 429); return true;
+  }
+  if (IS_ADMIN_APP) {
+    const acct = adb.prepare('SELECT * FROM admin_accounts WHERE id = ?').get(req.session.adminId);
+    const step = acct && security.totpCheck(acct.totp_secret, (req.body || {}).code);
+    if (!step || step <= acct.last_totp_step) { badc(res, 'Потвърди с нов код от приложението за удостоверяване.', 403, 'stepup'); return true; }
+    adb.prepare('UPDATE admin_accounts SET last_totp_step = ? WHERE id = ?').run(step, acct.id);
+  }
+  try { backup.snapshot('pre-' + action, { minGapMs: 10 * 60e3 }); }
+  catch (e) { console.error('Резервно копие преди изтриване:', e.message); if (isProd) { bad(res, 'Не може да се направи резервно копие – действието е спряно.', 500); return true; } }
+  db.prepare('INSERT INTO audit_log (admin_id, action) VALUES (?, ?)').run(admin, action);
+  return false;
+}
+app.get('/api/admin/security', requireAdmin, wrap((req, res) => {
+  const events = db.prepare('SELECT kind, ip, detail, created_at FROM security_events ORDER BY id DESC LIMIT 100').all().map(e => ({ ...e, at: iso(e.created_at) }));
+  const counts = db.prepare("SELECT kind, COUNT(*) c FROM security_events WHERE created_at >= datetime('now', '-1 day') GROUP BY kind").all();
+  res.json({ events, counts, mode: MODE });
+}));
 
 // Вход без парола – включва се само с DEMO_ADMIN=1 (и никога в production).
 app.post('/api/demo-admin', wrap((req, res) => {
@@ -1378,6 +1476,7 @@ app.delete('/api/admin/users/:id', requireAdmin, wrap((req, res) => {
   const row = db.prepare('SELECT id, role FROM users WHERE id = ?').get(id);
   if (!row) return bad(res, 'Потребителят не е намерен.', 404);
   if (row.role === 'admin') return bad(res, 'Администраторски акаунт не може да се изтрива.', 403);
+  if (guardDestructive(req, res, 'erase_user')) return;
   eraseUser(id);
   res.json({ ok: true });
 }));
@@ -1568,6 +1667,7 @@ app.post('/api/admin/dossiers/:id/deregister', requireAdmin, wrap((req, res) => 
   if (reason.length < 5) return bad(res, 'Напиши причина (поне 5 символа).');
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(d.user_id);
   if (!u || u.role === 'admin') return bad(res, 'Администраторски акаунт не може да се дерегистрира.', 403);
+  if (guardDestructive(req, res, 'deregister')) return;
   const admin = req.session.userId, snapshot = JSON.stringify({ age: ageFrom(u.birth_date), ...placeFields(u), gender: u.gender, joinedAt: iso(u.created_at), lastSeen: iso(u.last_seen), isDemo: !!u.is_demo, emailMasked: emailutil.maskEmail(u.email) });
   const email = u.email;
   db.transaction(() => {
