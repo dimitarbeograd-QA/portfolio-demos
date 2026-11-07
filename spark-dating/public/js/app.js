@@ -404,13 +404,18 @@ function viewDiscover() {
 }
 
 function profileCard(p, i) {
-  return h('button', { class: 'win card enter', type: 'button', style: `--i:${Math.min(i, 8)}`, 'aria-label': `Профил на ${p.nickname}, ${p.age} г., ${p.city}`, onclick: () => openProfile(p) },
-    h('div', { class: 'ph' },
-      h('img', { src: mainPhoto(p), alt: '', loading: 'lazy', width: '400', height: '500' }),
-      p.isDemo ? h('span', { class: 'tag demo badge-tr', text: 'демо' }) : null,
-      h('div', { class: 'over' }, h('b', { text: `${p.nickname}, ${p.age}` }), h('span', {}, p.online ? h('span', { class: 'dot', 'aria-label': 'онлайн' }) : null, `📍 ${p.city}`))),
-    h('div', { class: 'meta' }, h('p', { text: p.bio || 'Още няма био.' }),
-      h('div', { class: 'chips' }, p.interests.slice(0, 3).map(t => h('span', { class: 'tag', text: t })))));
+  const canChat = state.me && state.me.role !== 'admin';
+  return h('article', { class: 'win card enter', style: `--i:${Math.min(i, 8)}` },
+    h('button', { class: 'cardmain', type: 'button', 'aria-label': `Профил на ${p.nickname}, ${p.age} г., ${p.city}`, onclick: () => openProfile(p) },
+      h('div', { class: 'ph' },
+        h('img', { src: mainPhoto(p), alt: '', loading: 'lazy', width: '400', height: '500' }),
+        p.isDemo ? h('span', { class: 'tag demo badge-tr', text: 'демо' }) : null,
+        h('div', { class: 'over' }, h('b', { text: `${p.nickname}, ${p.age}` }), h('span', {}, p.online ? h('span', { class: 'dot', 'aria-label': 'онлайн' }) : null, `📍 ${p.city}`))),
+      h('div', { class: 'meta' }, h('p', { text: p.bio || 'Още няма био.' }),
+        h('div', { class: 'chips' }, p.interests.slice(0, 3).map(t => h('span', { class: 'tag', text: t }))))),
+    canChat ? h('div', { class: 'cardact' },
+      h('button', { class: 'btn sm', type: 'button', text: '💬 Пиши', 'aria-label': `Пиши на ${p.nickname}`, onclick: () => openChat(p.id) }),
+      p.likedMe ? h('span', { class: 'tag', text: '💙 Харесва те' }) : null) : null);
 }
 
 function openProfile(p) {
@@ -657,7 +662,8 @@ function viewMessages() {
   const threadBox = h('section', { class: 'win chatthread', 'aria-label': 'Разговор' });
   const layout = h('div', { class: 'chatlayout' + (chatWith ? ' open' : '') },
     h('aside', { class: 'win chatside', 'aria-label': 'Разговори' },
-      h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: 'Разговори' })), listBox),
+      h('div', { class: 'win-head' }, h('span', { class: 'dots', 'aria-hidden': 'true' }, h('b'), h('b'), h('b')), h('h2', { text: 'Разговори' }),
+        h('a', { class: 'btn sm', style: 'margin-left:auto', href: '#/discover', text: '＋ Нов' , title: 'Намери човек, на когото да пишеш' })), listBox),
     threadBox);
   v.append(h('h1', { text: 'Съобщения' }), layout);
 
@@ -666,7 +672,8 @@ function viewMessages() {
 
   function renderList() {
     clear(listBox);
-    if (!chats.length) { listBox.append(h('p', { class: 'dim', style: 'padding:1rem', text: 'Още нямаш разговори. Отвори профил от „Открий хора“ и натисни „Пиши“.' })); return; }
+    if (!chats.length) { listBox.append(h('div', { class: 'empty-state', style: 'padding:1.5rem 1rem' }, h('p', { text: 'Още нямаш разговори.' }),
+      h('p', { class: 'dim', text: 'Намери човек в „Открий хора“ и натисни „💬 Пиши“ на неговата карта.' }), h('a', { class: 'btn', href: '#/discover', text: 'Открий хора' }))); return; }
     chats.forEach(c => listBox.append(h('button', { class: 'chatitem' + (c.profile.id === chatWith ? ' on' : ''), type: 'button', role: 'listitem', onclick: () => { chatWith = c.profile.id; layout.classList.add('open'); renderList(); loadThread(true); } },
       h('img', { src: mainPhoto(c.profile), alt: '', width: '44', height: '44' }),
       h('span', { class: 'ci' }, h('b', { text: c.profile.nickname }), h('small', { text: (c.last.mine ? 'Ти: ' : '') + c.last.body })),
@@ -678,7 +685,7 @@ function viewMessages() {
 
   function renderThread(force) {
     if (!chatWith) {
-      clear(threadBox).append(h('div', { class: 'empty-state' }, h('div', { class: 'big', text: '💬' }), h('h3', { text: 'Избери разговор' }), h('p', { text: 'Или отвори нечий профил и натисни „Пиши“.' })));
+      clear(threadBox).append(h('div', { class: 'empty-state' }, h('div', { class: 'big', text: '💬' }), h('h3', { text: 'Избери разговор' }), h('p', { text: 'Или започни нов: избери човек и натисни „Пиши“.' }), h('a', { class: 'btn', href: '#/discover', text: '＋ Нов разговор' })));
       return;
     }
     if (!peer || peer.id !== chatWith) { clear(threadBox).append(h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Зареждане' })); sig = ''; return; }
